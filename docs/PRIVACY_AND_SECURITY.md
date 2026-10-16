@@ -1,7 +1,7 @@
 # Privacy, Security & Data Sovereignty Specification — Nexora
 
 ## Product: Nexora — AI File Manager
-**Version:** 0.3.1  
+**Version:** 0.4.0  
 **Core Guarantee:** 100% On-Device AI Processing with Zero Cloud Telemetry  
 
 ---
@@ -30,6 +30,9 @@ Nexora is designed from the ground up to respect complete user privacy and data 
    - Distinct source paths and database records are preserved even for identical files. Duplicate candidates are never automatically deleted or overwritten without explicit user review.
 6. **In-Flight Stream Modification Protection**:
    - Files undergoing cryptographic hashing or copy operations are guarded by pre/post stream stat comparisons. If a file is modified during hashing or copying, operations abort, temporary staging files are unlinked, and stale results are invalidated.
+7. **Non-Privileged Hardware Probing & Resource Telemetry Sovereignty**:
+   - Hardware detection (CPU cores/load, RAM pressure, GPU VRAM, storage type) operates entirely without administrator or elevated Windows privileges using unprivileged PowerShell CimInstance and WMI queries.
+   - Telemetry metrics are consumed strictly on-device to throttle background concurrency and prevent PC lockups. Hardware metrics, machine GUIDs, and serial numbers are never collected, logged to disk, or transmitted remotely.
 
 ---
 

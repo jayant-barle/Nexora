@@ -117,6 +117,14 @@ const electronAPI = {
     rescan: (targetPath: string, fullRescan?: boolean) => ipcRenderer.invoke('library:rescan', targetPath, fullRescan),
   },
 
+  // ── System & Adaptive Resources ────────────────────────────────────────
+  system: {
+    getHardwareMetrics: () => ipcRenderer.invoke('system:get-hardware-metrics'),
+    getQueueStats: () => ipcRenderer.invoke('system:get-queue-stats'),
+    pauseAllJobs: () => ipcRenderer.invoke('system:pause-all-jobs'),
+    resumeAllJobs: () => ipcRenderer.invoke('system:resume-all-jobs'),
+  },
+
   // ── App ─────────────────────────────────────────────────────────────────
   app: {
     getVersion: () => ipcRenderer.invoke('app:get-version'),

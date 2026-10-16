@@ -7,8 +7,9 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { app } from 'electron';
-import { getDb } from './database';
+import { getDb, getSettings } from './database';
 import { getAiWorkerClient } from './ai-worker-client';
+import { getHardwareMonitor } from './hardware-monitor';
 import { getMimeType, isImageFile, isVideoFile } from './filesystem';
 
 export interface ScanOptions {
@@ -16,6 +17,7 @@ export interface ScanOptions {
   extractAi?: boolean;
   generateThumbnails?: boolean;
   forceFullRescan?: boolean;
+  videoSamplingInterval?: number;
   onProgress?: (processed: number, total: number, currentFile: string) => void;
   isCancelled?: () => boolean;
 }
@@ -149,7 +151,7 @@ export async function indexFolderIncremental(
     ) VALUES (
       @id, @root_id, @relative_path, @filename, @extension, @mime_type, @size_bytes, @hash_sha256,
       @width, @height, @duration_seconds, @capture_time, @file_created_at, @file_modified_at,
-      @has_gps, @latitude, @longitude, @thumbnail_path, @metadata_json, 'completed',
+      @has_gps, @latitude, @longitude, @thumbnail_path, @metadata_json, @processing_status,
       @camera_make, @camera_model, @lens_model, @iso, @focal_length, @aperture, @exposure_time, @orientation,
       @codec, @frame_rate, @bitrate, @page_count, @word_count,
       @doc_title, @doc_author, @doc_subject,
@@ -163,7 +165,7 @@ export async function indexFolderIncremental(
       size_bytes = @size_bytes, hash_sha256 = @hash_sha256, width = @width, height = @height,
       duration_seconds = @duration_seconds, capture_time = @capture_time,
       file_modified_at = @file_modified_at, has_gps = @has_gps, latitude = @latitude, longitude = @longitude,
-      thumbnail_path = @thumbnail_path, metadata_json = @metadata_json, processing_status = 'completed',
+      thumbnail_path = @thumbnail_path, metadata_json = @metadata_json, processing_status = @processing_status,
       camera_make = @camera_make, camera_model = @camera_model, lens_model = @lens_model, iso = @iso,
       focal_length = @focal_length, aperture = @aperture, exposure_time = @exposure_time, orientation = @orientation,
       codec = @codec, frame_rate = @frame_rate, bitrate = @bitrate, page_count = @page_count, word_count = @word_count,
@@ -195,8 +197,17 @@ export async function indexFolderIncremental(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `);
 
-  // Batch transaction helper
-  const BATCH_SIZE = 50;
+  const enqueueJobStmt = db.prepare(`
+    INSERT OR IGNORE INTO jobs (
+      id, type, status, priority, progress, total, target_path, target_id, config_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `);
+
+  // Adaptive batch transaction helper
+  const settings = getSettings();
+  const configuredProfile = (settings.resourceProfile as any) || 'auto';
+  const executionParams = getHardwareMonitor().getExecutionParams(configuredProfile);
+  const BATCH_SIZE = executionParams.batchSize;
   let pendingBatch: Array<() => void> = [];
 
   function commitBatch() {
@@ -352,25 +363,70 @@ export async function indexFolderIncremental(
 
       const fileId = existing ? existing.id : uuidv4();
 
-      // Detect faces for images if AI enabled
+      // Detect faces or queue background AI without ever skipping processing
       const facesToInsert: any[] = [];
-      if (isImageFile(ext) && options.extractAi !== false) {
-        try {
-          const detections = await aiClient.detectFaces(fullPath);
-          for (const d of detections) {
-            facesToInsert.push({
-              id: uuidv4(),
-              fileId,
-              x: d.x,
-              y: d.y,
-              width: d.width,
-              height: d.height,
-              confidence: d.confidence,
-              quality_score: d.quality_score,
-              embedding: Buffer.from(new Float32Array(d.embedding).buffer),
+      const allowAi = options.extractAi !== false && executionParams.allowBackgroundAi && settings.enableBackgroundAi !== 'false';
+      let processingStatus: 'pending' | 'completed' = 'completed';
+
+      if (isImageFile(ext)) {
+        if (allowAi) {
+          if (!executionParams.deferHeavyAi) {
+            // Immediate in-line extraction when sufficient resources are available
+            try {
+              const detections = await aiClient.detectFaces(fullPath);
+              for (const d of detections) {
+                facesToInsert.push({
+                  id: uuidv4(),
+                  fileId,
+                  x: d.x,
+                  y: d.y,
+                  width: d.width,
+                  height: d.height,
+                  confidence: d.confidence,
+                  quality_score: d.quality_score,
+                  embedding: Buffer.from(new Float32Array(d.embedding).buffer),
+                });
+              }
+              processingStatus = 'completed';
+            } catch {
+              processingStatus = 'completed';
+            }
+          } else {
+            // Adaptive deferral: Queue face detection so analysis is NEVER lost or skipped
+            processingStatus = 'pending';
+            pendingBatch.push(() => {
+              enqueueJobStmt.run(
+                uuidv4(),
+                'face_detect',
+                'queued',
+                4, // Priority 4: Resource-intensive AI
+                0,
+                1,
+                fullPath,
+                fileId,
+                JSON.stringify({ fileId, filePath: fullPath })
+              );
             });
           }
-        } catch {}
+        }
+      } else if (isVideoFile(ext)) {
+        if (allowAi) {
+          // Defer heavy video frame analysis to background Priority 4 queue
+          processingStatus = 'pending';
+          pendingBatch.push(() => {
+            enqueueJobStmt.run(
+              uuidv4(),
+              'video_analyze',
+              'queued',
+              4, // Priority 4: Resource-intensive AI
+              0,
+              1,
+              fullPath,
+              fileId,
+              JSON.stringify({ fileId, filePath: fullPath, intervalSeconds: executionParams.videoSamplingIntervalSeconds })
+            );
+          });
+        }
       }
 
       const fileParams = {
@@ -393,6 +449,7 @@ export async function indexFolderIncremental(
         longitude,
         thumbnail_path: thumbPath,
         metadata_json: metadataJson,
+        processing_status: processingStatus,
         camera_make: cameraMake,
         camera_model: cameraModel,
         lens_model: lensModel,

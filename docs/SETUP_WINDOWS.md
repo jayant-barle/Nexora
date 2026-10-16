@@ -1,7 +1,7 @@
 # Windows 11 Setup & Environment Guide — Nexora
 
 ## Product: Nexora — AI File Manager
-**Version:** 0.2.0  
+**Version:** 0.4.0  
 **Target OS:** Windows 11 (64-bit, Build 22000+)  
 
 ---
@@ -80,3 +80,20 @@ Packages the complete Windows 11 desktop installer into `dist-electron/`:
 ```powershell
 npm run package
 ```
+
+---
+
+## 4. Hardware System Profiles & Minimum Requirements
+
+Nexora automatically evaluates installed hardware and runtime resource pressure to configure execution limits without requiring Windows administrator privileges:
+
+| Metric | Low Resource Profile | Balanced Profile | Performance Profile |
+| :--- | :--- | :--- | :--- |
+| **Target Hardware** | $\le 6$ GB RAM or $\le 4$ CPU cores | 8–16 GB RAM, 6–8 CPU cores | $\ge 16$ GB RAM, $\ge 8$ cores, dedicated GPU |
+| **Max Concurrent Jobs** | 1 worker | 2 workers | 4 workers |
+| **Batch Indexing Size** | 25 files / transaction | 50 files / transaction | 100 files / transaction |
+| **Face Image Downscaling** | Max 1024px dimension | Max 1600px dimension | Max 1600px dimension |
+| **Video Frame Sampling** | 15s keyframe interval | 5s keyframe interval | 2s keyframe interval |
+| **Background AI Status** | Deferred under high load | Active in background | Full throughput + GPU acceleration |
+| **Direct Video Seek** | Enabled (`cap.set`) | Enabled (`cap.set`) | Enabled (`cap.set`) |
+| **Privileges Needed** | Standard user (Non-admin) | Standard user (Non-admin) | Standard user (Non-admin) |

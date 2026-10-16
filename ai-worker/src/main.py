@@ -818,6 +818,17 @@ def detect_faces(file_path: str) -> List[Dict[str, Any]]:
                 return []
 
             h, w = img.shape[:2]
+            # Adaptive memory & CPU optimization: downscale high-resolution images
+            # (e.g. 24MP+ images) to max 1600px dimension while preserving aspect ratio.
+            # Normalization (x / w, y / h) remains mathematically identical.
+            max_dim = max(h, w)
+            if max_dim > 1600:
+                scale = 1600.0 / max_dim
+                new_w = max(int(w * scale), 1)
+                new_h = max(int(h * scale), 1)
+                img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                h, w = img.shape[:2]
+
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
             # High-performance face region localization
@@ -938,7 +949,7 @@ def cluster_faces(embeddings: List[List[float]], threshold: float = 0.6) -> List
 # ─── Video Analysis & Timestamp Sampling ─────────────────────────────────────
 
 def analyze_video(file_path: str, interval_seconds: int = 5) -> List[Dict[str, Any]]:
-    """Sample video frames at regular intervals and detect faces per frame."""
+    """Sample video frames at regular intervals with direct seeking and duplicate suppression."""
     observations: List[Dict[str, Any]] = []
 
     if not HAS_CV2 or not HAS_NUMPY or not os.path.exists(file_path):
@@ -950,56 +961,85 @@ def analyze_video(file_path: str, interval_seconds: int = 5) -> List[Dict[str, A
             return observations
 
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        frame_interval = int(fps * max(interval_seconds, 1))
-        frame_idx = 0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        frame_interval = max(int(fps * max(interval_seconds, 1)), 1)
+        current_frame = 0
+        last_sampled_thumb = None
 
-        while True:
+        while current_frame < total_frames if total_frames > 0 else True:
+            # Fast direct seek instead of sequential full decoding
+            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
             ret, frame = cap.read()
             if not ret or frame is None:
                 break
 
-            if frame_idx % frame_interval == 0:
-                timestamp = round(frame_idx / fps, 2)
-                # Save temporary frame to memory for face detection
-                h, w = frame.shape[:2]
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                ycrcb = cv2.cvtColor(frame, cv2.COLOR_BGR2YCrCb)
-                skin_mask = cv2.inRange(ycrcb, np.array([0, 133, 77]), np.array([255, 173, 127]))
-                contours, _ = cv2.findContours(skin_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            timestamp = round(current_frame / fps, 2)
+            h, w = frame.shape[:2]
 
-                detected_faces = []
-                for cnt in contours:
-                    area = cv2.contourArea(cnt)
-                    if area < (w * h) * 0.01:
+            # Fast duplicate / static frame suppression: compare with last sampled thumbnail
+            try:
+                small = cv2.resize(frame, (64, 64), interpolation=cv2.INTER_AREA)
+                small_gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                if last_sampled_thumb is not None:
+                    diff = float(np.mean(np.abs(small_gray.astype(np.float32) - last_sampled_thumb.astype(np.float32))))
+                    if diff < 2.5:  # Static shot; skip redundant face extraction
+                        current_frame += frame_interval
                         continue
-                    x, y, fw, fh = cv2.boundingRect(cnt)
-                    aspect = fw / float(fh)
-                    if 0.6 <= aspect <= 1.3:
-                        face_roi = gray[y:y + fh, x:x + fw]
-                        resized = cv2.resize(face_roi, (8, 8))
-                        norm_face = resized.astype(np.float32).flatten()
-                        norm = np.linalg.norm(norm_face)
-                        if norm > 0:
-                            norm_face /= norm
+                last_sampled_thumb = small_gray
+            except Exception:
+                pass
 
-                        detected_faces.append({
-                            "x": round(x / w, 4),
-                            "y": round(y / h, 4),
-                            "width": round(fw / w, 4),
-                            "height": round(fh / h, 4),
-                            "confidence": 0.80,
-                            "quality_score": 0.75,
-                            "embedding": [round(float(v), 5) for v in norm_face],
-                        })
+            # Scale down large 4K / 1080p frames to 960px max dimension for fast processing
+            max_dim = max(h, w)
+            if max_dim > 960:
+                scale = 960.0 / max_dim
+                proc_w = max(int(w * scale), 1)
+                proc_h = max(int(h * scale), 1)
+                proc_frame = cv2.resize(frame, (proc_w, proc_h), interpolation=cv2.INTER_AREA)
+            else:
+                proc_frame = frame
+                proc_w, proc_h = w, h
 
-                if detected_faces:
-                    observations.append({
-                        "timestamp_seconds": timestamp,
-                        "frame_number": frame_idx,
-                        "faces": detected_faces,
+            gray = cv2.cvtColor(proc_frame, cv2.COLOR_BGR2GRAY)
+            ycrcb = cv2.cvtColor(proc_frame, cv2.COLOR_BGR2YCrCb)
+            skin_mask = cv2.inRange(ycrcb, np.array([0, 133, 77]), np.array([255, 173, 127]))
+            contours, _ = cv2.findContours(skin_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            detected_faces = []
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area < (proc_w * proc_h) * 0.01:
+                    continue
+                x, y, fw, fh = cv2.boundingRect(cnt)
+                aspect = fw / float(fh)
+                if 0.6 <= aspect <= 1.3:
+                    face_roi = gray[y:y + fh, x:x + fw]
+                    if face_roi.size == 0:
+                        continue
+                    resized = cv2.resize(face_roi, (8, 8))
+                    norm_face = resized.astype(np.float32).flatten()
+                    norm = np.linalg.norm(norm_face)
+                    if norm > 0:
+                        norm_face /= norm
+
+                    detected_faces.append({
+                        "x": round(x / proc_w, 4),
+                        "y": round(y / proc_h, 4),
+                        "width": round(fw / proc_w, 4),
+                        "height": round(fh / proc_h, 4),
+                        "confidence": 0.80,
+                        "quality_score": 0.75,
+                        "embedding": [round(float(v), 5) for v in norm_face],
                     })
 
-            frame_idx += 1
+            if detected_faces:
+                observations.append({
+                    "timestamp_seconds": timestamp,
+                    "frame_number": current_frame,
+                    "faces": detected_faces,
+                })
+
+            current_frame += frame_interval
             # Cap at maximum 100 observations per video to avoid runaway processing
             if len(observations) >= 100:
                 break
@@ -1021,6 +1061,13 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         if action == "ping":
+            gpu_accel = "CPU"
+            try:
+                if HAS_CV2 and hasattr(cv2, "cuda") and cv2.cuda.getCudaEnabledDeviceCount() > 0:
+                    gpu_accel = "CUDA"
+            except Exception:
+                pass
+
             return {
                 "id": req_id,
                 "status": "ok",
@@ -1029,6 +1076,7 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
                     "cv2": HAS_CV2,
                     "numpy": HAS_NUMPY,
                     "pil": HAS_PIL,
+                    "acceleration": gpu_accel,
                 },
             }
 

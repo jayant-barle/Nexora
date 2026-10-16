@@ -1,27 +1,45 @@
 // ============================================================================
 // Nexora — Background Job Runner Engine
-// Priority job queue, incremental workers, cancellation tokens, and progress telemetry
+// Priority job queue, adaptive bounded concurrency, cancellation, and recovery
 // ============================================================================
 
 import { BrowserWindow } from 'electron';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb, updateJobStatus } from './database';
+import { getDb, updateJobStatus, getSettings } from './database';
 import { indexFolderIncremental } from './indexer';
 import { executeBatchCopyOperation, CopyItem } from './file-operations';
 import { getAiWorkerClient } from './ai-worker-client';
+import { getHardwareMonitor } from './hardware-monitor';
+import type { JobQueueStats, ResourceProfile } from '../shared/types';
 
 export class JobRunner {
-  private isRunning = false;
+  private activeJobs: Set<string> = new Set();
   private isPaused = false;
-  private activeJobId: string | null = null;
   private cancelledJobs: Set<string> = new Set();
   private pollTimer: NodeJS.Timeout | null = null;
+  private completedRecentTimestamps: number[] = [];
+
+  public recoverStrandedJobs(): void {
+    try {
+      const db = getDb();
+      db.prepare(`
+        UPDATE jobs
+        SET status = 'queued', updated_at = datetime('now')
+        WHERE status = 'running'
+      `).run();
+    } catch {}
+  }
 
   public start(): void {
     if (this.pollTimer) return;
-    this.pollTimer = setInterval(() => this.processNextJob(), 2000);
+
+    // Recover any stranded running jobs from an ungraceful shutdown/restart
+    this.recoverStrandedJobs();
+
+    this.pollTimer = setInterval(() => this.processNextJobs(), 1500);
     // Process immediately
-    this.processNextJob();
+    this.processNextJobs();
   }
 
   public stop(): void {
@@ -33,58 +51,151 @@ export class JobRunner {
 
   public pause(): void {
     this.isPaused = true;
+    this.notifyRenderer('queue:status-changed', this.getQueueStats());
+  }
+
+  public pauseAll(): void {
+    this.pause();
   }
 
   public resume(): void {
     this.isPaused = false;
-    this.processNextJob();
+    this.notifyRenderer('queue:status-changed', this.getQueueStats());
+    this.processNextJobs();
+  }
+
+  public resumeAll(): void {
+    this.resume();
   }
 
   public cancel(jobId: string): void {
     this.cancelledJobs.add(jobId);
     updateJobStatus(jobId, 'cancelled');
-    if (this.activeJobId === jobId) {
-      this.notifyRenderer('job:cancelled', { jobId });
+    this.activeJobs.delete(jobId);
+    this.notifyRenderer('job:cancelled', { jobId });
+    this.notifyRenderer('queue:status-changed', this.getQueueStats());
+  }
+
+  public getQueueStats(): JobQueueStats {
+    try {
+      const db = getDb();
+      const rows = db.prepare(`
+        SELECT status, COUNT(*) as count FROM jobs GROUP BY status
+      `).all() as Array<{ status: string; count: number }>;
+      const counts: Record<string, number> = {};
+      for (const r of rows) counts[r.status] = r.count;
+
+      let pendingAiFiles = 0;
+      try {
+        const pendingRow = db.prepare("SELECT COUNT(*) as count FROM files WHERE processing_status = 'pending'").get() as any;
+        pendingAiFiles = pendingRow?.count || 0;
+      } catch {}
+
+      const settings = getSettings();
+      const runAiOnlyWhenIdle = settings.runAiOnlyWhenIdle === 'true';
+      const monitor = getHardwareMonitor();
+      const metrics = monitor.getHardwareMetrics();
+      const isWaitingForIdle = runAiOnlyWhenIdle && (metrics.cpuLoadPercent >= 35 || metrics.memoryPressurePercent >= 75);
+      const now = Date.now();
+      this.completedRecentTimestamps = this.completedRecentTimestamps.filter(t => now - t <= 10000);
+      const processingRatePerSec = this.completedRecentTimestamps.length > 0 ? this.completedRecentTimestamps.length / 10 : 0;
+
+      return {
+        activeJobs: this.activeJobs.size,
+        queuedJobs: counts['queued'] || 0,
+        pausedJobs: counts['paused'] || 0,
+        failedJobs: counts['failed'] || 0,
+        completedJobs: counts['completed'] || 0,
+        pendingAiFiles,
+        isPaused: this.isPaused,
+        isWaitingForIdle,
+        processingRatePerSec,
+      };
+    } catch {
+      return {
+        activeJobs: this.activeJobs.size,
+        queuedJobs: 0,
+        pausedJobs: 0,
+        failedJobs: 0,
+        completedJobs: 0,
+        pendingAiFiles: 0,
+        isPaused: this.isPaused,
+        isWaitingForIdle: false,
+        processingRatePerSec: 0,
+      };
     }
   }
 
   private notifyRenderer(channel: string, payload: unknown): void {
-    const windows = BrowserWindow.getAllWindows();
-    for (const win of windows) {
-      if (!win.isDestroyed()) {
-        win.webContents.send(channel, payload);
+    try {
+      const windows = BrowserWindow.getAllWindows();
+      for (const win of windows) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(channel, payload);
+        }
       }
+    } catch {}
+  }
+
+  private async processNextJobs(): Promise<void> {
+    if (this.isPaused) return;
+
+    const settings = getSettings();
+    const configuredProfile = (settings.resourceProfile as ResourceProfile) || 'auto';
+    const monitor = getHardwareMonitor();
+    const executionParams = monitor.getExecutionParams(configuredProfile);
+    const maxConcurrency = executionParams.maxConcurrentJobs;
+
+    // Fill concurrency slots up to allowed limit
+    while (this.activeJobs.size < maxConcurrency && !this.isPaused) {
+      const metrics = monitor.getHardwareMetrics(configuredProfile);
+      const allowAi = settings.enableBackgroundAi !== 'false' && executionParams.allowBackgroundAi;
+      const runAiOnlyWhenIdle = settings.runAiOnlyWhenIdle === 'true';
+      const isSystemIdle = metrics.cpuLoadPercent < 35 && metrics.memoryPressurePercent < 75;
+
+      const db = getDb();
+
+      // Priority bands:
+      // Priority 1 (Interactive) -> Priority 2 (Lightweight Index) -> Priority 3 (Enrichment) -> Priority 4 (Heavy AI)
+      let priorityFilter = '';
+      if (!allowAi || (runAiOnlyWhenIdle && !isSystemIdle) || executionParams.isThrottled) {
+        // Under resource pressure or idle-only constraint, filter out heavy Priority 4 AI jobs
+        priorityFilter = 'AND priority < 4 AND type NOT IN (\'face_clustering\', \'face_detection\', \'face_detect\', \'video_analyze\')';
+      }
+
+      // Query highest priority queued job; aging-friendly (ordered by priority ASC, created_at ASC)
+      const job = db.prepare(`
+        SELECT * FROM jobs
+        WHERE status = 'queued' ${priorityFilter}
+        ORDER BY priority ASC, created_at ASC
+        LIMIT 1
+      `).get() as any;
+
+      if (!job) break;
+
+      this.activeJobs.add(job.id);
+      updateJobStatus(job.id, 'running');
+      this.notifyRenderer('job:progress', { jobId: job.id, status: 'running', progress: 0, total: 100 });
+      this.notifyRenderer('queue:status-changed', this.getQueueStats());
+
+      // Execute asynchronously in background slot
+      this.executeJob(job, executionParams);
     }
   }
 
-  private async processNextJob(): Promise<void> {
-    if (this.isRunning || this.isPaused) return;
-
+  private async executeJob(job: any, executionParams: any): Promise<void> {
     const db = getDb();
-
-    // Query highest priority queued job
-    const job = db.prepare(`
-      SELECT * FROM jobs
-      WHERE status = 'queued'
-      ORDER BY priority ASC, created_at ASC
-      LIMIT 1
-    `).get() as any;
-
-    if (!job) return;
-
-    this.isRunning = true;
-    this.activeJobId = job.id;
-
-    updateJobStatus(job.id, 'running');
-    this.notifyRenderer('job:progress', { jobId: job.id, status: 'running', progress: 0, total: 100 });
-
     try {
       if (job.type === 'folder_scan' || job.type === 'index_folder') {
-        await this.handleFolderScanJob(job);
+        await this.handleFolderScanJob(job, executionParams);
       } else if (job.type === 'batch_copy') {
         await this.handleBatchCopyJob(job);
       } else if (job.type === 'face_clustering') {
         await this.handleFaceClusteringJob(job);
+      } else if (job.type === 'face_detect') {
+        await this.handleFaceDetectJob(job);
+      } else if (job.type === 'video_analyze') {
+        await this.handleVideoAnalyzeJob(job);
       } else {
         console.warn(`[JobRunner] Unknown job type: ${job.type}`);
         updateJobStatus(job.id, 'completed', 100, 100);
@@ -95,6 +206,7 @@ export class JobRunner {
         this.notifyRenderer('job:progress', { jobId: job.id, status: 'cancelled' });
       } else {
         updateJobStatus(job.id, 'completed', 100, 100);
+        this.completedRecentTimestamps.push(Date.now());
         this.notifyRenderer('job:completed', { jobId: job.id, status: 'completed' });
       }
     } catch (err) {
@@ -110,7 +222,7 @@ export class JobRunner {
       } catch {}
 
       // Retry policy
-      if (job.retry_count < job.max_retries) {
+      if (job.retry_count < (job.max_retries || 3)) {
         db.prepare(`
           UPDATE jobs SET status = 'queued', retry_count = retry_count + 1, error_message = ? WHERE id = ?
         `).run(errorMsg, job.id);
@@ -120,22 +232,27 @@ export class JobRunner {
       }
     } finally {
       this.cancelledJobs.delete(job.id);
-      this.activeJobId = null;
-      this.isRunning = false;
-      // Immediately check for more jobs in queue
-      setTimeout(() => this.processNextJob(), 100);
+      this.activeJobs.delete(job.id);
+      this.notifyRenderer('queue:status-changed', this.getQueueStats());
+      // Prompt next job pickup immediately
+      setImmediate(() => this.processNextJobs());
     }
   }
 
   // ─── Job Type Handlers ───────────────────────────────────────────────────────
 
-  private async handleFolderScanJob(job: any): Promise<void> {
+  private async handleFolderScanJob(job: any, executionParams: any): Promise<void> {
     const targetFolder = job.target_path;
     if (!targetFolder) {
       throw new Error('Folder scan job requires a target_path');
     }
 
+    const config = job.config_json ? JSON.parse(job.config_json) : {};
+
     await indexFolderIncremental(targetFolder, {
+      extractAi: config.extractAi !== undefined ? config.extractAi : executionParams.allowBackgroundAi,
+      generateThumbnails: config.generateThumbnails !== false,
+      videoSamplingInterval: executionParams.videoSamplingIntervalSeconds,
       isCancelled: () => this.cancelledJobs.has(job.id),
       onProgress: (processed, total, currentFile) => {
         const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
@@ -179,7 +296,7 @@ export class JobRunner {
     );
   }
 
-  private async handleFaceClusteringJob(job: any): Promise<void> {
+  private async handleFaceClusteringJob(_job: any): Promise<void> {
     const db = getDb();
     const aiClient = getAiWorkerClient();
 
@@ -262,6 +379,133 @@ export class JobRunner {
     });
 
     executeClusterPersist();
+  }
+
+  private async handleFaceDetectJob(job: any): Promise<void> {
+    const db = getDb();
+    const filePath = job.target_path;
+    const fileId = job.target_id;
+
+    if (!filePath || !fileId || !fs.existsSync(filePath)) {
+      throw new Error(`File not found for face detection: ${filePath}`);
+    }
+
+    // Recheck source file identity and modification state before committing results
+    const fileRecord = db.prepare('SELECT id, file_modified_at, size_bytes FROM files WHERE id = ?').get(fileId) as any;
+    if (!fileRecord) {
+      throw new Error(`File record not found in database: ${fileId}`);
+    }
+
+    const stat = fs.statSync(filePath);
+    if (stat.size !== fileRecord.size_bytes || stat.mtime.toISOString() !== fileRecord.file_modified_at) {
+      throw new Error(`Source file was modified in-flight before face detection: ${filePath}`);
+    }
+
+    const aiClient = getAiWorkerClient();
+    const detections = await aiClient.detectFaces(filePath);
+
+    const insertFaceTx = db.transaction(() => {
+      const insertFaceStmt = db.prepare(`
+        INSERT OR IGNORE INTO face_detections (
+          id, file_id, x, y, width, height, confidence, quality_score, embedding, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `);
+
+      for (const d of detections) {
+        insertFaceStmt.run(
+          uuidv4(),
+          fileId,
+          d.x,
+          d.y,
+          d.width,
+          d.height,
+          d.confidence,
+          d.quality_score,
+          Buffer.from(new Float32Array(d.embedding).buffer)
+        );
+      }
+
+      db.prepare(`
+        UPDATE files
+        SET processing_status = 'completed', updated_at = datetime('now')
+        WHERE id = ?
+      `).run(fileId);
+    });
+
+    insertFaceTx();
+  }
+
+  private async handleVideoAnalyzeJob(job: any): Promise<void> {
+    const db = getDb();
+    const filePath = job.target_path;
+    const fileId = job.target_id;
+
+    if (!filePath || !fileId || !fs.existsSync(filePath)) {
+      throw new Error(`Video file not found for analysis: ${filePath}`);
+    }
+
+    const fileRecord = db.prepare('SELECT id, file_modified_at, size_bytes FROM files WHERE id = ?').get(fileId) as any;
+    if (!fileRecord) {
+      throw new Error(`Video file record not found: ${fileId}`);
+    }
+
+    const stat = fs.statSync(filePath);
+    if (stat.size !== fileRecord.size_bytes || stat.mtime.toISOString() !== fileRecord.file_modified_at) {
+      throw new Error(`Video file was modified in-flight before analysis: ${filePath}`);
+    }
+
+    const config = job.config_json ? JSON.parse(job.config_json) : {};
+    const intervalSeconds = config.intervalSeconds || 5;
+
+    const aiClient = getAiWorkerClient();
+    const observations = await aiClient.analyzeVideo(filePath, intervalSeconds);
+
+    const insertVideoTx = db.transaction(() => {
+      const insertFaceStmt = db.prepare(`
+        INSERT OR IGNORE INTO face_detections (
+          id, file_id, x, y, width, height, confidence, quality_score, embedding, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `);
+
+      const insertObsStmt = db.prepare(`
+        INSERT OR IGNORE INTO video_observations (
+          id, file_id, face_detection_id, timestamp_seconds, frame_number, created_at
+        ) VALUES (?, ?, ?, ?, ?, datetime('now'))
+      `);
+
+      for (const obs of observations) {
+        for (const face of obs.faces) {
+          const faceId = uuidv4();
+          insertFaceStmt.run(
+            faceId,
+            fileId,
+            face.x,
+            face.y,
+            face.width,
+            face.height,
+            face.confidence,
+            face.quality_score,
+            Buffer.from(new Float32Array(face.embedding).buffer)
+          );
+
+          insertObsStmt.run(
+            uuidv4(),
+            fileId,
+            faceId,
+            obs.timestamp_seconds,
+            obs.frame_number
+          );
+        }
+      }
+
+      db.prepare(`
+        UPDATE files
+        SET processing_status = 'completed', updated_at = datetime('now')
+        WHERE id = ?
+      `).run(fileId);
+    });
+
+    insertVideoTx();
   }
 }
 

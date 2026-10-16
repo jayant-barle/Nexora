@@ -480,8 +480,10 @@ describe('Mandatory Rule: Filename, Duplicate Detection & Person Identification'
     const destFile = path.join(testDir, 'dest', 'modifying_dest.dat');
     fs.writeFileSync(sourceFile, 'Initial stable content for hashing');
 
+    const originalHash = await computeFileSha256(sourceFile);
+
     // Test copyFileWithVerification failure when source is modified concurrently
-    const copyPromise = copyFileWithVerification(sourceFile, destFile);
+    const copyPromise = copyFileWithVerification(sourceFile, destFile, originalHash);
     // Mutate source concurrently while copy is in flight
     fs.appendFileSync(sourceFile, ' CONCURRENT_APPEND_DATA');
     fs.utimesSync(sourceFile, new Date(Date.now() + 5000), new Date(Date.now() + 5000));

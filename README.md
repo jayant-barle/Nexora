@@ -2,7 +2,7 @@
 
 > **"Your files. Your intelligence. Your control."**
 
-[![Version](https://img.shields.io/badge/Version-0.3.0-b4ff32.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.5.0-b4ff32.svg)](VERSION)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![Electron Version](https://img.shields.io/badge/Electron-33.2.1-blue)](https://www.electronjs.org/)
 [![React Version](https://img.shields.io/badge/React-18.3.1-61dafb)](https://react.dev/)
@@ -19,16 +19,22 @@ All metadata intelligence, face recognition, perceptual deduplication, EXIF time
 ## Primary Features
 
 - 📁 **Native Windows File Explorer**: Full disk navigation across logical drives (`C:`, `D:`, etc.), path breadcrumbs, sorting, list/grid toggles, and direct integration with native Windows File Explorer.
+- 🛡️ **Adaptive Performance Without Feature Loss**: Full feature parity across low-end PCs, mid-range systems, and high-performance computers. Nexora never improves performance by disabling features, reducing AI accuracy, lowering confidence thresholds, skipping required analysis, or weakening data-integrity safeguards.
+- ⚡ **Adaptive Scheduling & Dynamic Throttling**: Auto-detects physical hardware (CPU cores/load, total/free RAM, GPU VRAM, SSD/HDD) without administrator privileges. Dynamically switches between Low Resource, Balanced, and Performance modes with 5-second hysteresis anti-oscillation dampening.
+- 🎯 **Four-Tier Priority Scheduling**: Keeps UI browsing and instant search instantaneous (Priority 1) and lightweight discovery immediate (Priority 2) by automatically deferring heavy AI face and video analysis (Priority 4) during high memory pressure (>82%) or sustained CPU load (>85%).
+- 🔄 **Resumable Processing & Completeness Guarantee**: Files with deferred AI are transparently recorded with `processing_status = 'pending'` and enqueued into persistent Priority 4 background jobs. Every eligible file eventually receives full analysis without false completion or duplicated work.
+- 🎬 **Direct Seek Video Analysis & Frame Suppression**: Direct keyframe seeking (`cap.set(cv2.CAP_PROP_POS_FRAMES)`) bypasses sequential frame decoding, cutting video analysis CPU and RAM consumption by >90% while suppressing redundant face scans on static scenes.
 - 🧠 **Metadata Intelligence Engine**: Local-only extraction pipeline for images (EXIF camera make/model, lens, orientation, exposure, ISO, GPS), videos (resolution, duration, fps, codec), documents (PDF title, author, subject, page count, and text preview; Office DOCX/PPTX/XLSX Dublin Core properties and word counts), audio (WAV RIFF stream parameters, sample rate, bitrate; MP3 ID3v2 tags), archives (ZIP/TAR entry count and password encryption detection), and plaintext.
 - 📂 **Metadata-Based Organization Proposals**: Configurable folder template rules (`{category}/{YYYY}/{MM}/{DD}/{person}/{camera}/{location}/{event}/{author}`) with deterministic safe fallbacks (`Unknown Date`, `Unassigned`, `Unknown Location`, `General`, `Unknown Camera`, `Unknown Author`, `Other Files`), collision avoidance, duplicate detection, and verified copy staging without touching originals.
 - ⚡ **Incremental Scanning & Non-Destructive Reconciliation**: Caching compares file timestamps and byte size to skip unchanged files; missing files are flagged (`is_missing = 1`, `availability_status = 'missing'`) without deleting records or user history, and automatically restored upon return.
-- 👤 **On-Device Facial Recognition**: Local neural face detection, vector embedding, and cosine clustering across photos and videos. Review, name, confirm, hide, or merge identity clusters.
+- 👤 **On-Device Facial Recognition**: Local neural face detection with standardized 1600px image normalization across all profiles, vector embedding, and cosine clustering across photos and videos. Review, name, confirm, hide, or merge identity clusters.
 - 🔄 **Safe Perceptual & Hash Deduplication**: Detect bit-for-bit identical files (SHA-256) and visually similar photos (perceptual difference hashing) with non-destructive resolution actions (Keep Best, Move to Trash, Hardlink).
 - 🔍 **Instant Smart Search**: High-performance SQLite FTS5 search indexing with filters by filename, extension, file size, date range, tags, camera make/model, author, artist, GPS, and recognized people.
+- 📊 **Resource Transparency & Controls Panel**: Settings dashboard with live CPU load, RAM pressure, GPU/VRAM telemetry, persistent job queue monitoring with items/sec throughput, pending AI file counters, master Pause/Resume All button, and worker limits.
 - 📅 **EXIF Media Timeline**: Chronologically group and browse photos and videos by Year, Month, or Day derived directly from camera metadata.
 - 💾 **Storage Analytics**: Monitor partition capacities, inspect file type distribution across indexed media, and instantly locate heavy disk consumers.
 - 👁 **Continuous Folder Watcher**: Automated background detection of new and modified media in monitored folders using `chokidar`.
-- ⚡ **Background Worker Queue**: Resilient, priority-driven job processing with live progress telemetry, pause/resume/cancel controls, and error logs.
+- ⚡ **Background Worker Queue**: Resilient, priority-driven job processing with live progress telemetry, pause/resume/cancel controls, crash recovery of stranded jobs, and error logs.
 - 📜 **Non-Destructive Operations & Rollback**: Safe copy-based file reorganizations with mandatory checksum verifications and instant one-click rollback.
 - 🎨 **Cinematic Windows 11 Visual Identity**: Dark charcoal surfaces (`#0a0a0a`), vibrant neon-lime accents (`#b4ff32`), glassmorphism, smooth micro-animations, and responsive layouts.
 

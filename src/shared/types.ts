@@ -349,7 +349,11 @@ export type IpcChannel =
   | 'dialog:open-file'
   | 'dialog:save-file'
   | 'app:get-version'
-  | 'app:get-paths';
+  | 'app:get-paths'
+  | 'system:get-hardware-metrics'
+  | 'system:get-queue-stats'
+  | 'system:pause-all-jobs'
+  | 'system:resume-all-jobs';
 
 // ─── API Request/Response Types ──────────────────────────────────────────────
 
@@ -511,6 +515,42 @@ export interface NavigationItem {
   badge?: number;
 }
 
+// ─── Hardware & Adaptive Resource Management ───────────────────────────────
+
+export type ResourceProfile = 'auto' | 'low' | 'balanced' | 'performance';
+
+export interface HardwareMetrics {
+  totalMemoryBytes: number;
+  freeMemoryBytes: number;
+  usedMemoryBytes: number;
+  memoryPressurePercent: number;
+  cpuCores: number;
+  cpuModel: string;
+  cpuLoadPercent: number;
+  gpuName: string | null;
+  gpuVramBytes: number | null;
+  accelerationProvider: 'DirectML' | 'CUDA' | 'OpenCL' | 'CPU';
+  isGpuAvailable: boolean;
+  primaryDiskType: 'SSD' | 'HDD' | 'Unknown';
+  activeJobCount: number;
+  detectedProfile: 'low' | 'balanced' | 'performance';
+  activeProfile: 'low' | 'balanced' | 'performance';
+  isThrottled: boolean;
+  throttleReason?: string | null;
+}
+
+export interface JobQueueStats {
+  activeJobs: number;
+  queuedJobs: number;
+  pausedJobs: number;
+  failedJobs: number;
+  completedJobs: number;
+  pendingAiFiles: number;
+  isPaused: boolean;
+  isWaitingForIdle: boolean;
+  processingRatePerSec: number;
+}
+
 // ─── App Settings ────────────────────────────────────────────────────────────
 
 export interface AppSettings {
@@ -529,6 +569,13 @@ export interface AppSettings {
   hashVerification: boolean;
   maxRetries: number;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
+  // Adaptive Hardware Tuning
+  resourceProfile: ResourceProfile;
+  enableBackgroundAi: boolean;
+  runAiOnlyWhenIdle: boolean;
+  maxCpuWorkers: number;
+  maxDiskWorkers: number;
+  maxAiWorkers: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -547,4 +594,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hashVerification: true,
   maxRetries: 3,
   logLevel: 'info',
+  resourceProfile: 'auto',
+  enableBackgroundAi: true,
+  runAiOnlyWhenIdle: false,
+  maxCpuWorkers: 2,
+  maxDiskWorkers: 1,
+  maxAiWorkers: 1,
 };

@@ -8,6 +8,7 @@ import path from 'path';
 import * as db from './database';
 import * as fsService from './filesystem';
 import { getJobRunner } from './job-runner';
+import { getHardwareMonitor } from './hardware-monitor';
 import { getWatcherService } from './watcher';
 import { getAiWorkerClient } from './ai-worker-client';
 import { executeBatchCopyOperation, revertBatchOperation, CopyItem } from './file-operations';
@@ -351,6 +352,25 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('library:rescan', async (_event, targetPath: unknown, fullRescan?: unknown) => {
     const validPath = validatePath(targetPath);
     return indexFolderIncremental(validPath, { forceFullRescan: !!fullRescan });
+  });
+
+  // ── System & Adaptive Resource Management ──────────────────────────────
+  ipcMain.handle('system:get-hardware-metrics', async () => {
+    return getHardwareMonitor().getMetrics();
+  });
+
+  ipcMain.handle('system:get-queue-stats', async () => {
+    return getJobRunner().getQueueStats();
+  });
+
+  ipcMain.handle('system:pause-all-jobs', async () => {
+    getJobRunner().pauseAll();
+    return true;
+  });
+
+  ipcMain.handle('system:resume-all-jobs', async () => {
+    getJobRunner().resumeAll();
+    return true;
   });
 
   // ── App Info ──────────────────────────────────────────────────────────────

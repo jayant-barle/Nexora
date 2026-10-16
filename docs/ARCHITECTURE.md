@@ -2,8 +2,8 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 1.3.0  
-**Status:** Implemented (v0.3.1 Mandatory Rule: Filename, Duplicate Detection & Person Identification Release)  
+**Version:** 0.5.0  
+**Status:** Implemented (v0.5.0 Adaptive Performance Without Feature Loss Release)  
 **Platform:** Windows 11 (x64) desktop  
 **Visual Identity:** Cinematic, futuristic, minimal black/charcoal surfaces (`#0a0a0a`), neon-lime accents (`#b4ff32`), glassmorphism  
 
@@ -37,8 +37,8 @@ graph TB
         DBService[SQLite Database: database.ts]
         FileOps[Safe File Operations: file-operations.ts]
         Indexer[Incremental Indexer: indexer.ts]
-        Organizer[Metadata Organizer: organizer.ts]
         JobQueue[Persistent Job Runner: job-runner.ts]
+        HwMonitor[Hardware Monitor: hardware-monitor.ts]
         Watcher[Chokidar Watcher: watcher.ts]
         AIClient[AI Worker Client: ai-worker-client.ts]
         
@@ -49,8 +49,10 @@ graph TB
         IPC --> Indexer
         IPC --> Organizer
         IPC --> JobQueue
+        IPC --> HwMonitor
         IPC --> Watcher
         WinManager --> IPC
+        JobQueue --> HwMonitor
         JobQueue --> Indexer
         JobQueue --> FileOps
         JobQueue --> DBService
@@ -225,6 +227,16 @@ State is managed via modular [Zustand](https://github.com/pmndrs/zustand) stores
   4. Person identities are strictly prohibited from being inferred from filenames. Person folders require confirmed/reviewed review status (`review_status IN ('confirmed', 'reviewed')`); unreviewed matches safely fallback to `Unassigned`. Multiple confirmed people in a single file are aggregated (e.g. `Alice & Bob`).
   5. In-flight file modifications during hashing (`computeFileSha256`) and copying (`copyFileWithVerification`) are detected via pre/post stream `stat` comparisons, aborting the operation, removing staging files, and invalidating affected results without corrupting targets.
 - **Consequences**: Eliminates false-positive deduplication, prevents erroneous biometric tagging from filenames, ensures multi-person safety, and guarantees 100% original file preservation.
+
+### ADR-05: Non-Negotiable Principle — Adaptive Performance Without Feature Loss
+- **Context**: Desktop applications often resort to arbitrarily disabling features, silently dropping AI accuracy, downscaling neural inputs, or skipping files to run on low-end hardware. This creates fragmented tiers, inconsistent duplicate detection, and incomplete library processing.
+- **Decision**: 
+  1. **Adapt scheduling, not capabilities**: Feature sets remain identical across all hardware profiles (`low`, `balanced`, `performance`). Heavy AI operations are never disabled (`allowBackgroundAi = true` on all profiles).
+  2. **Preserve accuracy invariants**: Model input resolution is standardized to 1600px across all profiles, preserving identical vector embeddings, matching thresholds ($\ge 0.70$), and clustering boundaries ($0.60$).
+  3. **Resumable deferred AI pipeline**: On low-end systems or during dynamic resource throttling (>82% RAM or >85% CPU load), heavy AI operations are deferred to persistent Priority 4 jobs (`face_detect`, `video_analyze`) in the SQLite `jobs` table with `processing_status = 'pending'`.
+  4. **Processing completeness guarantee**: Every eligible file is guaranteed to receive full analysis when resources or idle states permit. Tasks are never reported as completed when required analysis remains pending.
+  5. **Transparent user trade-offs**: Real-time queue telemetry reports pending AI counts (`pendingAiFiles`), idle-waiting conditions, and throttling state in the UI.
+- **Consequences**: Low-end systems remain responsive and unburdened without sacrificing AI intelligence or missing files. High-performance systems utilize additional cores without restriction. Zero silent degradation or data loss.
 
 ---
 

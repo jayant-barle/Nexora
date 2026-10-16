@@ -2,8 +2,8 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Document Version:** 1.3.0  
-**Status:** Implemented (v0.3.1 Mandatory Rule: Filename, Duplicate Detection & Person Identification Release) / Production-Ready  
+**Document Version:** 1.4.0  
+**Status:** Implemented (v0.4.0 Low-End PC Optimization & Adaptive Resource Management Release) / Production-Ready  
 **Target Platform:** Windows 11 (x64) desktop  
 **Execution Model:** Local-First, Offline, Zero-Cloud Telemetry  
 **Visual Identity:** Cinematic, futuristic, minimal; black and charcoal surfaces with restrained neon-lime accents and subtle glass effects  
@@ -224,8 +224,12 @@ Standard desktop file explorers (such as default Windows File Explorer) were arc
 | **AI Worker** | EXIF & GPS Metadata Extraction | **Implemented** | DateTimeOriginal, GPS coordinates |
 | **AI Worker** | Face Detection & Clustering | **Implemented** | Bounding box & cosine distance clustering |
 | **Mandatory Invariants** | Filename, Duplicate & Person Rules | **Implemented** | Canonical paths, non-inference of people, SHA-256 duplicate verification, multi-person support, in-flight modification guards |
-| **UI Pages** | 12 Core Views (Dashboard, Explorer, etc.) | **Implemented** | Complete cinematic black/charcoal/lime UI |
-| **Testing** | Automated Vitest Test Suite | **Implemented** | 51 tests passing across 10 test suites (100% pass) |
+| **Hardware Monitor** | Non-Admin Hardware Telemetry | **Implemented** | CPU cores/load, total/free RAM, GPU VRAM & provider, primary SSD/HDD detection |
+| **Adaptive Scheduler** | 4-Tier Priority & Dynamic Throttling | **Implemented** | Low/Balanced/Performance/Auto profiles, 5s hysteresis window, P4 AI deferral |
+| **Adaptive Performance Without Feature Loss** | Non-Negotiable Completeness & Accuracy Principle | **Implemented** | 100% feature parity, 1600px uniform resolution, deferred AI execution via persistent P4 jobs, transparent pending tracking |
+| **AI Optimization** | Direct Seek Video Sampling & Downscaling | **Implemented** | `cap.set` keyframe seek, 64x64 duplicate frame suppression, max 1600px face detection |
+| **Settings UI** | Hardware Transparency & Queue Controls | **Implemented** | Real-time telemetry cards, pause/resume background work, worker limits, pending AI counter |
+| **Testing** | Automated Vitest Test Suite | **Implemented** | 67 tests passing across 11 test suites (100% pass) |
 
 ---
 

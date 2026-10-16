@@ -1,7 +1,7 @@
 # Implementation Plan — Nexora AI File Manager
 
 ## Product: Nexora — AI File Manager
-**Version:** 0.3.0 (Metadata Intelligence Milestone)  
+**Version:** 0.5.0 (Adaptive Performance Without Feature Loss Milestone)  
 **Target Platform:** Windows 11 (x64) desktop  
 **Architecture:** Electron 33 + React 18 + Vite 6 + SQLite (better-sqlite3 WAL) + Python 3.14 (OpenCV 5.0)  
 
@@ -83,6 +83,26 @@ The v0.2.0 upgrade resolves foundational engine execution bottlenecks, AI infere
   - **Verified Copy & Rollback Guard**: Item-level proposal preview, duplicate avoidance, and atomic verified copy (pre/post SHA-256 check, temp staging, rollback safety) without modifying originals.
   - **Multi-Parameter Search Integration (`src/main/database.ts`)**: Search by category, camera make/model, author, artist, GPS, missing status, and FTS5 full-text matching.
   - **Automated Vitest Test Suites**: 44 tests passing across 9 test suites with 100% pass rate.
+
+### Phase 6: Low-End PC Optimization & Adaptive Resource Management (v0.4.0)
+- **Modules**: `src/main/hardware-monitor.ts`, `src/main/job-runner.ts`, `ai-worker/src/main.py`, `src/renderer/pages/SettingsPage.tsx`, `src/shared/types.ts`, `tests/unit/hardware-and-adaptive.test.ts`
+- **Deliverables**:
+  - **Hardware Monitor**: Non-admin probing of CPU cores/load, total/free RAM, GPU VRAM & acceleration provider, and primary SSD/HDD disk type via PowerShell CimInstance.
+  - **Resource Profiles**: Four distinct operational profiles (`low`, `balanced`, `performance`, `auto`) configuring concurrency, batch sizes, and video sampling intervals.
+  - **Dynamic Throttling & Hysteresis**: Evaluates memory pressure (>82%) and CPU load (>85%) to throttle down to `low` profile; enforces 5-second minimum adjustment window to prevent oscillation; asymmetric recovery requires <70% CPU and <70% RAM.
+  - **4-Tier Priority Scheduling**: P1 Interactive > P2 Lightweight Indexing > P3 Background Enrichment > P4 Heavy AI. Heavy AI is deferred during throttling or when `runAiOnlyWhenIdle` is enabled.
+  - **Direct Video Seek Sampling**: Replaced sequential decoding with direct keyframe seeking (`cap.set(cv2.CAP_PROP_POS_FRAMES)`), reducing video analysis CPU/RAM consumption by >90%. Added 64x64 thumbnail difference comparison to suppress redundant face scans on static scenes.
+  - **Settings UI Controls**: Live telemetry cards, persistent job queue monitoring with items/sec throughput, master Pause/Resume All button, background AI toggle, and idle-only processing.
+
+### Phase 7: Non-Negotiable Principle — Adaptive Performance Without Feature Loss (v0.5.0)
+- **Modules**: `src/main/hardware-monitor.ts`, `src/main/indexer.ts`, `src/main/job-runner.ts`, `src/shared/types.ts`, `src/renderer/pages/SettingsPage.tsx`, `tests/unit/hardware-and-adaptive.test.ts`
+- **Deliverables**:
+  - **Feature Parity Invariant**: All features remain fully available across low-end, mid-range, and high-performance machines. Capabilities are never disabled (`allowBackgroundAi = true` across all profiles).
+  - **AI Accuracy Invariant**: Standardized face image normalization resolution to 1600px across all profiles (`low`, `balanced`, `performance`), eliminating vector embedding drift and ensuring 100% identical detection precision ($\ge 0.70$ confidence) and clustering accuracy ($0.60$ distance) regardless of hardware tier.
+  - **Scheduling Adaptation Over Capability Removal**: On low-end systems or under resource pressure (>82% RAM or >85% CPU load), heavy AI operations are deferred (`deferHeavyAi = true`) rather than dropped. Files are recorded immediately in SQLite with `processing_status = 'pending'`, and Priority 4 jobs (`face_detect`, `video_analyze`) are enqueued into the `jobs` table.
+  - **Complete & Resumable AI Execution**: Dedicated job handlers (`handleFaceDetectJob`, `handleVideoAnalyzeJob`) in `JobRunner` execute deferred AI analysis via `AiWorkerClient`, persist face detections and video observations, verify file timestamps, and update `processing_status = 'completed'` without touching original files.
+  - **Transparent Trade-Offs**: Extended `JobQueueStats` with `pendingAiFiles` and `isWaitingForIdle`; added Pending AI counter tile, idle-waiting badge, and throttling status in the Settings UI so users always know when analysis is deferred. Tasks are never falsely reported as completed when required analysis is pending.
+  - **Automated Vitest Test Suites**: Expanded `tests/unit/hardware-and-adaptive.test.ts` with 4 dedicated Non-Negotiable Principle tests. Total test suite expanded to 67 tests passing across 11 test suites with 100% pass rate.
 
 ---
 

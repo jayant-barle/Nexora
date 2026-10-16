@@ -188,6 +188,9 @@ vi.mock('../../src/main/database', () => {
     getDb: () => mockDbInstance,
     initDatabase: () => {},
     closeDatabase: () => {},
+    getSettings: () => ({ resourceProfile: 'balanced', enableBackgroundAi: 'true' }),
+    getSetting: () => null,
+    setSetting: () => {},
   };
 });
 

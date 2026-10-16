@@ -1,7 +1,7 @@
 # Troubleshooting & Diagnostic Guide — Nexora
 
 ## Product: Nexora — AI File Manager
-**Version:** 0.2.0  
+**Version:** 0.4.0  
 
 ---
 
@@ -59,3 +59,14 @@
   Adding a folder with thousands of temporary files causes frequent re-indexing.
 - **Resolution**:
   Nexora's `WatcherService` implements a 500ms sliding debounce window and automatically excludes `.git`, `node_modules`, and system directories. Custom exclusion patterns can be added in `WatchedFoldersPage`.
+
+### 1.6 Resource Pressure & Dynamic Throttling
+- **Symptom**:
+  A warning badge appears in Settings: `⚠️ Throttled: High memory pressure (85%)` or heavy video/face indexing slows down system responsiveness.
+- **Resolution**:
+  1. **Automatic Self-Correction**: Nexora's `HardwareMonitor` automatically throttles concurrency down to 1 worker and defers heavy Priority 4 AI jobs (face embeddings, video keyframes) until resource pressure drops below 70%.
+  2. **Manual Profile Selection**: Open **Settings** > select **Low Resource** profile (`1 CPU worker, 25-item batches, background AI deferred`).
+  3. **Idle-Only AI**: In **Settings** > toggle **Run Intensive AI Only When System is Idle** on. This guarantees face and video recognition run only when CPU usage is below 30%.
+  4. **Master Pause**: Click **⏸ Pause Background Work** in the Settings panel to immediately pause all active queue execution while keeping file browsing and search fully responsive.
+  5. **Stranded Job Recovery**: If Nexora is closed unexpectedly during an active scan, the job runner automatically resets all stranded `running` jobs to `queued` on the next launch with zero duplicated database records.
+
