@@ -246,14 +246,14 @@ Standard desktop file explorers (such as default Windows File Explorer) were arc
 
 ## 9. Related Engineering Specifications
 
-- [ARCHITECTURE.md](file:///e:/Code%20Tresure/File%20manager/ARCHITECTURE.md) — Comprehensive technical architecture.
-- [FILE_OPERATIONS.md](file:///e:/Code%20Tresure/File%20manager/FILE_OPERATIONS.md) — Copy-first preservation, verification, and rollback mechanics.
-- [AI_PIPELINE.md](file:///e:/Code%20Tresure/File%20manager/AI_PIPELINE.md) — Subprocess JSON-RPC worker, hashing, EXIF, and facial recognition.
-- [PRIVACY_SECURITY.md](file:///e:/Code%20Tresure/File%20manager/PRIVACY_SECURITY.md) — Zero-cloud architecture, biometric data isolation, and Electron hardening.
-- [SEARCH_DUPLICATES.md](file:///e:/Code%20Tresure/File%20manager/SEARCH_DUPLICATES.md) — SQLite FTS5 search indexing and exact/perceptual deduplication engine.
-- [WATCH_FOLDERS.md](file:///e:/Code%20Tresure/File%20manager/WATCH_FOLDERS.md) — Chokidar directory monitoring, debounce windows, and offline re-sync.
-- [ERROR_HANDLING.md](file:///e:/Code%20Tresure/File%20manager/ERROR_HANDLING.md) — Multi-tier error boundaries, database transactions, and crash recovery.
-- [PERFORMANCE.md](file:///e:/Code%20Tresure/File%20manager/PERFORMANCE.md) — Large-library scalability targets, WAL tuning, and 60 FPS rendering.
-- [DEPENDENCIES.md](file:///e:/Code%20Tresure/File%20manager/DEPENDENCIES.md) — Production and development dependency inventory, licenses, and ABI guide.
-- [DATABASE_SCHEMA.md](file:///e:/Code%20Tresure/File%20manager/DATABASE_SCHEMA.md) — SQLite 3 schema documentation for all 25 tables and FTS5 indices.
-- [UI_UX_SPEC.md](file:///e:/Code%20Tresure/File%20manager/UI_UX_SPEC.md) — Design tokens, visual identity, and specifications for all 12 views.
+- [ARCHITECTURE.md](file:///e:/Code%20Tresure/File%20manager/docs/architecture/ARCHITECTURE.md) — Comprehensive technical architecture.
+- [FILE_OPERATIONS.md](file:///e:/Code%20Tresure/File%20manager/docs/operations/FILE_OPERATIONS.md) — Copy-first preservation, verification, and rollback mechanics.
+- [AI_PIPELINE.md](file:///e:/Code%20Tresure/File%20manager/docs/features/AI_PIPELINE.md) — Subprocess JSON-RPC worker, hashing, EXIF, and facial recognition.
+- [PRIVACY_SECURITY.md](file:///e:/Code%20Tresure/File%20manager/docs/security/PRIVACY_SECURITY.md) — Zero-cloud architecture, biometric data isolation, and Electron hardening.
+- [SEARCH_DUPLICATES.md](file:///e:/Code%20Tresure/File%20manager/docs/features/SEARCH_DUPLICATES.md) — SQLite FTS5 search indexing and exact/perceptual deduplication engine.
+- [WATCH_FOLDERS.md](file:///e:/Code%20Tresure/File%20manager/docs/operations/WATCH_FOLDERS.md) — Chokidar directory monitoring, debounce windows, and offline re-sync.
+- [ERROR_HANDLING.md](file:///e:/Code%20Tresure/File%20manager/docs/operations/ERROR_HANDLING.md) — Multi-tier error boundaries, database transactions, and crash recovery.
+- [PERFORMANCE.md](file:///e:/Code%20Tresure/File%20manager/docs/quality/PERFORMANCE.md) — Large-library scalability targets, WAL tuning, and 60 FPS rendering.
+- [DEPENDENCIES.md](file:///e:/Code%20Tresure/File%20manager/docs/architecture/DEPENDENCIES.md) — Production and development dependency inventory, licenses, and ABI guide.
+- [DATABASE_SCHEMA.md](file:///e:/Code%20Tresure/File%20manager/docs/architecture/DATABASE_SCHEMA.md) — SQLite 3 schema documentation for all 25 tables and FTS5 indices.
+- [UI_UX_SPEC.md](file:///e:/Code%20Tresure/File%20manager/docs/features/UI_UX_SPEC.md) — Design tokens, visual identity, and specifications for all 12 views.

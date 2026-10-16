@@ -2,8 +2,8 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 0.1.0  
-**Tracking Status:** Synchronized with v0.1.0 codebase  
+**Version:** 0.5.0  
+**Tracking Status:** Synchronized with v0.5.0 codebase  
 
 ---
 
@@ -102,7 +102,8 @@
 
 | Task ID | Description | Priority | Status | Dependencies | Completion Criteria |
 | :--- | :--- | :---: | :---: | :--- | :--- |
-| `DOC-01` | Establish Canonical Version Source of Truth | P0 | **Completed** | None | Root [VERSION](file:///e:/Code%20Tresure/File%20manager/VERSION) established at `0.1.0` and aligned with [package.json](file:///e:/Code%20Tresure/File%20manager/package.json). |
-| `DOC-02` | Implement Version Management & Release Workflow | P1 | **Completed** | `DOC-01` | Defined 9-step version update workflow and SemVer standards in [CONTRIBUTING.md](file:///e:/Code%20Tresure/File%20manager/CONTRIBUTING.md). |
-| `DOC-03` | Author Domain-Specific Engineering Specifications | P1 | **Completed** | None | Created [FILE_OPERATIONS.md](file:///e:/Code%20Tresure/File%20manager/FILE_OPERATIONS.md), [AI_PIPELINE.md](file:///e:/Code%20Tresure/File%20manager/AI_PIPELINE.md), [PRIVACY_SECURITY.md](file:///e:/Code%20Tresure/File%20manager/PRIVACY_SECURITY.md), [SEARCH_DUPLICATES.md](file:///e:/Code%20Tresure/File%20manager/SEARCH_DUPLICATES.md), [WATCH_FOLDERS.md](file:///e:/Code%20Tresure/File%20manager/WATCH_FOLDERS.md), [ERROR_HANDLING.md](file:///e:/Code%20Tresure/File%20manager/ERROR_HANDLING.md), [PERFORMANCE.md](file:///e:/Code%20Tresure/File%20manager/PERFORMANCE.md), [DEPENDENCIES.md](file:///e:/Code%20Tresure/File%20manager/DEPENDENCIES.md), and [UI_UX_SPEC.md](file:///e:/Code%20Tresure/File%20manager/UI_UX_SPEC.md). |
-| `DOC-04` | Maintain Chronological Release History in Changelog | P1 | **Completed** | `DOC-01` | Formatted [CHANGELOG.md](file:///e:/Code%20Tresure/File%20manager/CHANGELOG.md) adhering to Keep a Changelog standards. |
+| `DOC-01` | Establish Canonical Version Source of Truth | P0 | **Completed** | None | Root [VERSION](../../VERSION) established at `0.5.0` and aligned with [package.json](../../package.json). |
+| `DOC-02` | Implement Version Management & Release Workflow | P1 | **Completed** | `DOC-01` | Defined 9-step version update workflow and SemVer standards in [CONTRIBUTING.md](CONTRIBUTING.md). |
+| `DOC-03` | Author Domain-Specific Engineering Specifications | P1 | **Completed** | None | Created [FILE_OPERATIONS.md](../operations/FILE_OPERATIONS.md), [AI_PIPELINE.md](../features/AI_PIPELINE.md), [PRIVACY_SECURITY.md](../security/PRIVACY_SECURITY.md), [SEARCH_DUPLICATES.md](../features/SEARCH_DUPLICATES.md), [WATCH_FOLDERS.md](../operations/WATCH_FOLDERS.md), [ERROR_HANDLING.md](../operations/ERROR_HANDLING.md), [PERFORMANCE.md](../quality/PERFORMANCE.md), [DEPENDENCIES.md](../architecture/DEPENDENCIES.md), and [UI_UX_SPEC.md](../features/UI_UX_SPEC.md). |
+| `DOC-04` | Maintain Chronological Release History in Changelog | P1 | **Completed** | `DOC-01` | Formatted [CHANGELOG.md](../../CHANGELOG.md) adhering to Keep a Changelog standards. |
+| `DOC-05` | Professional Repository Architecture Refactoring | P0 | **Completed** | `DOC-01` | Reorganized repository into clean categorized structure under `docs/`, `config/`, `.github/`, and `database/`. |

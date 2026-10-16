@@ -2,8 +2,8 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 1.0.0  
-**Status:** Approved & Implemented  
+**Version:** 0.5.0  
+**Status:** Implemented (v0.5.0 Adaptive Performance Without Feature Loss Release)  
 **Platform:** Windows 11 (x64) desktop  
 **Visual Identity:** Cinematic, futuristic, minimal black/charcoal surfaces (`#0a0a0a`), neon-lime accents (`#b4ff32`), glassmorphism  
 
@@ -35,33 +35,61 @@ graph TB
         WinManager[Window Manager: index.ts]
         FSService[Filesystem Service: filesystem.ts]
         DBService[SQLite Database: database.ts]
-        JobQueue[Background Job Queue & Watcher]
+        FileOps[Safe File Operations: file-operations.ts]
+        Indexer[Incremental Indexer: indexer.ts]
+        JobQueue[Persistent Job Runner: job-runner.ts]
+        HwMonitor[Hardware Monitor: hardware-monitor.ts]
+        Watcher[Chokidar Watcher: watcher.ts]
+        AIClient[AI Worker Client: ai-worker-client.ts]
         
         ContextBridge -->|IPC invoke / handle| IPC
         IPC --> FSService
         IPC --> DBService
+        IPC --> FileOps
+        IPC --> Indexer
+        IPC --> Organizer
         IPC --> JobQueue
+        IPC --> HwMonitor
+        IPC --> Watcher
         WinManager --> IPC
+        JobQueue --> HwMonitor
+        JobQueue --> Indexer
+        JobQueue --> FileOps
+        JobQueue --> DBService
+        Organizer --> FileOps
+        Watcher --> JobQueue
+        Indexer --> AIClient
+        Indexer --> DBService
     end
 
     subgraph "Embedded Database"
-        SQLite[(better-sqlite3 WAL Mode)]
+        SQLite[(better-sqlite3 WAL Mode - Schema v2)]
         FTS5[(FTS5 Full-Text Index)]
         DBService --> SQLite
         DBService --> FTS5
     end
 
-    subgraph "AI Worker Subprocess (Python 3)"
+    subgraph "AI Worker Subprocess (Python 3.14 + OpenCV 5.0)"
         JSONRPC[JSON-RPC Engine: stdin/stdout]
         HashEngine[SHA-256 & Perceptual dHash]
-        EXIFParser[EXIF, GPS & Metadata Parser]
+        MetadataEngine[Metadata Intelligence Engine]
+        EXIFParser[EXIF, Camera & GPS Extractor]
+        DocParser[PDF & Office OpenXML Parser]
+        AudioParser[WAV, MP3 ID3 & FLAC Extractor]
+        ArchiveParser[ZIP & TAR Entry Inspector]
         FaceEngine[Face Detection & Cosine Clustering]
-        ThumbnailGen[Pillow JPEG Downscaler]
+        VideoEngine[Video Frame Sampler & Codec Info]
+        ThumbnailGen[Lanczos JPEG Downscaler]
         
-        JobQueue -->|spawn / JSON Lines| JSONRPC
+        AIClient -->|spawn / JSON Lines| JSONRPC
         JSONRPC --> HashEngine
-        JSONRPC --> EXIFParser
+        JSONRPC --> MetadataEngine
+        MetadataEngine --> EXIFParser
+        MetadataEngine --> DocParser
+        MetadataEngine --> AudioParser
+        MetadataEngine --> ArchiveParser
         JSONRPC --> FaceEngine
+        JSONRPC --> VideoEngine
         JSONRPC --> ThumbnailGen
     end
 ```
@@ -190,19 +218,40 @@ State is managed via modular [Zustand](https://github.com/pmndrs/zustand) stores
 - **Decision**: All organization workflows use copy-first operations with mandatory SHA-256 source/destination hash verifications and maintain a reversible transaction history in `operation_history`.
 - **Consequences**: User data is protected against corruption, partial transfers, or disk disconnections.
 
+### ADR-04: Mandatory Invariants for Filename Handling, Duplicate Verification & Person Identity
+- **Context**: Relying on filenames for duplicate detection or person attribution leads to false associations, while unmonitored concurrent file writes during hashing/copying can lead to corrupt copies or stale records.
+- **Decision**: 
+  1. Every file is an autonomous entity keyed by its canonical filesystem path and distinct `files.id`.
+  2. Identical filenames across different paths are never duplicates or associated with the same person without identical SHA-256 hash or verified face matches.
+  3. Exact duplicate detection requires byte-for-byte SHA-256 cryptographic verification; duplicates are registered in `duplicate_groups` with `status = 'pending'` and are never automatically deleted or overwritten.
+  4. Person identities are strictly prohibited from being inferred from filenames. Person folders require confirmed/reviewed review status (`review_status IN ('confirmed', 'reviewed')`); unreviewed matches safely fallback to `Unassigned`. Multiple confirmed people in a single file are aggregated (e.g. `Alice & Bob`).
+  5. In-flight file modifications during hashing (`computeFileSha256`) and copying (`copyFileWithVerification`) are detected via pre/post stream `stat` comparisons, aborting the operation, removing staging files, and invalidating affected results without corrupting targets.
+- **Consequences**: Eliminates false-positive deduplication, prevents erroneous biometric tagging from filenames, ensures multi-person safety, and guarantees 100% original file preservation.
+
+### ADR-05: Non-Negotiable Principle — Adaptive Performance Without Feature Loss
+- **Context**: Desktop applications often resort to arbitrarily disabling features, silently dropping AI accuracy, downscaling neural inputs, or skipping files to run on low-end hardware. This creates fragmented tiers, inconsistent duplicate detection, and incomplete library processing.
+- **Decision**: 
+  1. **Adapt scheduling, not capabilities**: Feature sets remain identical across all hardware profiles (`low`, `balanced`, `performance`). Heavy AI operations are never disabled (`allowBackgroundAi = true` on all profiles).
+  2. **Preserve accuracy invariants**: Model input resolution is standardized to 1600px across all profiles, preserving identical vector embeddings, matching thresholds ($\ge 0.70$), and clustering boundaries ($0.60$).
+  3. **Resumable deferred AI pipeline**: On low-end systems or during dynamic resource throttling (>82% RAM or >85% CPU load), heavy AI operations are deferred to persistent Priority 4 jobs (`face_detect`, `video_analyze`) in the SQLite `jobs` table with `processing_status = 'pending'`.
+  4. **Processing completeness guarantee**: Every eligible file is guaranteed to receive full analysis when resources or idle states permit. Tasks are never reported as completed when required analysis remains pending.
+  5. **Transparent user trade-offs**: Real-time queue telemetry reports pending AI counts (`pendingAiFiles`), idle-waiting conditions, and throttling state in the UI.
+- **Consequences**: Low-end systems remain responsive and unburdened without sacrificing AI intelligence or missing files. High-performance systems utilize additional cores without restriction. Zero silent degradation or data loss.
+
 ---
 
 ## 10. Specialized Engineering Specifications
 
 For in-depth domain specifications, consult the dedicated architecture documents:
 
-- [FILE_OPERATIONS.md](file:///e:/Code%20Tresure/File%20manager/FILE_OPERATIONS.md) — Copy-first preservation, verification, and rollback mechanics.
-- [AI_PIPELINE.md](file:///e:/Code%20Tresure/File%20manager/AI_PIPELINE.md) — Subprocess JSON-RPC worker, hashing, EXIF, and facial recognition.
-- [PRIVACY_SECURITY.md](file:///e:/Code%20Tresure/File%20manager/PRIVACY_SECURITY.md) — Zero-cloud architecture, biometric data isolation, and Electron hardening.
-- [SEARCH_DUPLICATES.md](file:///e:/Code%20Tresure/File%20manager/SEARCH_DUPLICATES.md) — SQLite FTS5 search indexing and exact/perceptual deduplication engine.
-- [WATCH_FOLDERS.md](file:///e:/Code%20Tresure/File%20manager/WATCH_FOLDERS.md) — Chokidar directory monitoring, debounce windows, and offline re-sync.
-- [ERROR_HANDLING.md](file:///e:/Code%20Tresure/File%20manager/ERROR_HANDLING.md) — Multi-tier error boundaries, database transactions, and crash recovery.
-- [PERFORMANCE.md](file:///e:/Code%20Tresure/File%20manager/PERFORMANCE.md) — Large-library scalability targets, WAL tuning, and 60 FPS rendering.
-- [DEPENDENCIES.md](file:///e:/Code%20Tresure/File%20manager/DEPENDENCIES.md) — Production and development dependency inventory, licenses, and ABI guide.
-- [DATABASE_SCHEMA.md](file:///e:/Code%20Tresure/File%20manager/DATABASE_SCHEMA.md) — SQLite 3 schema documentation for all 25 tables and FTS5 indices.
-- [UI_UX_SPEC.md](file:///e:/Code%20Tresure/File%20manager/UI_UX_SPEC.md) — Design tokens, visual identity, and specifications for all 12 views.
+- [FILE_OPERATIONS.md](../operations/FILE_OPERATIONS.md) — Copy-first preservation, verification, and rollback mechanics.
+- [AI_PIPELINE.md](../features/AI_PIPELINE.md) — Subprocess JSON-RPC worker, hashing, EXIF, and facial recognition.
+- [PRIVACY_SECURITY.md](../security/PRIVACY_SECURITY.md) — Zero-cloud architecture, biometric data isolation, and Electron hardening.
+- [SEARCH_DUPLICATES.md](../features/SEARCH_DUPLICATES.md) — SQLite FTS5 search indexing and exact/perceptual deduplication engine.
+- [WATCH_FOLDERS.md](../operations/WATCH_FOLDERS.md) — Chokidar directory monitoring, debounce windows, and offline re-sync.
+- [ERROR_HANDLING.md](../operations/ERROR_HANDLING.md) — Multi-tier error boundaries, database transactions, and crash recovery.
+- [PERFORMANCE.md](../quality/PERFORMANCE.md) — Large-library scalability targets, WAL tuning, and 60 FPS rendering.
+- [DEPENDENCIES.md](DEPENDENCIES.md) — Production and development dependency inventory, licenses, and ABI guide.
+- [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) — SQLite 3 schema documentation for all 25 tables and FTS5 indices.
+- [UI_UX_SPEC.md](../features/UI_UX_SPEC.md) — Design tokens, visual identity, and specifications for all 12 views.
+

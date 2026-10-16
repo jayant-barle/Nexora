@@ -172,49 +172,84 @@ npm run package
 
 ## Documentation & Engineering Specifications
 
-Nexora includes an extensive, production-grade technical documentation system:
+Nexora includes an extensive, production-grade technical documentation system organized in [`docs/`](docs/README.md):
 
-| Document | Purpose & Scope |
-| :--- | :--- |
-| [VERSION](file:///e:/Code%20Tresure/File%20manager/VERSION) | Canonical single source of truth for the project version (`0.1.0`) |
-| [PRD.md](file:///e:/Code%20Tresure/File%20manager/PRD.md) | Product requirements, scope, constraints, and acceptance criteria |
-| [ARCHITECTURE.md](file:///e:/Code%20Tresure/File%20manager/ARCHITECTURE.md) | System topology, multi-process IPC, state management, and data flow |
-| [FILE_OPERATIONS.md](file:///e:/Code%20Tresure/File%20manager/FILE_OPERATIONS.md) | Copy-first preservation, SHA-256 verification, and rollback mechanics |
-| [AI_PIPELINE.md](file:///e:/Code%20Tresure/File%20manager/AI_PIPELINE.md) | Subprocess JSON-RPC worker, hashing, EXIF, and facial recognition |
-| [PRIVACY_SECURITY.md](file:///e:/Code%20Tresure/File%20manager/PRIVACY_SECURITY.md) | Zero-cloud architecture, biometric data isolation, and Electron hardening |
-| [SEARCH_DUPLICATES.md](file:///e:/Code%20Tresure/File%20manager/SEARCH_DUPLICATES.md) | SQLite FTS5 search indexing and exact/perceptual deduplication engine |
-| [WATCH_FOLDERS.md](file:///e:/Code%20Tresure/File%20manager/WATCH_FOLDERS.md) | Chokidar directory monitoring, debounce windows, and offline re-sync |
-| [ERROR_HANDLING.md](file:///e:/Code%20Tresure/File%20manager/ERROR_HANDLING.md) | Multi-tier error boundaries, database transactions, and crash recovery |
-| [PERFORMANCE.md](file:///e:/Code%20Tresure/File%20manager/PERFORMANCE.md) | Large-library scalability targets, WAL tuning, and 60 FPS rendering |
-| [DEPENDENCIES.md](file:///e:/Code%20Tresure/File%20manager/DEPENDENCIES.md) | Production and development dependency inventory, licenses, and ABI guide |
-| [DATABASE_SCHEMA.md](file:///e:/Code%20Tresure/File%20manager/DATABASE_SCHEMA.md) | SQLite 3 schema documentation for all 25 tables and FTS5 indices |
-| [UI_UX_SPEC.md](file:///e:/Code%20Tresure/File%20manager/UI_UX_SPEC.md) | Design tokens, visual identity, and specifications for all 12 views |
-| [API.md](file:///e:/Code%20Tresure/File%20manager/API.md) | Complete IPC channel specifications and payload contracts |
-| [IMPLEMENTATION_PLAN.md](file:///e:/Code%20Tresure/File%20manager/IMPLEMENTATION_PLAN.md) | Phased development roadmap and milestones |
-| [TASKS.md](file:///e:/Code%20Tresure/File%20manager/TASKS.md) | Status tracker for completed, in-progress, and planned engineering tasks |
-| [TESTING.md](file:///e:/Code%20Tresure/File%20manager/TESTING.md) | Automated testing strategy, Vitest commands, and acceptance criteria |
-| [SECURITY.md](file:///e:/Code%20Tresure/File%20manager/SECURITY.md) | Security vulnerability disclosure and threat policies |
-| [CHANGELOG.md](file:///e:/Code%20Tresure/File%20manager/CHANGELOG.md) | Chronological release and change history |
-| [CONTRIBUTING.md](file:///e:/Code%20Tresure/File%20manager/CONTRIBUTING.md) | Contribution standards, code style, and version update workflow |
+| Document | Category | Purpose & Scope |
+| :--- | :--- | :--- |
+| [VERSION](VERSION) | Root | Canonical single source of truth for the project version (`0.5.0`) |
+| [PROJECT_RULES.md](PROJECT_RULES.md) | Root | Non-negotiable engineering principles & coding rules |
+| [CHANGELOG.md](CHANGELOG.md) | Root | Chronological release and change history |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Root / Dev | Contribution standards, code style, and version update workflow |
+| [docs/README.md](docs/README.md) | Index | Complete master documentation index and navigation directory |
+| [PRD.md](docs/product/PRD.md) | Product | Product requirements, scope, constraints, and acceptance criteria |
+| [FEATURES.md](docs/product/FEATURES.md) | Product | Comprehensive catalog of all 10 core features |
+| [IMPLEMENTATION_PLAN.md](docs/product/IMPLEMENTATION_PLAN.md) | Product | Phased development roadmap and milestones |
+| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Architecture | System topology, multi-process IPC, state management, and data flow |
+| [DATABASE_SCHEMA.md](docs/architecture/DATABASE_SCHEMA.md) | Architecture | SQLite 3 schema documentation for all 25 tables and FTS5 indices |
+| [API.md](docs/architecture/API.md) | Architecture | Complete IPC channel specifications and payload contracts |
+| [DEPENDENCIES.md](docs/architecture/DEPENDENCIES.md) | Architecture | Production and development dependency inventory, licenses, and ABI guide |
+| [SETUP_WINDOWS.md](docs/development/SETUP_WINDOWS.md) | Development | Windows 11 development environment setup and native build guide |
+| [GSD_STYLE.md](docs/development/GSD_STYLE.md) | Development | Get-Stuff-Done engineering standards and delivery workflow |
+| [TASKS.md](docs/development/TASKS.md) | Development | Status tracker for completed, in-progress, and planned engineering tasks |
+| [FILE_OPERATIONS.md](docs/operations/FILE_OPERATIONS.md) | Operations | Copy-first preservation, SHA-256 verification, and rollback mechanics |
+| [WATCH_FOLDERS.md](docs/operations/WATCH_FOLDERS.md) | Operations | Chokidar directory monitoring, debounce windows, and offline re-sync |
+| [ERROR_HANDLING.md](docs/operations/ERROR_HANDLING.md) | Operations | Multi-tier error boundaries, database transactions, and crash recovery |
+| [TROUBLESHOOTING.md](docs/operations/TROUBLESHOOTING.md) | Operations | Diagnostic playbooks, common error resolutions, and logs |
+| [TESTING.md](docs/quality/TESTING.md) | Quality | Automated testing strategy, Vitest commands, and acceptance criteria |
+| [PERFORMANCE.md](docs/quality/PERFORMANCE.md) | Quality | Large-library scalability targets, WAL tuning, and 60 FPS rendering |
+| [SECURITY.md](docs/security/SECURITY.md) | Security | Security vulnerability disclosure and threat policies |
+| [PRIVACY_SECURITY.md](docs/security/PRIVACY_SECURITY.md) | Security | Zero-cloud architecture, biometric data isolation, and Electron hardening |
+| [AI_PIPELINE.md](docs/features/AI_PIPELINE.md) | Features | Subprocess JSON-RPC worker, hashing, EXIF, and facial recognition |
+| [SEARCH_DUPLICATES.md](docs/features/SEARCH_DUPLICATES.md) | Features | SQLite FTS5 search indexing and exact/perceptual deduplication engine |
+| [UI_UX_SPEC.md](docs/features/UI_UX_SPEC.md) | Features | Design tokens, visual identity, and specifications for all 12 views |
+| [MODEL_AND_DEPENDENCY_LICENSES.md](docs/MODEL_AND_DEPENDENCY_LICENSES.md) | Compliance | Permissive open-source licenses and redistribution guide |
 
 ---
 
 ## Project Structure
 
 ```
-nexora/
+Nexora/
+├── .github/                      # CI workflows and issue/PR templates
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.md
+│   │   └── feature_request.md
+│   ├── workflows/
+│   │   └── ci.yml
+│   └── PULL_REQUEST_TEMPLATE.md
 ├── ai-worker/                    # Python AI subprocess inference engine
 │   ├── requirements.txt          # Python ML & image dependencies
 │   └── src/
 │       └── main.py               # JSON-RPC server on stdin/stdout
-├── assets/                       # Application icons and static assets
-├── database/                     # SQLite schema definitions
-│   └── migrations/
-│       └── 001_initial.sql       # Versioned SQLite initial schema
-├── docs/                         # Extended technical documentation
-│   ├── ARCHITECTURE.md           # Detailed architectural breakdown
-│   └── PRD.md                    # Product requirements document
-├── scripts/                      # Developer utility scripts
+├── assets/                       # Application icons, images, and branding assets
+│   ├── branding/
+│   ├── icons/
+│   └── images/
+├── config/                       # Application configuration specifications
+│   └── model_capabilities.yaml   # Hardware profiles & local AI model catalog
+├── database/                     # SQLite schema definitions and migrations
+│   ├── migrations/
+│   │   ├── 001_initial.sql
+│   │   ├── 002_metadata_engine.sql
+│   │   ├── 003_adaptive_performance.sql
+│   │   └── 004_adaptive_scheduler.sql
+│   ├── schemas/
+│   └── seeds/
+├── docs/                         # Categorized technical engineering documentation
+│   ├── architecture/             # System topology, API, schema, and dependencies
+│   ├── development/              # Setup, contributing guide, and task tracker
+│   ├── features/                 # AI pipeline, search/duplicates, UI/UX specs
+│   ├── operations/               # File ops, folder monitoring, and error handling
+│   ├── product/                  # PRD, feature catalog, and roadmap
+│   ├── quality/                  # Testing plan and performance benchmarks
+│   ├── security/                 # Threat model and privacy architecture
+│   ├── MODEL_AND_DEPENDENCY_LICENSES.md # Permissive open-source licenses
+│   └── README.md                 # Master documentation index
+├── scripts/                      # Developer and maintenance utility scripts
+│   ├── build/
+│   ├── development/
+│   ├── maintenance/
+│   ├── validation/
 │   └── migrate.js                # Standalone database migration runner
 ├── src/
 │   ├── main/                     # Electron Main Process (Node.js)
@@ -236,10 +271,21 @@ nexora/
 │   └── shared/                   # Shared TypeScript contracts
 │       └── types.ts              # Common data models, IPC types, and defaults
 ├── tests/                        # Automated test suites
-│   └── unit/                     # Vitest unit test files
+│   ├── unit/                     # 11 unit test suites (67 tests)
+│   ├── integration/              # Integration tests
+│   ├── e2e/                      # End-to-end tests
+│   ├── performance/              # Performance benchmarks
+│   └── fixtures/                 # Test sample data
+├── .gitignore                    # Comprehensive repository hygiene ignore patterns
+├── .npmrc                        # Package manager engine strictness configuration
+├── CHANGELOG.md                  # Chronological release and change history
+├── CONTRIBUTING.md               # Contribution standards and version update workflow
 ├── package.json                  # Dependencies, scripts, and build metadata
+├── PROJECT_RULES.md              # Non-negotiable engineering principles & coding rules
+├── README.md                     # Repository entry point and architecture overview
 ├── tsconfig.json                 # Renderer TypeScript compiler configuration
 ├── tsconfig.main.json            # Main process TypeScript compiler configuration
+├── VERSION                       # Canonical single source of truth for version (0.5.0)
 ├── vite.config.ts                # Vite renderer build configuration
 └── vitest.config.ts              # Vitest test configuration
 ```
