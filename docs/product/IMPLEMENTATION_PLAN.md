@@ -102,7 +102,7 @@ The v0.2.0 upgrade resolves foundational engine execution bottlenecks, AI infere
   - **Scheduling Adaptation Over Capability Removal**: On low-end systems or under resource pressure (>82% RAM or >85% CPU load), heavy AI operations are deferred (`deferHeavyAi = true`) rather than dropped. Files are recorded immediately in SQLite with `processing_status = 'pending'`, and Priority 4 jobs (`face_detect`, `video_analyze`) are enqueued into the `jobs` table.
   - **Complete & Resumable AI Execution**: Dedicated job handlers (`handleFaceDetectJob`, `handleVideoAnalyzeJob`) in `JobRunner` execute deferred AI analysis via `AiWorkerClient`, persist face detections and video observations, verify file timestamps, and update `processing_status = 'completed'` without touching original files.
   - **Transparent Trade-Offs**: Extended `JobQueueStats` with `pendingAiFiles` and `isWaitingForIdle`; added Pending AI counter tile, idle-waiting badge, and throttling status in the Settings UI so users always know when analysis is deferred. Tasks are never falsely reported as completed when required analysis is pending.
-  - **Automated Vitest Test Suites**: Expanded `tests/unit/hardware-and-adaptive.test.ts` with 4 dedicated Non-Negotiable Principle tests. Total test suite expanded to 67 tests passing across 11 test suites with 100% pass rate.
+  - **Automated Vitest Test Suites**: Expanded `tests/unit/hardware-and-adaptive.test.ts` with dedicated Non-Negotiable Principle and quad-core scaling tests. Total test suite expanded to 68 tests passing across 11 test suites with 100% pass rate.
 
 ---
 

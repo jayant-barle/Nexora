@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Repository Hygiene & Strictness**: Added `.npmrc` enforcing strict engine checks and updated `.gitignore` accounting for runtime databases, build outputs, and Python caches.
     - **Preserved Core Files & Integrity**: Kept authoritative files at repository root (`package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `PROJECT_RULES.md`, `VERSION`, `tsconfig*.json`, `vite.config.ts`, `vitest.config.ts`) and updated all internal documentation cross-references.
 
+**Fixed**
+- **CI Test Suite Isolation & Core-Adaptive Determinism (`tests/unit/hardware-and-adaptive.test.ts`)**:
+  - Resolved GitHub Actions CI failure on Windows runner in `Execution Parameters by Profile`. Added unconstrained hermetic baseline hardware mocks (`32GB RAM`, `8 cores`) in `beforeEach` to isolate unit test assertions from host runner VM memory pressure and CPU core constraints.
+  - Added test verifying dynamic concurrency scaling (`min(4, max(2, cores - 1))`) on quad-core machines, ensuring that systems with 4 vCPUs reserve 1 core for OS/UI responsiveness while correctly scheduling 3 concurrent workers.
+  - All 68 tests across 11 test suites now pass deterministically across both local development environments and CI matrix runners.
+
 ---
 
 ### [0.4.0] — 2026-10-17

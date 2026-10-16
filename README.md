@@ -271,7 +271,7 @@ Nexora/
 │   └── shared/                   # Shared TypeScript contracts
 │       └── types.ts              # Common data models, IPC types, and defaults
 ├── tests/                        # Automated test suites
-│   ├── unit/                     # 11 unit test suites (67 tests)
+│   ├── unit/                     # 11 unit test suites (68 tests)
 │   ├── integration/              # Integration tests
 │   ├── e2e/                      # End-to-end tests
 │   ├── performance/              # Performance benchmarks

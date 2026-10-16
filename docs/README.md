@@ -55,7 +55,7 @@ docs/
 ### 4. Quality & Performance (`docs/quality/`)
 | Document | Description |
 | :--- | :--- |
-| [**TESTING.md**](file:///e:/Code%20Tresure/File%20manager/docs/quality/TESTING.md) | Automated QA test plan: 11 test suites, 67 tests, 100% pass rate, and invariant verification specs. |
+| [**TESTING.md**](file:///e:/Code%20Tresure/File%20manager/docs/quality/TESTING.md) | Automated QA test plan: 11 test suites, 68 tests, 100% pass rate, and invariant verification specs. |
 | [**PERFORMANCE.md**](file:///e:/Code%20Tresure/File%20manager/docs/quality/PERFORMANCE.md) | Scalability benchmarks, memory targets, 60 FPS rendering specs, and SQLite WAL pragma tuning. |
 
 ---

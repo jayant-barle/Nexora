@@ -128,6 +128,14 @@ describe('Adaptive Resource Management & Hardware Telemetry', () => {
   beforeEach(() => {
     mockDb = new MockAdaptiveDatabase();
     vi.restoreAllMocks();
+    // Establish unconstrained, healthy 8-core / 32GB baseline to isolate tests from host VM CPU/RAM load
+    vi.spyOn(os, 'totalmem').mockReturnValue(32 * 1024 * 1024 * 1024);
+    vi.spyOn(os, 'freemem').mockReturnValue(24 * 1024 * 1024 * 1024);
+    vi.spyOn(os, 'cpus').mockReturnValue(new Array(8).fill({
+      model: 'Intel Core i7 Performance',
+      speed: 3600,
+      times: { idle: 1000, user: 100, sys: 50, irq: 0, nice: 0 },
+    }) as any);
   });
 
   afterEach(() => {
@@ -226,6 +234,19 @@ describe('Adaptive Resource Management & Hardware Telemetry', () => {
       expect(params.videoSamplingIntervalSeconds).toBe(3);
       expect(params.allowBackgroundAi).toBe(true);
       expect(params.deferHeavyAi).toBe(false);
+    });
+
+    it('adapts performance concurrency dynamically on quad-core machines (leaves 1 core for OS/UI)', () => {
+      // 4-core machine in performance profile leaves 1 core for UI responsiveness: min(4, max(2, 4 - 1)) = 3
+      vi.spyOn(os, 'cpus').mockReturnValue(new Array(4).fill({
+        model: 'Generic 4-Core CPU',
+        speed: 2500,
+        times: { idle: 1000, user: 100, sys: 50, irq: 0, nice: 0 },
+      }) as any);
+
+      const monitor = new HardwareMonitor();
+      const params = monitor.getExecutionParams('performance');
+      expect(params.maxConcurrentJobs).toBe(3);
     });
   });
 
