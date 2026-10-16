@@ -496,17 +496,90 @@ export function getJobs(status?: string, limit = 50): Job[] {
   return database.prepare('SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?').all(limit) as Job[];
 }
 
-export function createJob(type: string, targetPath?: string, targetId?: string, config?: Record<string, unknown>): Job {
+export function createJob(
+  type: string,
+  targetPath?: string,
+  targetId?: string,
+  config?: Record<string, unknown>,
+  priority?: number
+): Job {
   const database = getDb();
+
+  // Deduplication: If a queued or running job already exists for the identical operation, return it
+  const existingJob = database.prepare(`
+    SELECT * FROM jobs 
+    WHERE type = ? 
+      AND (target_path = ? OR (target_path IS NULL AND ? IS NULL))
+      AND (target_id = ? OR (target_id IS NULL AND ? IS NULL))
+      AND status IN ('queued', 'running')
+    LIMIT 1
+  `).get(
+    type,
+    targetPath ?? null,
+    targetPath ?? null,
+    targetId ?? null,
+    targetId ?? null
+  ) as Job | undefined;
+
+  if (existingJob) {
+    return existingJob;
+  }
+
   const id = uuidv4();
   const now = new Date().toISOString();
-  
+
+  // Determine appropriate priority based on job type if not explicitly passed:
+  // 1: Interactive / User-driven operations
+  // 2: Folder scanning & lightweight indexing
+  // 3: Enrichment / duplicate computation
+  // 4: Heavy AI (face detection, video analysis)
+  let assignedPriority = priority;
+  if (assignedPriority === undefined) {
+    if (type === 'folder_scan' || type === 'index_folder' || type === 'batch_copy') {
+      assignedPriority = 1;
+    } else if (type === 'hash_compute' || type === 'duplicate_compare' || type === 'reconciliation') {
+      assignedPriority = 2;
+    } else if (type === 'face_clustering' || type === 'semantic_index') {
+      assignedPriority = 3;
+    } else if (type === 'face_detect' || type === 'video_analyze') {
+      assignedPriority = 4;
+    } else {
+      assignedPriority = 2;
+    }
+  }
+
   database.prepare(`
     INSERT INTO jobs (id, type, status, priority, progress, total, target_path, target_id, config_json, created_at, updated_at)
-    VALUES (?, ?, 'queued', 5, 0, 0, ?, ?, ?, ?, ?)
-  `).run(id, type, targetPath ?? null, targetId ?? null, config ? JSON.stringify(config) : null, now, now);
-  
+    VALUES (?, ?, 'queued', ?, 0, 0, ?, ?, ?, ?, ?)
+  `).run(id, type, assignedPriority, targetPath ?? null, targetId ?? null, config ? JSON.stringify(config) : null, now, now);
+
   return database.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
+}
+
+export function retryJob(id: string): Job | null {
+  const database = getDb();
+  const now = new Date().toISOString();
+  database.prepare(`
+    UPDATE jobs
+    SET status = 'queued',
+        error_message = NULL,
+        retry_count = 0,
+        progress = 0,
+        started_at = NULL,
+        completed_at = NULL,
+        updated_at = ?
+    WHERE id = ?
+  `).run(now, id);
+
+  return database.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
+}
+
+export function clearCompletedJobs(): number {
+  const database = getDb();
+  const info = database.prepare(`
+    DELETE FROM jobs WHERE status IN ('completed', 'cancelled')
+  `).run();
+  return info.changes;
 }
 
 export function updateJobStatus(id: string, status: string, progress?: number, total?: number, error?: string): void {
@@ -514,13 +587,13 @@ export function updateJobStatus(id: string, status: string, progress?: number, t
   const now = new Date().toISOString();
   const updates: string[] = ['status = ?', 'updated_at = ?'];
   const params: unknown[] = [status, now];
-  
+
   if (progress !== undefined) { updates.push('progress = ?'); params.push(progress); }
   if (total !== undefined) { updates.push('total = ?'); params.push(total); }
   if (error !== undefined) { updates.push('error_message = ?'); params.push(error); }
   if (status === 'running') { updates.push("started_at = COALESCE(started_at, ?)"); params.push(now); }
   if (status === 'completed' || status === 'failed') { updates.push('completed_at = ?'); params.push(now); }
-  
+
   params.push(id);
   database.prepare(`UPDATE jobs SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 }

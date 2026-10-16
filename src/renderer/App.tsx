@@ -25,7 +25,7 @@ import { SettingsPage } from './pages/SettingsPage';
 
 export const App: React.FC = () => {
   const { currentPage, setPage } = useNavigationStore();
-  const { jobs, fetchJobs } = useJobsStore();
+  const { jobs, queueStats, fetchJobs, fetchQueueStats, initListeners } = useJobsStore();
   const [quickSearch, setQuickSearch] = useState('');
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [selectedScanFolder, setSelectedScanFolder] = useState<string | null>(null);
@@ -61,16 +61,21 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setPage]);
 
-  // Monitor jobs in background
+  // Monitor jobs in background with real-time event listeners and stats
   useEffect(() => {
     fetchJobs();
+    fetchQueueStats();
+    const cleanup = initListeners();
     const interval = setInterval(() => {
-      fetchJobs('running');
+      fetchQueueStats();
     }, 4000);
-    return () => clearInterval(interval);
-  }, [fetchJobs]);
+    return () => {
+      cleanup();
+      clearInterval(interval);
+    };
+  }, [fetchJobs, fetchQueueStats, initListeners]);
 
-  const activeJobs = jobs.filter(j => j.status === 'running');
+  const activeJobsCount = queueStats ? queueStats.activeJobs : jobs.filter(j => j.status === 'running').length;
 
   // Handle Quick Search submission
   const handleQuickSearchSubmit = (e: React.FormEvent) => {
@@ -197,7 +202,7 @@ export const App: React.FC = () => {
             </button>
 
             {/* Active Jobs Pill */}
-            {activeJobs.length > 0 ? (
+            {activeJobsCount > 0 ? (
               <button
                 className="btn btn-sm"
                 onClick={() => setPage('activity')}
@@ -211,7 +216,7 @@ export const App: React.FC = () => {
                 }}
               >
                 <span className="animate-pulse">⚡</span>
-                <span>{activeJobs.length} Processing</span>
+                <span>{activeJobsCount} Processing</span>
               </button>
             ) : (
               <button

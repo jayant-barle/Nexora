@@ -8,23 +8,29 @@ import { useJobsStore } from '../store';
 import type { JobStatus } from '@shared/types';
 
 export const ActivityPage: React.FC = () => {
-  const { jobs, loading, fetchJobs, pauseJob, resumeJob, cancelJob } = useJobsStore();
+  const { jobs, queueStats, loading, fetchJobs, fetchQueueStats, pauseJob, resumeJob, cancelJob, retryJob, clearCompletedJobs } = useJobsStore();
   const [filter, setFilter] = useState<string>('all');
 
   useEffect(() => {
     fetchJobs();
-    const timer = setInterval(() => fetchJobs(), 3000);
+    fetchQueueStats();
+    const timer = setInterval(() => {
+      fetchJobs();
+      fetchQueueStats();
+    }, 3000);
     return () => clearInterval(timer);
-  }, [fetchJobs]);
+  }, [fetchJobs, fetchQueueStats]);
 
   const filteredJobs = jobs.filter(j => {
     if (filter === 'all') return true;
     return j.status === filter;
   });
 
-  const activeCount = jobs.filter(j => j.status === 'running').length;
-  const queuedCount = jobs.filter(j => j.status === 'queued').length;
-  const failedCount = jobs.filter(j => j.status === 'failed').length;
+  const activeCount = queueStats ? queueStats.activeJobs : jobs.filter(j => j.status === 'running').length;
+  const queuedCount = queueStats ? queueStats.queuedJobs : jobs.filter(j => j.status === 'queued').length;
+  const failedCount = queueStats ? queueStats.failedJobs : jobs.filter(j => j.status === 'failed').length;
+  const completedCount = queueStats ? queueStats.completedJobs : jobs.filter(j => j.status === 'completed').length;
+  const pausedCount = queueStats ? queueStats.pausedJobs : jobs.filter(j => j.status === 'paused').length;
 
   return (
     <div className="page-content animate-fadeIn">
@@ -35,12 +41,23 @@ export const ActivityPage: React.FC = () => {
             Activity & Background Processing
           </h2>
           <p style={{ color: 'var(--color-text-secondary)' }}>
-            Real-time status of metadata indexing, face detection, embeddings, and media organization.
+            Real-time status of metadata indexing, duplicate hashing, face detection, and media intelligence.
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={() => fetchJobs()}>
-          ↻ Refresh Queue
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          {completedCount > 0 && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => clearCompletedJobs()}
+              title="Remove finished jobs from database history"
+            >
+              🧹 Clear Completed
+            </button>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={() => { fetchJobs(); fetchQueueStats(); }}>
+            ↻ Refresh Queue
+          </button>
+        </div>
       </div>
 
       {/* KPI Ribbon */}
@@ -57,7 +74,7 @@ export const ActivityPage: React.FC = () => {
         </div>
         <div className="stat-card">
           <div className="stat-label">Completed Jobs</div>
-          <div className="stat-value">{jobs.filter(j => j.status === 'completed').length}</div>
+          <div className="stat-value">{completedCount}</div>
           <div className="stat-subtext">Successfully processed</div>
         </div>
         <div className="stat-card">
@@ -84,6 +101,11 @@ export const ActivityPage: React.FC = () => {
         <button className={`tab ${filter === 'failed' ? 'active' : ''}`} onClick={() => setFilter('failed')}>
           Failed ({failedCount})
         </button>
+        {pausedCount > 0 && (
+          <button className={`tab ${filter === 'paused' ? 'active' : ''}`} onClick={() => setFilter('paused')}>
+            Paused ({pausedCount})
+          </button>
+        )}
       </div>
 
       {/* Job Items List */}
@@ -116,6 +138,9 @@ export const ActivityPage: React.FC = () => {
                 ? 'badge-warning'
                 : 'badge-secondary';
 
+            const formattedCreated = job.created_at ? new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+            const formattedCompleted = job.completed_at ? new Date(job.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+
             return (
               <div key={job.id} className="card" style={{ padding: 'var(--space-4)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
@@ -127,16 +152,29 @@ export const ActivityPage: React.FC = () => {
                       <span style={{ fontWeight: 600, fontSize: 'var(--font-size-md)' }}>
                         {job.type.replace(/_/g, ' ').toUpperCase()}
                       </span>
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                        Priority: {job.priority}
+                      </span>
                     </div>
                     {job.target_path && (
                       <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                         Target: {job.target_path}
                       </div>
                     )}
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
+                      Created: {formattedCreated}
+                      {formattedCompleted && ` • Completed: ${formattedCompleted}`}
+                      {job.retry_count > 0 && ` • Retries: ${job.retry_count}/${job.max_retries || 3}`}
+                    </div>
                   </div>
 
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    {job.status === 'failed' && (
+                      <button className="btn btn-sm btn-secondary" onClick={() => retryJob(job.id)} title="Retry Failed Job">
+                        ↻ Retry
+                      </button>
+                    )}
                     {job.status === 'running' && (
                       <button className="btn btn-sm btn-ghost" onClick={() => pauseJob(job.id)} title="Pause Job">
                         ⏸ Pause
@@ -159,7 +197,7 @@ export const ActivityPage: React.FC = () => {
                 {(job.status === 'running' || job.status === 'paused') && (
                   <div style={{ marginTop: 'var(--space-3)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', marginBottom: '4px', color: 'var(--color-text-secondary)' }}>
-                      <span>{job.progress} / {job.total} files</span>
+                      <span>{job.progress} / {job.total} units</span>
                       <span>{progressPct}%</span>
                     </div>
                     <div className="progress-bar">
@@ -171,7 +209,7 @@ export const ActivityPage: React.FC = () => {
                 {/* Error message if failed */}
                 {job.error_message && (
                   <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-2) var(--space-3)', background: 'var(--color-error-dim)', border: '1px solid var(--color-error)', borderRadius: 'var(--radius-sm)', color: 'var(--color-error)', fontSize: 'var(--font-size-xs)' }}>
-                    Error: {job.error_message}
+                    <strong>Failure Details:</strong> {job.error_message}
                   </div>
                 )}
               </div>

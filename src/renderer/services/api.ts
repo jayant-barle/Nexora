@@ -61,10 +61,12 @@ function createMockAPI(): ElectronAPI {
     },
     jobs: {
       list: async () => [],
-      create: async () => ({ id: '', type: '', status: 'queued', priority: 5, progress: 0, total: 0, target_path: null, target_id: null, config_json: null, error_message: null, retry_count: 0, max_retries: 3, started_at: null, completed_at: null, created_at: '', updated_at: '' }),
-      cancel: async (jobId: string) => true,
-      pause: async (jobId?: string) => true,
-      resume: async (jobId?: string) => true,
+      create: async () => ({ id: '', type: '', status: 'queued', priority: 1, progress: 0, total: 0, target_path: null, target_id: null, config_json: null, error_message: null, retry_count: 0, max_retries: 3, started_at: null, completed_at: null, created_at: '', updated_at: '' }),
+      cancel: async (_jobId: string) => true,
+      pause: async (_jobId?: string) => true,
+      resume: async (_jobId?: string) => true,
+      retry: async (_jobId: string) => true,
+      clearCompleted: async () => 0,
     },
     people: {
       list: async () => [],

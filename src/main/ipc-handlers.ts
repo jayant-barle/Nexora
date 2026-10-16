@@ -150,6 +150,15 @@ export function registerIpcHandlers(): void {
     return true;
   });
 
+  ipcMain.handle('jobs:retry', async (_event, jobId: unknown) => {
+    const id = validateId(jobId);
+    return getJobRunner().retry(id);
+  });
+
+  ipcMain.handle('jobs:clear-completed', async () => {
+    return getJobRunner().clearCompleted();
+  });
+
   // ── Safe File Operations & Rollback ───────────────────────────────────────
 
   ipcMain.handle('operations:copy', async (_event, sourceDescription: unknown, destinationRoot: unknown, items: unknown) => {

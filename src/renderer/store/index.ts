@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { create } from 'zustand';
-import type { NavigationPage, DashboardStats, DirectoryEntry, DriveInfo, Job, Person, WatchRoot } from '../../shared/types';
+import type { NavigationPage, DashboardStats, DirectoryEntry, DriveInfo, Job, JobQueueStats, Person, WatchRoot } from '../../shared/types';
 import { api } from '../services/api';
 
 // ─── Navigation Store ────────────────────────────────────────────────────────
@@ -183,15 +183,21 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
 
 interface JobsState {
   jobs: Job[];
+  queueStats: JobQueueStats | null;
   loading: boolean;
   fetchJobs: (status?: string) => Promise<void>;
+  fetchQueueStats: () => Promise<void>;
   cancelJob: (id: string) => Promise<void>;
   pauseJob: (id: string) => Promise<void>;
   resumeJob: (id: string) => Promise<void>;
+  retryJob: (id: string) => Promise<void>;
+  clearCompletedJobs: () => Promise<void>;
+  initListeners: () => () => void;
 }
 
 export const useJobsStore = create<JobsState>((set, get) => ({
   jobs: [],
+  queueStats: null,
   loading: false,
   fetchJobs: async (status?) => {
     set({ loading: true });
@@ -202,17 +208,113 @@ export const useJobsStore = create<JobsState>((set, get) => ({
       set({ loading: false });
     }
   },
+  fetchQueueStats: async () => {
+    try {
+      const stats = await api().system.getQueueStats();
+      set({ queueStats: stats });
+    } catch {}
+  },
   cancelJob: async (id) => {
     await api().jobs.cancel(id);
     get().fetchJobs();
+    get().fetchQueueStats();
   },
   pauseJob: async (id) => {
     await api().jobs.pause(id);
     get().fetchJobs();
+    get().fetchQueueStats();
   },
   resumeJob: async (id) => {
     await api().jobs.resume(id);
     get().fetchJobs();
+    get().fetchQueueStats();
+  },
+  retryJob: async (id) => {
+    await api().jobs.retry(id);
+    get().fetchJobs();
+    get().fetchQueueStats();
+  },
+  clearCompletedJobs: async () => {
+    await api().jobs.clearCompleted();
+    get().fetchJobs();
+    get().fetchQueueStats();
+  },
+  initListeners: () => {
+    const handleProgress = (data: any) => {
+      set((state) => {
+        const nextJobs = state.jobs.map((j) => {
+          if (j.id === data.jobId) {
+            return {
+              ...j,
+              status: data.status || j.status,
+              progress: data.progress !== undefined ? data.progress : j.progress,
+              total: data.total !== undefined ? data.total : j.total,
+            };
+          }
+          return j;
+        });
+        return { jobs: nextJobs };
+      });
+    };
+
+    const handleCompleted = (data: any) => {
+      set((state) => {
+        const nextJobs = state.jobs.map((j) => {
+          if (j.id === data.jobId) {
+            return { ...j, status: 'completed' as const, progress: j.total, completed_at: new Date().toISOString() };
+          }
+          return j;
+        });
+        return { jobs: nextJobs };
+      });
+      get().fetchQueueStats();
+    };
+
+    const handleCancelled = (data: any) => {
+      set((state) => {
+        const nextJobs = state.jobs.map((j) => {
+          if (j.id === data.jobId) {
+            return { ...j, status: 'cancelled' as const };
+          }
+          return j;
+        });
+        return { jobs: nextJobs };
+      });
+      get().fetchQueueStats();
+    };
+
+    const handleError = (data: any) => {
+      set((state) => {
+        const nextJobs = state.jobs.map((j) => {
+          if (j.id === data.jobId) {
+            return { ...j, status: 'failed' as const, error_message: data.error };
+          }
+          return j;
+        });
+        return { jobs: nextJobs };
+      });
+      get().fetchQueueStats();
+    };
+
+    const handleQueueChanged = (stats: any) => {
+      if (stats) {
+        set({ queueStats: stats });
+      }
+    };
+
+    api().on('job:progress', handleProgress);
+    api().on('job:completed', handleCompleted);
+    api().on('job:cancelled', handleCancelled);
+    api().on('job:error', handleError);
+    api().on('queue:status-changed', handleQueueChanged);
+
+    return () => {
+      api().removeAllListeners('job:progress');
+      api().removeAllListeners('job:completed');
+      api().removeAllListeners('job:cancelled');
+      api().removeAllListeners('job:error');
+      api().removeAllListeners('queue:status-changed');
+    };
   },
 }));
 

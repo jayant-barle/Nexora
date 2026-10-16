@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+### [0.5.1] — 2026-10-17
+
+**Fixed**
+- **Activity & Background Processing Pipeline & Telemetry Diagnostics**:
+  - **Resolved State Overwrite Bug in `src/renderer/App.tsx`**: Eliminated periodic `fetchJobs('running')` poll that previously overwrote the global Zustand `jobs` store with an empty array whenever no jobs were actively executing, which caused all completed, queued, and failed jobs on the Activity screen to disappear every 4 seconds.
+  - **Decoupled Queue Telemetry from Job List Filter**: Switched header processing pill and Activity page KPI counters to query `system:get-queue-stats` and listen to real-time `queue:status-changed` events rather than wiping the jobs list.
+  - **Real-Time IPC Job Event Synchronization (`src/renderer/store/index.ts`, `src/preload/index.ts`)**: Added frontend subscriptions to `job:progress`, `job:completed`, `job:cancelled`, `job:error`, and `queue:status-changed` IPC streams so worker transitions update progress bars, counters, and badges without requiring manual refreshes.
+  - **Implemented Missing Job Handlers in `src/main/job-runner.ts`**: Added execution support for `hash_compute` and `duplicate_compare` background jobs, triggering SHA-256 and visual dHash group recalculations instead of discarding unknown job types.
+  - **Interactive Priority Assignment & Job Deduplication (`src/main/database.ts`)**: Updated `createJob` to assign appropriate priorities (Priority 1 for user-triggered folder scans and batch copies, Priority 2 for duplicate indexing) and prevent redundant concurrent enqueueing of identical operations.
+  - **Job Retry & History Retention Controls (`src/renderer/pages/ActivityPage.tsx`, `src/main/database.ts`, `src/main/ipc-handlers.ts`)**: Added a "Retry" action for failed jobs (clearing previous errors and resetting status to queued) and a "Clear Completed" button to purge finished jobs from the database history on demand.
+  - **Added Targeted Regression Tests (`tests/unit/database.test.ts`)**: Verified job creation, priority assignment, duplicate prevention, queued-to-running-to-completed transitions, failed job error capture, retry resets, and history clearance.
+
 ### [0.5.0] — 2026-10-17
 
 **Added**

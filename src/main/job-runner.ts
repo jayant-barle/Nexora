@@ -6,8 +6,8 @@
 import { BrowserWindow } from 'electron';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb, updateJobStatus, getSettings } from './database';
-import { indexFolderIncremental } from './indexer';
+import { getDb, updateJobStatus, getSettings, retryJob, clearCompletedJobs } from './database';
+import { indexFolderIncremental, recalculateDuplicates } from './indexer';
 import { executeBatchCopyOperation, CopyItem } from './file-operations';
 import { getAiWorkerClient } from './ai-worker-client';
 import { getHardwareMonitor } from './hardware-monitor';
@@ -74,6 +74,22 @@ export class JobRunner {
     this.activeJobs.delete(jobId);
     this.notifyRenderer('job:cancelled', { jobId });
     this.notifyRenderer('queue:status-changed', this.getQueueStats());
+  }
+
+  public retry(jobId: string): boolean {
+    const job = retryJob(jobId);
+    if (!job) return false;
+    this.cancelledJobs.delete(jobId);
+    this.notifyRenderer('job:progress', { jobId, status: 'queued', progress: 0, total: job.total || 0 });
+    this.notifyRenderer('queue:status-changed', this.getQueueStats());
+    setImmediate(() => this.processNextJobs());
+    return true;
+  }
+
+  public clearCompleted(): number {
+    const removedCount = clearCompletedJobs();
+    this.notifyRenderer('queue:status-changed', this.getQueueStats());
+    return removedCount;
   }
 
   public getQueueStats(): JobQueueStats {
@@ -196,6 +212,8 @@ export class JobRunner {
         await this.handleFaceDetectJob(job);
       } else if (job.type === 'video_analyze') {
         await this.handleVideoAnalyzeJob(job);
+      } else if (job.type === 'hash_compute' || job.type === 'duplicate_compare') {
+        await this.handleHashComputeJob(job);
       } else {
         console.warn(`[JobRunner] Unknown job type: ${job.type}`);
         updateJobStatus(job.id, 'completed', 100, 100);
@@ -506,6 +524,17 @@ export class JobRunner {
     });
 
     insertVideoTx();
+  }
+
+  private async handleHashComputeJob(job: any): Promise<void> {
+    updateJobStatus(job.id, 'running', 20, 100);
+    this.notifyRenderer('job:progress', { jobId: job.id, status: 'running', progress: 20, total: 100 });
+
+    // Recalculate duplicate groups and visual similarity
+    recalculateDuplicates();
+
+    updateJobStatus(job.id, 'running', 100, 100);
+    this.notifyRenderer('job:progress', { jobId: job.id, status: 'running', progress: 100, total: 100 });
   }
 }
 

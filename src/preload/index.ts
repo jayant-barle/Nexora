@@ -48,6 +48,8 @@ const electronAPI = {
     cancel: (jobId: string) => ipcRenderer.invoke('jobs:cancel', jobId),
     pause: (jobId?: string) => ipcRenderer.invoke('jobs:pause', jobId),
     resume: (jobId?: string) => ipcRenderer.invoke('jobs:resume', jobId),
+    retry: (jobId: string) => ipcRenderer.invoke('jobs:retry', jobId),
+    clearCompleted: () => ipcRenderer.invoke('jobs:clear-completed'),
   },
 
   // ── People ──────────────────────────────────────────────────────────────
@@ -138,7 +140,15 @@ const electronAPI = {
 
   // ── Events from main process ────────────────────────────────────────────
   on: (channel: string, callback: (...args: unknown[]) => void) => {
-    const validChannels = ['job:progress', 'job:completed', 'job:error', 'watcher:change', 'app:update'];
+    const validChannels = [
+      'job:progress',
+      'job:completed',
+      'job:cancelled',
+      'job:error',
+      'queue:status-changed',
+      'watcher:change',
+      'app:update'
+    ];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args));
     }

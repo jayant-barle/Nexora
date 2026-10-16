@@ -49,12 +49,44 @@ vi.mock('better-sqlite3', () => {
         if (sql.includes('SELECT name FROM sqlite_master')) {
           return { get: () => null };
         }
+        if (sql.includes('SELECT * FROM jobs') && sql.includes('WHERE type = ?') && sql.includes("status IN ('queued', 'running')")) {
+          return {
+            get: (type: string, targetPath: string | null, _p2: any, targetId: string | null) => {
+              const jobs = this.tables.get('jobs')!;
+              return jobs.find(j => j.type === type && (j.target_path ?? null) === targetPath && (j.target_id ?? null) === targetId && (j.status === 'queued' || j.status === 'running')) || null;
+            },
+          };
+        }
         if (sql.includes('INSERT INTO jobs')) {
           return {
             run: (...params: any[]) => {
               const jobs = this.tables.get('jobs')!;
-              const [id, type, status, priority, progress, total, target_path, target_id, config_json, created_at, updated_at] = params;
+              const [id, type, priority, target_path, target_id, config_json, created_at, updated_at] = params;
               jobs.push({ id, type, status: 'queued', priority, progress: 0, total: 0, target_path, target_id, config_json, created_at, updated_at });
+            },
+          };
+        }
+        if (sql.includes('UPDATE jobs') && sql.includes("SET status = 'queued'") && sql.includes('retry_count = 0')) {
+          return {
+            run: (_now: string, id: string) => {
+              const job = this.tables.get('jobs')!.find(j => j.id === id);
+              if (job) {
+                job.status = 'queued';
+                job.error_message = null;
+                job.retry_count = 0;
+                job.progress = 0;
+              }
+            },
+          };
+        }
+        if (sql.includes('DELETE FROM jobs WHERE status IN')) {
+          return {
+            run: () => {
+              const jobs = this.tables.get('jobs')!;
+              const initialLen = jobs.length;
+              const remaining = jobs.filter(j => j.status !== 'completed' && j.status !== 'cancelled');
+              this.tables.set('jobs', remaining);
+              return { changes: initialLen - remaining.length };
             },
           };
         }
@@ -155,6 +187,8 @@ import {
   createJob,
   getJobs,
   updateJobStatus,
+  retryJob,
+  clearCompletedJobs,
   searchFiles,
   getCopyOperations,
   getDuplicateGroupFiles,
@@ -198,13 +232,38 @@ describe('Database Engine & Relational Schema', () => {
     expect(success).toBe(true);
   });
 
-  it('manages background jobs lifecycle with priority ordering', () => {
+  it('manages background jobs lifecycle with priority ordering and prevents duplicate enqueueing', () => {
     const job1 = createJob('folder_scan', 'C:\\Photos');
     expect(job1.id).toBeDefined();
+    expect(job1.priority).toBe(1); // User folder scan defaults to priority 1
 
+    // Deduplication check: attempting to enqueue same target should return existing queued job
+    const jobDuplicate = createJob('folder_scan', 'C:\\Photos');
+    expect(jobDuplicate.id).toBe(job1.id);
+
+    // Transition to running
     updateJobStatus(job1.id, 'running', 50, 100);
-    const updated = getJobs('running');
-    expect(updated.some(j => j.id === job1.id)).toBe(true);
+    const runningJobs = getJobs('running');
+    expect(runningJobs.some(j => j.id === job1.id)).toBe(true);
+
+    // Fail job
+    updateJobStatus(job1.id, 'failed', 50, 100, 'I/O read error');
+    const failedJobs = getJobs('failed');
+    expect(failedJobs.some(j => j.id === job1.id)).toBe(true);
+
+    // Retry job
+    const retried = retryJob(job1.id);
+    expect(retried).toBeDefined();
+    expect(retried?.status).toBe('queued');
+    expect(retried?.error_message).toBeNull();
+    expect(retried?.retry_count).toBe(0);
+
+    // Complete job and clear completed
+    updateJobStatus(job1.id, 'completed', 100, 100);
+    expect(getJobs('completed').length).toBeGreaterThan(0);
+    const cleared = clearCompletedJobs();
+    expect(cleared).toBeGreaterThan(0);
+    expect(getJobs('completed').some(j => j.id === job1.id)).toBe(false);
   });
 
   it('merges source people into target person and updates associations', () => {
