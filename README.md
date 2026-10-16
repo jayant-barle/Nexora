@@ -2,7 +2,7 @@
 
 > **"Your files. Your intelligence. Your control."**
 
-[![Version](https://img.shields.io/badge/Version-0.1.0-b4ff32.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.3.0-b4ff32.svg)](VERSION)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![Electron Version](https://img.shields.io/badge/Electron-33.2.1-blue)](https://www.electronjs.org/)
 [![React Version](https://img.shields.io/badge/React-18.3.1-61dafb)](https://react.dev/)
@@ -12,16 +12,19 @@
 
 **Nexora** is an intelligent, local-first desktop file management system for Windows 11. Designed with a cinematic, futuristic, minimal visual identity—deep black and charcoal surfaces with restrained neon-lime accents and subtle glass effects—Nexora unites native Windows filesystem capabilities with on-device artificial intelligence. 
 
-All face recognition, perceptual deduplication, EXIF timeline visualization, natural search, and media organization run **100% locally on your machine with zero cloud uploads or telemetry**.
+All metadata intelligence, face recognition, perceptual deduplication, EXIF timeline visualization, natural search, and media organization run **100% locally on your machine with zero cloud uploads or telemetry**.
 
 ---
 
 ## Primary Features
 
 - 📁 **Native Windows File Explorer**: Full disk navigation across logical drives (`C:`, `D:`, etc.), path breadcrumbs, sorting, list/grid toggles, and direct integration with native Windows File Explorer.
+- 🧠 **Metadata Intelligence Engine**: Local-only extraction pipeline for images (EXIF camera make/model, lens, orientation, exposure, ISO, GPS), videos (resolution, duration, fps, codec), documents (PDF title, author, subject, page count, and text preview; Office DOCX/PPTX/XLSX Dublin Core properties and word counts), audio (WAV RIFF stream parameters, sample rate, bitrate; MP3 ID3v2 tags), archives (ZIP/TAR entry count and password encryption detection), and plaintext.
+- 📂 **Metadata-Based Organization Proposals**: Configurable folder template rules (`{category}/{YYYY}/{MM}/{DD}/{person}/{camera}/{location}/{event}/{author}`) with deterministic safe fallbacks (`Unknown Date`, `Unassigned`, `Unknown Location`, `General`, `Unknown Camera`, `Unknown Author`, `Other Files`), collision avoidance, duplicate detection, and verified copy staging without touching originals.
+- ⚡ **Incremental Scanning & Non-Destructive Reconciliation**: Caching compares file timestamps and byte size to skip unchanged files; missing files are flagged (`is_missing = 1`, `availability_status = 'missing'`) without deleting records or user history, and automatically restored upon return.
 - 👤 **On-Device Facial Recognition**: Local neural face detection, vector embedding, and cosine clustering across photos and videos. Review, name, confirm, hide, or merge identity clusters.
 - 🔄 **Safe Perceptual & Hash Deduplication**: Detect bit-for-bit identical files (SHA-256) and visually similar photos (perceptual difference hashing) with non-destructive resolution actions (Keep Best, Move to Trash, Hardlink).
-- 🔍 **Instant Smart Search**: High-performance SQLite FTS5 search indexing with filters by filename, extension, file size, date range, tags, and recognized people.
+- 🔍 **Instant Smart Search**: High-performance SQLite FTS5 search indexing with filters by filename, extension, file size, date range, tags, camera make/model, author, artist, GPS, and recognized people.
 - 📅 **EXIF Media Timeline**: Chronologically group and browse photos and videos by Year, Month, or Day derived directly from camera metadata.
 - 💾 **Storage Analytics**: Monitor partition capacities, inspect file type distribution across indexed media, and instantly locate heavy disk consumers.
 - 👁 **Continuous Folder Watcher**: Automated background detection of new and modified media in monitored folders using `chokidar`.

@@ -1,6 +1,6 @@
 // ============================================================================
 // Nexora — Electron Main Process Entry
-// Secure desktop shell with contextIsolation, no nodeIntegration
+// Secure desktop shell with contextIsolation, no nodeIntegration, and background service lifecycle
 // ============================================================================
 
 import { app, BrowserWindow, Menu } from 'electron';
@@ -8,6 +8,9 @@ import path from 'path';
 import fs from 'fs';
 import { initDatabase, closeDatabase } from './database';
 import { registerIpcHandlers } from './ipc-handlers';
+import { getAiWorkerClient } from './ai-worker-client';
+import { getJobRunner } from './job-runner';
+import { getWatcherService } from './watcher';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -27,7 +30,7 @@ function createWindow(): void {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // Required for better-sqlite3 native module in preload
+      sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
     },
@@ -58,8 +61,8 @@ function createWindow(): void {
 
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
-  // Initialize database
+app.whenReady().then(async () => {
+  // 1. Initialize SQLite database
   const legacyDb = path.join(app.getPath('userData'), 'ai-file-manager.db');
   const dbPath = fs.existsSync(legacyDb)
     ? legacyDb
@@ -67,10 +70,38 @@ app.whenReady().then(() => {
   console.log(`Database path: ${dbPath}`);
   initDatabase(dbPath);
 
-  // Register IPC handlers
+  // 2. Register IPC handlers
   registerIpcHandlers();
 
-  // Create main window
+  // 3. Start Python AI inference worker
+  try {
+    const aiWorker = getAiWorkerClient();
+    aiWorker.start().catch((err) => {
+      console.warn('[Main] AI Worker startup warning:', err);
+    });
+  } catch (err) {
+    console.warn('[Main] Failed to initialize AI Worker:', err);
+  }
+
+  // 4. Start Background Job Runner
+  try {
+    const jobRunner = getJobRunner();
+    jobRunner.start();
+  } catch (err) {
+    console.warn('[Main] Failed to initialize Job Runner:', err);
+  }
+
+  // 5. Initialize Chokidar Watcher Service
+  try {
+    const watcherService = getWatcherService();
+    watcherService.init().catch((err) => {
+      console.warn('[Main] Watcher Service startup warning:', err);
+    });
+  } catch (err) {
+    console.warn('[Main] Failed to initialize Watcher Service:', err);
+  }
+
+  // 6. Create main window
   createWindow();
 
   app.on('activate', () => {
@@ -80,18 +111,33 @@ app.whenReady().then(() => {
   });
 });
 
+function cleanupServices(): void {
+  try {
+    getJobRunner().stop();
+  } catch {}
+  try {
+    getWatcherService().stopAll();
+  } catch {}
+  try {
+    getAiWorkerClient().stop();
+  } catch {}
+  try {
+    closeDatabase();
+  } catch {}
+}
+
 app.on('window-all-closed', () => {
-  closeDatabase();
+  cleanupServices();
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
-  closeDatabase();
+  cleanupServices();
 });
 
-// ─── Security: Prevent new window creation ───────────────────────────────────
+// ─── Security: Prevent new window creation & lockdown navigation ─────────────
 
 app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(() => {

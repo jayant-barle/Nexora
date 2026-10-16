@@ -2,8 +2,8 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Document Version:** 1.0.0  
-**Status:** Implemented (v0.1.0) / Active Development  
+**Document Version:** 1.3.0  
+**Status:** Implemented (v0.3.1 Mandatory Rule: Filename, Duplicate Detection & Person Identification Release) / Production-Ready  
 **Target Platform:** Windows 11 (x64) desktop  
 **Execution Model:** Local-First, Offline, Zero-Cloud Telemetry  
 **Visual Identity:** Cinematic, futuristic, minimal; black and charcoal surfaces with restrained neon-lime accents and subtle glass effects  
@@ -132,6 +132,53 @@ Standard desktop file explorers (such as default Windows File Explorer) were arc
 - **FR-08.3**: When `hashVerification` is enabled, the system must verify source and destination SHA-256 hashes before marking an item as `verified`.
 - **FR-08.4**: The system must maintain an audit log in `operation_history` and support one-click rollback.
 
+### 5.9 Metadata Intelligence Engine & Organization (`FR-09`)
+- **FR-09.1 (Modular Local Extraction)**: The system must extract metadata locally without cloud dependency across supported categories:
+  - **Images**: EXIF capture date/time, camera make, camera model, lens model, orientation, ISO, focal length, aperture, exposure time, GPS coordinates, and technical properties.
+  - **Videos**: Resolution (width/height), duration, frame rate, FourCC video codec, container format, and keyframe face sampling.
+  - **Documents**: Safe PDF parser (%PDF- header validation, encryption detection, metadata dictionary title/author/subject, page count, and 3KB text preview); Office OpenXML (DOCX, PPTX, XLSX) read-only zip/xml parser reading Dublin Core title, creator, subject/description, page/word counts, and sample text preview.
+  - **Audio**: WAV RIFF stream parameter extractor (sample rate, channels, byte rate, bitrate, duration); MP3 ID3v2 tag parser (TIT2 title, TPE1 artist, TALB album) and MPEG frame duration estimation; FLAC STREAMINFO metadata.
+  - **Archives**: Safe ZIP and TAR entry inspection with password-encryption detection.
+  - **Plaintext & Code**: Line counts, word counts, UTF-8/Latin-1 encoding detection, and text preview snippets.
+- **FR-09.2 (Macro & Script Sandboxing)**: Metadata extraction must never execute file contents, macros, embedded scripts, or shell payloads; parsing must be strictly read-only structured container analysis.
+- **FR-09.3 (Incremental Scanning & Caching)**: Scans must compare file size, modification timestamp, and stored fingerprints to skip unchanged files (100% cache hit reuse). Only invalidated files are reprocessed. A manual `forceFullRescan` option must force re-extraction on demand.
+- **FR-09.4 (Non-Destructive Missing File Reconciliation)**: Discovered paths must be reconciled against the database. Missing files are flagged as `is_missing = 1`, `availability_status = 'missing'` without deleting database records, face links, or timeline history. Files returning to disk automatically restore availability (`is_missing = 0`).
+- **FR-09.5 (Metadata-Based Organization Proposals)**: The system must propose folder hierarchies based on configurable pattern tokens (`{category}`, `{YYYY}`, `{MM}`, `{DD}`, `{person}`, `{camera}`, `{location}`, `{event}`, `{author}`). Missing metadata must resolve to deterministic fallbacks (`Unknown Date`, `Unassigned`, `Unknown Location`, `General`, `Unknown Camera`, `Unknown Author`, `Other Files`) without fabricating facts.
+- **FR-09.6 (Preview & Verified-Copy Workflow)**: Mandatory user preview before copying displaying proposed paths, rule sources, collision warnings (`filename (1).ext`), duplicate detection avoiding redundant copies, and storage metrics. Operations execute atomic staging, pre/post SHA-256 verification, and rollback protection without modifying or deleting original files.
+- **FR-09.7 (Metadata-Powered Search Integration)**: Search interface must support combined queries by category, camera make/model, document author, audio artist, GPS availability, missing file status, and FTS5 full-text matching.
+
+### 5.10 Mandatory Invariants: Filename Handling, Duplicate Detection & Person Identification (`FR-10`)
+- **FR-10.1 (Filename Handling & Canonical File Identity)**:
+  - Every file is treated as a separate, autonomous entity by its canonical filesystem path and distinct database identifier (`files.id`).
+  - Files with identical names across different directories or paths must never automatically be classified as duplicates or associated with the same person.
+  - Filename and available metadata generate folder organization proposals immediately without waiting for face recognition or background clustering.
+  - Explicit user-defined filename rule tokens (`{filename}`, `{basename}`, `{name}`, `{ext}`, `{extension}`) are fully supported.
+  - Ambiguous or unresolved rule tokens trigger safety warnings and resolve to safe fallbacks (`General`).
+- **FR-10.2 (Cryptographic Exact Duplicate Detection)**:
+  - Exact duplicate status is strictly determined by cryptographic content hash (SHA-256).
+  - Files are never classified as exact duplicates based solely on filename, file size, extension, or timestamps.
+  - Inexpensive size checks narrow candidate pools before hashing when appropriate.
+  - Hashing uses actual file contents and detects in-flight modifications between stream initiation and completion.
+  - Separate source paths and database records are strictly maintained for every file even when contents are identical.
+  - Duplicate candidates are never automatically deleted or overwritten; duplicates are registered in `duplicate_groups` with `status = 'pending'` for explicit user resolution.
+- **FR-10.3 (Face Recognition & Person-Based Organization)**:
+  - A person's identity is never inferred from a filename alone under any circumstance (e.g. `Alice_photo.jpg` does not assign person `Alice`).
+  - Person identification relies exclusively on the local face detection, embedding extraction, vector clustering, and user review workflow.
+  - Files are associated with a person in folder organization only when the match meets configured confidence requirements or has been confirmed by user review (`review_status IN ('confirmed', 'reviewed')` or `association_type = 'confirmed'`).
+  - Uncertain or unreviewed face matches remain unassigned (`Unassigned` fallback) with warning notifications.
+  - Multiple confirmed people in a single image or video are supported and aggregated (e.g. `People/Alice & Bob/`).
+  - Folder organization proposals based on metadata are never blocked while face recognition jobs are queued or executing.
+- **FR-10.4 (Safe Concurrent Processing & In-Flight Protection)**:
+  - Filename analysis, metadata extraction, cryptographic hashing, thumbnail generation, search indexing, and face recognition run concurrently when dependencies permit.
+  - Operations utilize the persistent SQLite job queue, transaction boundaries, deduplication, dependency tracking, and bounded concurrency.
+  - In-flight file changes during hashing (`computeFileSha256`) or copying (`copyFileWithVerification`) are actively detected via pre/post stream stat comparisons. The operation aborts, deletes temporary staging files, and invalidates affected results without corrupting destinations.
+  - Retries and application restarts are idempotent without creating duplicate records or redundant copy operations.
+- **FR-10.5 (Original-File Preservation Guarantee)**:
+  - Original source files are strictly immutable and preserved.
+  - Organization operations follow a preview-and-confirm workflow before copying files into managed destinations.
+  - Pre/post SHA-256 hash verification and in-flight source modification checks ensure file integrity before completing copy operations.
+  - Source files are never silently moved, overwritten, or deleted.
+
 ---
 
 ## 6. Non-Functional Requirements (NFR)
@@ -160,27 +207,25 @@ Standard desktop file explorers (such as default Windows File Explorer) were arc
 
 | Module | Requirement | Status | Notes |
 | :--- | :--- | :--- | :--- |
-| **Explorer** | Logical Drive Listing | **Implemented** | Uses Windows `wmic logicaldisk` |
+| **Explorer** | Logical Drive Listing | **Implemented** | Uses Windows native `fs.statfsSync` |
 | **Explorer** | Directory Navigation & Breadcrumbs | **Implemented** | List and Grid views with sorting |
-| **Database** | SQLite WAL Mode & Schema v1 | **Implemented** | 25 tables, versioned migration runner |
-| **Database** | FTS5 Full-Text Search | **Implemented** | Covers filenames, paths, tags, OCR |
+| **Database** | SQLite WAL Mode & Schema v2 | **Implemented** | 27 tables, versioned migration runner (001, 002) |
+| **Database** | FTS5 Full-Text Search | **Implemented** | Covers filenames, paths, tags, OCR, text previews |
+| **Metadata Engine** | Modular Local Extraction Pipeline | **Implemented** | Images, videos, PDF, Office, audio, archives, text |
+| **Metadata Engine** | Sandboxing & Safe Container Parsing | **Implemented** | Read-only zip/xml without macro execution |
+| **Incremental Scan** | Timestamp & Size Cache Reuse | **Implemented** | Bypasses unchanged files; supports force rescan |
+| **Incremental Scan** | Missing File Non-Destructive Reconciliation | **Implemented** | Flags `is_missing = 1` without record deletion |
+| **Organizer** | Metadata Token Rule Resolution | **Implemented** | Configurable templates with deterministic fallbacks |
+| **Organizer** | Proposal Preview & Duplicate Avoidance | **Implemented** | Collision renaming and redundant copy skipping |
+| **File Operations** | Verified Atomic Copy & Rollback Guard | **Implemented** | SHA-256 pre/post check, temp file staging, in-flight modification detection |
+| **Search Engine** | Multi-Parameter Metadata Filtering | **Implemented** | Camera, author, artist, category, missing status |
 | **AI Worker** | JSON-RPC Python Subprocess | **Implemented** | Over stdin/stdout with ping/hashes/meta |
-| **AI Worker** | SHA-256 & Perceptual Hashing | **Implemented** | Native hashlib + PIL 8x8 dHash |
+| **AI Worker** | SHA-256 & Perceptual Hashing | **Implemented** | Native hashlib + PIL 8x8 dHash with in-flight stat checks |
 | **AI Worker** | EXIF & GPS Metadata Extraction | **Implemented** | DateTimeOriginal, GPS coordinates |
 | **AI Worker** | Face Detection & Clustering | **Implemented** | Bounding box & cosine distance clustering |
-| **UI Pages** | Dashboard Page | **Implemented** | Real-time database metrics |
-| **UI Pages** | File Explorer Page | **Implemented** | Grid/list view, selection, reveal |
-| **UI Pages** | People Page | **Implemented** | Review, naming, hide, delete |
-| **UI Pages** | Search Page | **Implemented** | Text and multi-parameter filters |
-| **UI Pages** | Timeline Page | **Implemented** | Year/Month/Day grouping |
-| **UI Pages** | Events Page | **Implemented** | Event & location layout |
-| **UI Pages** | Duplicates Page | **Implemented** | Hash vs similarity side-by-side |
-| **UI Pages** | Storage Page | **Implemented** | Drive meters & heavy file table |
-| **UI Pages** | Activity Page | **Implemented** | Live job queue controls |
-| **UI Pages** | History Page | **Implemented** | Operation audit log & rollback |
-| **UI Pages** | Watched Folders Page | **Implemented** | Chokidar watcher manager |
-| **UI Pages** | Settings Page | **Implemented** | AI thresholds, paths, diagnostics |
-| **Testing** | Vitest Test Suite | **Implemented** | Filesystem safety & types invariants |
+| **Mandatory Invariants** | Filename, Duplicate & Person Rules | **Implemented** | Canonical paths, non-inference of people, SHA-256 duplicate verification, multi-person support, in-flight modification guards |
+| **UI Pages** | 12 Core Views (Dashboard, Explorer, etc.) | **Implemented** | Complete cinematic black/charcoal/lime UI |
+| **Testing** | Automated Vitest Test Suite | **Implemented** | 51 tests passing across 10 test suites (100% pass) |
 
 ---
 

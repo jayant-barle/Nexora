@@ -21,12 +21,22 @@ const electronAPI = {
   // ── Database ────────────────────────────────────────────────────────────
   db: {
     getStats: () => ipcRenderer.invoke('db:get-stats'),
+    integrity: () => ipcRenderer.invoke('db:integrity'),
+    vacuum: () => ipcRenderer.invoke('db:vacuum'),
+  },
+
+  // ── Safe File Operations & Reversible Undo ──────────────────────────────
+  operations: {
+    copy: (sourceDescription: string, destinationRoot: string, items: Array<{ sourcePath: string; destinationPath: string }>) =>
+      ipcRenderer.invoke('operations:copy', sourceDescription, destinationRoot, items),
+    revert: (operationId: string) => ipcRenderer.invoke('operations:revert', operationId),
   },
 
   // ── Search ──────────────────────────────────────────────────────────────
   search: {
     query: (searchQuery: import('../shared/types').SearchQuery | Record<string, unknown>) =>
       ipcRenderer.invoke('search:query', searchQuery),
+    rebuildIndex: () => ipcRenderer.invoke('search:rebuild-index'),
   },
 
   // ── Jobs ────────────────────────────────────────────────────────────────
@@ -35,8 +45,8 @@ const electronAPI = {
     create: (type: string, targetPath?: string, targetId?: string, config?: Record<string, unknown>) =>
       ipcRenderer.invoke('jobs:create', type, targetPath, targetId, config),
     cancel: (jobId: string) => ipcRenderer.invoke('jobs:cancel', jobId),
-    pause: (jobId: string) => ipcRenderer.invoke('jobs:pause', jobId),
-    resume: (jobId: string) => ipcRenderer.invoke('jobs:resume', jobId),
+    pause: (jobId?: string) => ipcRenderer.invoke('jobs:pause', jobId),
+    resume: (jobId?: string) => ipcRenderer.invoke('jobs:resume', jobId),
   },
 
   // ── People ──────────────────────────────────────────────────────────────
@@ -45,6 +55,8 @@ const electronAPI = {
     update: (personId: string, updates: Record<string, unknown>) =>
       ipcRenderer.invoke('people:update', personId, updates),
     delete: (personId: string) => ipcRenderer.invoke('people:delete', personId),
+    merge: (targetPersonId: string, sourcePersonIds: string[]) =>
+      ipcRenderer.invoke('people:merge', targetPersonId, sourcePersonIds),
   },
 
   // ── Roots ───────────────────────────────────────────────────────────────
@@ -65,6 +77,13 @@ const electronAPI = {
   // ── Duplicates ──────────────────────────────────────────────────────────
   duplicates: {
     list: () => ipcRenderer.invoke('duplicates:list'),
+    resolve: (groupId: string, action: 'keep_best' | 'recycle' | 'hardlink') =>
+      ipcRenderer.invoke('duplicates:resolve', groupId, action),
+  },
+
+  // ── AI Worker Status ────────────────────────────────────────────────────
+  ai: {
+    getStatus: () => ipcRenderer.invoke('ai:get-status'),
   },
 
   // ── Settings ────────────────────────────────────────────────────────────
@@ -79,6 +98,23 @@ const electronAPI = {
     openFolder: () => ipcRenderer.invoke('dialog:open-folder'),
     openFile: (filters?: Array<{ name: string; extensions: string[] }>) =>
       ipcRenderer.invoke('dialog:open-file', filters),
+  },
+
+  // ── Metadata Organization ──────────────────────────────────────────────
+  organizer: {
+    getRules: () => ipcRenderer.invoke('organizer:get-rules'),
+    saveRule: (rule: import('../shared/types').OrganizationRule | Partial<import('../shared/types').OrganizationRule>) =>
+      ipcRenderer.invoke('organizer:save-rule', rule),
+    generateProposals: (fileIds: string[], ruleIdOrPattern: string, destinationRoot: string) =>
+      ipcRenderer.invoke('organizer:generate-proposals', fileIds, ruleIdOrPattern, destinationRoot),
+    execute: (proposals: import('../shared/types').OrganizationProposalItem[], destinationRoot: string, options?: { removeSourceOnSuccess?: boolean }) =>
+      ipcRenderer.invoke('organizer:execute', proposals, destinationRoot, options),
+  },
+
+  // ── Library ─────────────────────────────────────────────────────────────
+  library: {
+    reconcile: (rootId?: string) => ipcRenderer.invoke('library:reconcile', rootId),
+    rescan: (targetPath: string, fullRescan?: boolean) => ipcRenderer.invoke('library:rescan', targetPath, fullRescan),
   },
 
   // ── App ─────────────────────────────────────────────────────────────────

@@ -38,6 +38,31 @@ export interface FileRecord {
   last_scanned_at: string;
   created_at: string;
   updated_at: string;
+  // Extended Metadata Intelligence
+  camera_make?: string | null;
+  camera_model?: string | null;
+  lens_model?: string | null;
+  iso?: number | null;
+  focal_length?: number | null;
+  aperture?: number | null;
+  exposure_time?: string | null;
+  orientation?: number | null;
+  codec?: string | null;
+  frame_rate?: number | null;
+  bitrate?: number | null;
+  page_count?: number | null;
+  word_count?: number | null;
+  doc_title?: string | null;
+  doc_author?: string | null;
+  doc_subject?: string | null;
+  audio_artist?: string | null;
+  audio_album?: string | null;
+  audio_title?: string | null;
+  archive_entries?: number | null;
+  is_missing?: boolean;
+  availability_status?: 'available' | 'missing' | 'corrupt' | 'encrypted';
+  extractor_version?: string | null;
+  extracted_at?: string | null;
 }
 
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
@@ -409,6 +434,14 @@ export interface SearchQuery {
   sortOrder?: 'asc' | 'desc';
   offset?: number;
   limit?: number;
+  hasGps?: boolean;
+  // Metadata Intelligence filters
+  category?: 'all' | 'image' | 'video' | 'document' | 'audio' | 'archive' | 'text' | 'other';
+  camera?: string;
+  author?: string;
+  artist?: string;
+  isMissing?: boolean;
+  availabilityStatus?: 'available' | 'missing' | 'corrupt' | 'encrypted';
 }
 
 export interface SearchResult {
@@ -416,6 +449,43 @@ export interface SearchResult {
   totalCount: number;
   query: SearchQuery;
   executionTimeMs: number;
+}
+
+// ─── Metadata Organization Intelligence ─────────────────────────────────────
+
+export interface OrganizationRule {
+  id: string;
+  name: string;
+  description: string | null;
+  pattern: string;
+  fallback_behavior: 'use_fallbacks' | 'skip';
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationProposalItem {
+  id: string;
+  rule_id?: string | null;
+  source_file_id: string;
+  source_path: string;
+  proposed_destination: string;
+  rule_name: string;
+  status: 'proposed' | 'confirmed' | 'rejected' | 'executed';
+  warnings: string[];
+  metadata_snapshot: Record<string, unknown>;
+  file_size: number;
+  is_identical_duplicate?: boolean;
+  has_collision?: boolean;
+}
+
+export interface OrganizationPreviewSummary {
+  proposals: OrganizationProposalItem[];
+  totalFiles: number;
+  totalBytes: number;
+  estimatedDuplicatesAvoided: number;
+  destinationConflicts: number;
+  warningsCount: number;
 }
 
 // ─── Navigation ──────────────────────────────────────────────────────────────

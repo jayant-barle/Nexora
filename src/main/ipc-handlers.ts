@@ -7,6 +7,13 @@ import { ipcMain, dialog, shell, BrowserWindow, app } from 'electron';
 import path from 'path';
 import * as db from './database';
 import * as fsService from './filesystem';
+import { getJobRunner } from './job-runner';
+import { getWatcherService } from './watcher';
+import { getAiWorkerClient } from './ai-worker-client';
+import { executeBatchCopyOperation, revertBatchOperation, CopyItem } from './file-operations';
+import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization } from './organizer';
+import { reconcileLibrary, indexFolderIncremental } from './indexer';
+import type { OrganizationRule, OrganizationProposalItem } from '../shared/types';
 
 // ─── Input Validation ────────────────────────────────────────────────────────
 
@@ -67,10 +74,18 @@ export function registerIpcHandlers(): void {
     return true;
   });
 
-  // ── Database / Stats ─────────────────────────────────────────────────────
+  // ── Database / Maintenance ───────────────────────────────────────────────
 
   ipcMain.handle('db:get-stats', async () => {
     return db.getDashboardStats();
+  });
+
+  ipcMain.handle('db:integrity', async () => {
+    return db.checkDatabaseIntegrity();
+  });
+
+  ipcMain.handle('db:vacuum', async () => {
+    return db.vacuumDatabase();
   });
 
   // ── Search ────────────────────────────────────────────────────────────────
@@ -80,6 +95,10 @@ export function registerIpcHandlers(): void {
       throw new Error('Invalid search query');
     }
     return db.searchFiles(query as import('../shared/types').SearchQuery);
+  });
+
+  ipcMain.handle('search:rebuild-index', async () => {
+    return db.rebuildSearchIndex();
   });
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
@@ -98,20 +117,47 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('jobs:cancel', async (_event, jobId: unknown) => {
     const id = validateId(jobId);
-    db.updateJobStatus(id, 'cancelled');
+    getJobRunner().cancel(id);
     return true;
   });
 
-  ipcMain.handle('jobs:pause', async (_event, jobId: unknown) => {
-    const id = validateId(jobId);
-    db.updateJobStatus(id, 'paused');
+  ipcMain.handle('jobs:pause', async (_event, jobId?: unknown) => {
+    if (jobId) {
+      const id = validateId(jobId);
+      db.updateJobStatus(id, 'paused');
+    } else {
+      getJobRunner().pause();
+    }
     return true;
   });
 
-  ipcMain.handle('jobs:resume', async (_event, jobId: unknown) => {
-    const id = validateId(jobId);
-    db.updateJobStatus(id, 'queued');
+  ipcMain.handle('jobs:resume', async (_event, jobId?: unknown) => {
+    if (jobId) {
+      const id = validateId(jobId);
+      db.updateJobStatus(id, 'queued');
+    }
+    getJobRunner().resume();
     return true;
+  });
+
+  // ── Safe File Operations & Rollback ───────────────────────────────────────
+
+  ipcMain.handle('operations:copy', async (_event, sourceDescription: unknown, destinationRoot: unknown, items: unknown) => {
+    const desc = validateString(sourceDescription, 'sourceDescription');
+    const dest = validatePath(destinationRoot);
+    if (!Array.isArray(items)) {
+      throw new Error('Invalid items: must be an array of CopyItem');
+    }
+    const copyItems: CopyItem[] = items.map((i) => ({
+      sourcePath: validatePath(i.sourcePath),
+      destinationPath: validatePath(i.destinationPath),
+    }));
+    return executeBatchCopyOperation(desc, dest, copyItems);
+  });
+
+  ipcMain.handle('operations:revert', async (_event, operationId: unknown) => {
+    const id = validateId(operationId);
+    return revertBatchOperation(id);
   });
 
   // ── People ────────────────────────────────────────────────────────────────
@@ -140,6 +186,15 @@ export function registerIpcHandlers(): void {
       }
     }
     return true;
+  });
+
+  ipcMain.handle('people:merge', async (_event, targetPersonId: unknown, sourcePersonIds: unknown) => {
+    const targetId = validateId(targetPersonId);
+    if (!Array.isArray(sourcePersonIds)) {
+      throw new Error('sourcePersonIds must be an array');
+    }
+    const srcIds = sourcePersonIds.map((id) => validateId(id));
+    return db.mergePeople(targetId, srcIds);
   });
 
   ipcMain.handle('people:delete', async (_event, personId: unknown) => {
@@ -173,17 +228,24 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('watcher:add', async (_event, pathStr: unknown, label: unknown) => {
     const validPath = validatePath(pathStr);
     const validLabel = validateString(label, 'label');
-    return db.addWatchRoot(validPath, validLabel);
+    const root = db.addWatchRoot(validPath, validLabel);
+    getWatcherService().attachWatcher(root.id, validPath);
+    return root;
   });
 
   ipcMain.handle('watcher:remove', async (_event, watchId: unknown) => {
     const id = validateId(watchId);
+    getWatcherService().detachWatcher(id);
     db.getDb().prepare('DELETE FROM watch_roots WHERE id = ?').run(id);
     return true;
   });
 
   ipcMain.handle('watcher:toggle', async (_event, watchId: unknown, active: unknown) => {
     const id = validateId(watchId);
+    const row = db.getDb().prepare('SELECT path FROM watch_roots WHERE id = ?').get(id) as any;
+    if (row) {
+      getWatcherService().setWatcherActive(id, row.path, !!active);
+    }
     db.getDb().prepare('UPDATE watch_roots SET active = ?, updated_at = datetime(\'now\') WHERE id = ?').run(active ? 1 : 0, id);
     return true;
   });
@@ -192,6 +254,15 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('duplicates:list', async () => {
     return db.getDuplicateGroups();
+  });
+
+  ipcMain.handle('duplicates:resolve', async (_event, groupId: unknown, action: unknown) => {
+    const gid = validateId(groupId);
+    const act = validateString(action, 'action') as 'keep_best' | 'recycle' | 'hardlink';
+    if (!['keep_best', 'recycle', 'hardlink'].includes(act)) {
+      throw new Error(`Invalid action: ${act}`);
+    }
+    return db.resolveDuplicateGroup(gid, act);
   });
 
   // ── Settings ──────────────────────────────────────────────────────────────
@@ -213,6 +284,17 @@ export function registerIpcHandlers(): void {
     return true;
   });
 
+  // ── AI Worker Status ──────────────────────────────────────────────────────
+
+  ipcMain.handle('ai:get-status', async () => {
+    try {
+      const pingRes = await getAiWorkerClient().ping(3000);
+      return { ok: true, capabilities: pingRes };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
   // ── Dialogs ───────────────────────────────────────────────────────────────
 
   ipcMain.handle('dialog:open-folder', async () => {
@@ -232,6 +314,43 @@ export function registerIpcHandlers(): void {
       filters: Array.isArray(filters) ? filters : undefined,
     });
     return result.canceled ? null : result.filePaths;
+  });
+
+  // ── Metadata Organization ──────────────────────────────────────────────
+  ipcMain.handle('organizer:get-rules', async () => {
+    return getOrganizationRules();
+  });
+
+  ipcMain.handle('organizer:save-rule', async (_event, rule: unknown) => {
+    if (!rule || typeof rule !== 'object') throw new Error('Invalid rule payload');
+    const r = rule as Partial<OrganizationRule>;
+    if (!r.name || !r.pattern) throw new Error('Rule name and pattern are required');
+    return saveOrganizationRule(r as any);
+  });
+
+  ipcMain.handle('organizer:generate-proposals', async (_event, fileIds: unknown, ruleIdOrPattern: unknown, destinationRoot: unknown) => {
+    if (!Array.isArray(fileIds) || fileIds.length === 0) throw new Error('fileIds must be a non-empty array');
+    const ruleStr = validateString(ruleIdOrPattern, 'ruleIdOrPattern');
+    const dest = validatePath(destinationRoot);
+    const validIds = fileIds.map((id) => validateString(id, 'fileId'));
+    return generateOrganizationProposals(validIds, ruleStr, dest);
+  });
+
+  ipcMain.handle('organizer:execute', async (_event, proposals: unknown, destinationRoot: unknown, options?: unknown) => {
+    if (!Array.isArray(proposals)) throw new Error('proposals must be an array');
+    const dest = validatePath(destinationRoot);
+    return executeOrganization(proposals as OrganizationProposalItem[], dest, options as any);
+  });
+
+  // ── Library Reconciliation & Rescan ─────────────────────────────────────
+  ipcMain.handle('library:reconcile', async (_event, rootId?: unknown) => {
+    const id = rootId ? validateString(rootId, 'rootId') : undefined;
+    return reconcileLibrary(id);
+  });
+
+  ipcMain.handle('library:rescan', async (_event, targetPath: unknown, fullRescan?: unknown) => {
+    const validPath = validatePath(targetPath);
+    return indexFolderIncremental(validPath, { forceFullRescan: !!fullRescan });
   });
 
   // ── App Info ──────────────────────────────────────────────────────────────

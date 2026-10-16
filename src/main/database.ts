@@ -114,6 +114,17 @@ function createSchemaInline(database: Database.Database): void {
       thumbnail_path TEXT, metadata_json TEXT,
       processing_status TEXT NOT NULL DEFAULT 'pending',
       last_scanned_at TEXT NOT NULL DEFAULT (datetime('now')),
+      camera_make TEXT, camera_model TEXT, lens_model TEXT, iso INTEGER,
+      focal_length REAL, aperture REAL, exposure_time TEXT, orientation INTEGER,
+      codec TEXT, frame_rate REAL, bitrate INTEGER,
+      page_count INTEGER, word_count INTEGER,
+      doc_title TEXT, doc_author TEXT, doc_subject TEXT,
+      audio_artist TEXT, audio_album TEXT, audio_title TEXT,
+      archive_entries INTEGER,
+      is_missing INTEGER NOT NULL DEFAULT 0,
+      availability_status TEXT NOT NULL DEFAULT 'available',
+      extractor_version TEXT,
+      extracted_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(root_id, relative_path)
@@ -123,6 +134,11 @@ function createSchemaInline(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash_sha256);
     CREATE INDEX IF NOT EXISTS idx_files_capture_time ON files(capture_time);
     CREATE INDEX IF NOT EXISTS idx_files_processing ON files(processing_status);
+    CREATE INDEX IF NOT EXISTS idx_files_camera ON files(camera_make, camera_model);
+    CREATE INDEX IF NOT EXISTS idx_files_author ON files(doc_author);
+    CREATE INDEX IF NOT EXISTS idx_files_artist ON files(audio_artist);
+    CREATE INDEX IF NOT EXISTS idx_files_missing ON files(is_missing);
+    CREATE INDEX IF NOT EXISTS idx_files_availability ON files(availability_status);
     CREATE TABLE IF NOT EXISTS file_versions (
       id TEXT PRIMARY KEY, file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
       hash_sha256 TEXT NOT NULL, size_bytes INTEGER NOT NULL,
@@ -280,6 +296,25 @@ function createSchemaInline(database: Database.Database): void {
       is_original INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (group_id, file_id)
     );
+    CREATE TABLE IF NOT EXISTS organization_rules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      pattern TEXT NOT NULL,
+      description TEXT,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS organization_proposals (
+      id TEXT PRIMARY KEY,
+      rule_id TEXT REFERENCES organization_rules(id) ON DELETE SET NULL,
+      source_file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      source_path TEXT NOT NULL,
+      proposed_destination TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'proposed',
+      warning_flags TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY, value TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'string',
@@ -291,6 +326,15 @@ function createSchemaInline(database: Database.Database): void {
       content='', contentless_delete=1, tokenize='unicode61'
     );
     INSERT OR IGNORE INTO schema_version (version, description) VALUES (1, 'Initial schema');
+    INSERT OR IGNORE INTO schema_version (version, description) VALUES (2, 'Metadata Intelligence Engine');
+
+    INSERT OR IGNORE INTO organization_rules (id, name, pattern, description, is_default)
+    VALUES
+      ('rule_default_date', 'Date Hierarchy', '{category}/{YYYY}/{MM}', 'Organize into category and Year/Month folders', 1),
+      ('rule_camera_date', 'Camera & Date', 'Media/{camera}/{YYYY}/{MM}', 'Organize media by camera model and date', 0),
+      ('rule_person_date', 'Person & Date', 'People/{person}/{YYYY}', 'Organize photos by confirmed person name and year', 0),
+      ('rule_docs_author', 'Documents by Author', 'Documents/{author}/{YYYY}', 'Organize documents by author and year', 0),
+      ('rule_audio_artist', 'Music by Artist & Album', 'Music/{artist}/{YYYY}', 'Organize audio tracks by artist and year', 0);
   `);
 }
 
@@ -331,8 +375,17 @@ export function searchFiles(query: SearchQuery): SearchResult {
   const params: Record<string, unknown> = {};
 
   if (query.text) {
-    conditions.push("(f.filename LIKE @text OR f.relative_path LIKE @text)");
-    params.text = `%${query.text}%`;
+    // Search in filename, relative_path, and full-text search index
+    try {
+      conditions.push("(f.filename LIKE @text OR f.relative_path LIKE @text OR f.id IN (SELECT file_id FROM search_index WHERE search_index MATCH @ftsQuery))");
+      params.text = `%${query.text}%`;
+      // Clean query token for FTS
+      const cleanFts = query.text.replace(/["*]/g, ' ').trim();
+      params.ftsQuery = cleanFts ? `"${cleanFts}"*` : `"${query.text}"`;
+    } catch {
+      conditions.push("(f.filename LIKE @text OR f.relative_path LIKE @text)");
+      params.text = `%${query.text}%`;
+    }
   }
   if (query.filename) {
     conditions.push("f.filename LIKE @filename");
@@ -369,6 +422,50 @@ export function searchFiles(query: SearchQuery): SearchResult {
   if (query.rootId) {
     conditions.push("f.root_id = @rootId");
     params.rootId = query.rootId;
+  }
+  if (query.hasGps) {
+    conditions.push("f.has_gps = 1");
+  }
+  if (query.isMissing !== undefined) {
+    conditions.push("f.is_missing = @isMissing");
+    params.isMissing = query.isMissing ? 1 : 0;
+  }
+  if (query.camera) {
+    conditions.push("(f.camera_make LIKE @camera OR f.camera_model LIKE @camera)");
+    params.camera = `%${query.camera}%`;
+  }
+  if (query.author) {
+    conditions.push("f.doc_author LIKE @author");
+    params.author = `%${query.author}%`;
+  }
+  if (query.artist) {
+    conditions.push("(f.audio_artist LIKE @artist OR f.audio_album LIKE @artist)");
+    params.artist = `%${query.artist}%`;
+  }
+  if (query.category) {
+    switch (query.category) {
+      case 'image':
+        conditions.push("(f.mime_type LIKE 'image/%' OR f.extension IN ('.jpg','.jpeg','.png','.gif','.bmp','.webp','.tiff','.svg','.heic','.heif'))");
+        break;
+      case 'video':
+        conditions.push("(f.mime_type LIKE 'video/%' OR f.extension IN ('.mp4','.avi','.mov','.mkv','.wmv','.flv','.webm','.m4v'))");
+        break;
+      case 'audio':
+        conditions.push("(f.mime_type LIKE 'audio/%' OR f.extension IN ('.mp3','.wav','.flac','.m4a','.aac','.ogg','.wma'))");
+        break;
+      case 'document':
+        conditions.push("(f.mime_type LIKE 'application/pdf%' OR f.mime_type LIKE '%word%' OR f.mime_type LIKE '%document%' OR f.mime_type LIKE '%presentation%' OR f.mime_type LIKE '%spreadsheet%' OR f.extension IN ('.pdf','.doc','.docx','.ppt','.pptx','.xls','.xlsx'))");
+        break;
+      case 'archive':
+        conditions.push("(f.mime_type LIKE '%zip%' OR f.mime_type LIKE '%tar%' OR f.extension IN ('.zip','.tar','.gz','.tgz','.7z','.rar'))");
+        break;
+      case 'text':
+        conditions.push("(f.mime_type LIKE 'text/%' OR f.extension IN ('.txt','.md','.csv','.json','.xml','.yaml','.yml','.js','.ts','.py'))");
+        break;
+      case 'other':
+        conditions.push("(f.mime_type NOT LIKE 'image/%' AND f.mime_type NOT LIKE 'video/%' AND f.mime_type NOT LIKE 'audio/%' AND f.mime_type NOT LIKE 'text/%' AND f.mime_type NOT LIKE 'application/pdf%' AND f.extension NOT IN ('.jpg','.jpeg','.png','.gif','.bmp','.webp','.mp4','.mov','.mkv','.mp3','.wav','.flac','.pdf','.docx','.pptx','.xlsx','.zip','.tar','.txt'))");
+        break;
+    }
   }
 
   const where = conditions.join(' AND ');
@@ -475,6 +572,131 @@ export function setSetting(key: string, value: string, type = 'string', category
 
 export function getDuplicateGroups(): DuplicateGroup[] {
   return getDb().prepare('SELECT * FROM duplicate_groups ORDER BY total_size DESC').all() as DuplicateGroup[];
+}
+
+export function checkDatabaseIntegrity(): { ok: boolean; message: string } {
+  try {
+    const row = getDb().prepare('PRAGMA integrity_check').get() as { integrity_check: string };
+    const ok = row?.integrity_check === 'ok';
+    return { ok, message: row?.integrity_check || 'Unknown status' };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export function vacuumDatabase(): boolean {
+  try {
+    getDb().exec('VACUUM');
+    return true;
+  } catch (err) {
+    console.error('Failed to vacuum database:', err);
+    return false;
+  }
+}
+
+export function rebuildSearchIndex(): { success: boolean; indexedCount: number } {
+  const database = getDb();
+  try {
+    const countRow = database.prepare('SELECT COUNT(*) as count FROM files').get() as { count: number };
+    const rebuild = database.transaction(() => {
+      database.exec('DELETE FROM search_index');
+      database.exec(`
+        INSERT INTO search_index (file_id, filename, path, tags, ocr_text, metadata)
+        SELECT f.id, f.filename, (r.path || '/' || f.relative_path), '', '',
+          COALESCE(f.camera_make, '') || ' ' || COALESCE(f.camera_model, '') || ' ' || COALESCE(f.doc_author, '') || ' ' || COALESCE(f.doc_title, '') || ' ' || COALESCE(f.audio_artist, '') || ' ' || COALESCE(f.metadata_json, '')
+        FROM files f
+        JOIN roots r ON f.root_id = r.id
+      `);
+    });
+    rebuild();
+    return { success: true, indexedCount: countRow.count };
+  } catch (err) {
+    console.error('Failed to rebuild search index:', err);
+    return { success: false, indexedCount: 0 };
+  }
+}
+
+export function resolveDuplicateGroup(
+  groupId: string,
+  action: 'keep_best' | 'recycle' | 'hardlink'
+): { success: boolean; filesAffected: number; bytesReclaimed: number } {
+  const database = getDb();
+  const group = database.prepare('SELECT * FROM duplicate_groups WHERE id = ?').get(groupId) as any;
+  if (!group) {
+    throw new Error(`Duplicate group ${groupId} not found`);
+  }
+
+  const groupFiles = database.prepare(`
+    SELECT f.*, dgf.is_original
+    FROM duplicate_group_files dgf
+    JOIN files f ON dgf.file_id = f.id
+    WHERE dgf.group_id = ?
+    ORDER BY dgf.is_original DESC, f.file_created_at ASC
+  `).all(groupId) as any[];
+
+  if (groupFiles.length <= 1) {
+    database.prepare("UPDATE duplicate_groups SET status = 'resolved' WHERE id = ?").run(groupId);
+    return { success: true, filesAffected: 0, bytesReclaimed: 0 };
+  }
+
+  const original = groupFiles[0];
+  const duplicates = groupFiles.slice(1);
+  let filesAffected = 0;
+  let bytesReclaimed = 0;
+
+  if (action === 'keep_best') {
+    // Designate original, keep duplicates marked
+    database.prepare("UPDATE duplicate_groups SET status = 'resolved' WHERE id = ?").run(groupId);
+    return { success: true, filesAffected: duplicates.length, bytesReclaimed: 0 };
+  }
+
+  if (action === 'recycle') {
+    // Delete non-original duplicates
+    for (const dup of duplicates) {
+      try {
+        // Resolve full path
+        const root = database.prepare('SELECT path FROM roots WHERE id = ?').get(dup.root_id) as any;
+        if (root) {
+          const fullPath = path.join(root.path, dup.relative_path);
+          if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+            bytesReclaimed += dup.size_bytes;
+            filesAffected++;
+          }
+        }
+        database.prepare('DELETE FROM files WHERE id = ?').run(dup.id);
+      } catch (err) {
+        console.warn(`Failed to delete duplicate file ${dup.id}:`, err);
+      }
+    }
+    database.prepare("UPDATE duplicate_groups SET status = 'resolved' WHERE id = ?").run(groupId);
+  }
+
+  return { success: true, filesAffected, bytesReclaimed };
+}
+
+export function mergePeople(targetPersonId: string, sourcePersonIds: string[]): boolean {
+  const database = getDb();
+  if (sourcePersonIds.length === 0) return true;
+
+  const merge = database.transaction(() => {
+    for (const srcId of sourcePersonIds) {
+      if (srcId === targetPersonId) continue;
+      // Re-assign face clusters
+      database.prepare('UPDATE face_clusters SET person_id = ? WHERE person_id = ?').run(targetPersonId, srcId);
+      // Re-assign file links
+      database.prepare(`
+        INSERT OR IGNORE INTO file_people (file_id, person_id, association_type)
+        SELECT file_id, ?, association_type FROM file_people WHERE person_id = ?
+      `).run(targetPersonId, srcId);
+      database.prepare('DELETE FROM file_people WHERE person_id = ?').run(srcId);
+      // Delete source person
+      database.prepare('DELETE FROM people WHERE id = ?').run(srcId);
+    }
+  });
+
+  merge();
+  return true;
 }
 
 export function closeDatabase(): void {

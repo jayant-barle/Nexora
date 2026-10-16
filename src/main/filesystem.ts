@@ -44,19 +44,27 @@ export function listDrives(): DriveInfo[] {
 
     return drives;
   } catch {
-    // Fallback: try common drive letters
+    // Fast native fallback: probe drive letters and compute capacity via fs.statfsSync
     const drives: DriveInfo[] = [];
-    for (const letter of ['C:', 'D:', 'E:', 'F:', 'G:', 'H:']) {
+    for (const letter of ['C:', 'D:', 'E:', 'F:', 'G:', 'H:', 'I:', 'J:']) {
       try {
         const letterPath = letter + '\\';
         fs.accessSync(letterPath, fs.constants.R_OK);
+        let totalSize = 0;
+        let freeSpace = 0;
+        try {
+          const stats = fs.statfsSync(letterPath);
+          totalSize = stats.blocks * stats.bsize;
+          freeSpace = stats.bavail * stats.bsize;
+        } catch {}
+
         drives.push({
           letter,
           label: letter,
           type: 'Local Disk',
-          totalSize: 0,
-          freeSpace: 0,
-          usedSpace: 0,
+          totalSize,
+          freeSpace,
+          usedSpace: totalSize - freeSpace,
         });
       } catch {
         // Drive not accessible
@@ -248,8 +256,13 @@ export function safeCopyFile(src: string, dest: string): { success: boolean; err
 
 export function getFreeDiskSpace(targetPath: string): number {
   try {
+    const root = path.parse(targetPath).root || targetPath;
+    if (typeof fs.statfsSync === 'function') {
+      const stats = fs.statfsSync(root);
+      return stats.bavail * stats.bsize;
+    }
     const drive = path.parse(targetPath).root;
-    const output = execSync(`wmic logicaldisk where "caption='${drive.replace('\\', '')}'" get freespace /value`, { encoding: 'utf-8' });
+    const output = execSync(`wmic logicaldisk where "caption='${drive.replace('\\', '')}'" get freespace /value`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
     const match = output.match(/FreeSpace=(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
   } catch {

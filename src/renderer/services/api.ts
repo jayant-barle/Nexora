@@ -1,6 +1,6 @@
 // ============================================================================
 // Nexora — Electron API Bridge
-// Type-safe access to preload APIs from renderer
+// Type-safe access to preload APIs from renderer with mock fallback
 // ============================================================================
 
 import type { ElectronAPI } from '../../preload/index';
@@ -47,21 +47,29 @@ function createMockAPI(): ElectronAPI {
         recentActivity: [],
         watchedFolders: 0,
       }),
+      integrity: async () => ({ ok: true, message: 'ok' }),
+      vacuum: async () => true,
+    },
+    operations: {
+      copy: async () => ({ operationId: 'mock-op', success: true, totalFiles: 0, completedFiles: 0, failedFiles: 0, errors: [] }),
+      revert: async () => ({ operationId: 'mock-op', success: true, revertedFiles: 0, skippedFiles: 0, protectedFiles: [], errors: [] }),
     },
     search: {
       query: async () => ({ files: [], totalCount: 0, query: {}, executionTimeMs: 0 }),
+      rebuildIndex: async () => ({ success: true, indexedCount: 0 }),
     },
     jobs: {
       list: async () => [],
       create: async () => ({ id: '', type: '', status: 'queued', priority: 5, progress: 0, total: 0, target_path: null, target_id: null, config_json: null, error_message: null, retry_count: 0, max_retries: 3, started_at: null, completed_at: null, created_at: '', updated_at: '' }),
-      cancel: async () => true,
-      pause: async () => true,
-      resume: async () => true,
+      cancel: async (jobId: string) => true,
+      pause: async (jobId?: string) => true,
+      resume: async (jobId?: string) => true,
     },
     people: {
       list: async () => [],
       update: async () => true,
       delete: async () => true,
+      merge: async () => true,
     },
     roots: {
       list: async () => [],
@@ -75,6 +83,10 @@ function createMockAPI(): ElectronAPI {
     },
     duplicates: {
       list: async () => [],
+      resolve: async () => ({ success: true, filesAffected: 0, bytesReclaimed: 0 }),
+    },
+    ai: {
+      getStatus: async () => ({ ok: true, capabilities: { pong: true, cv2: true, numpy: true, pil: false } }),
     },
     settings: {
       getAll: async () => ({}),
@@ -85,8 +97,35 @@ function createMockAPI(): ElectronAPI {
       openFolder: async () => null,
       openFile: async () => null,
     },
+    organizer: {
+      getRules: async () => [],
+      saveRule: async () => ({ id: 'mock', name: 'Mock', pattern: '{category}/{YYYY}', is_default: false, created_at: '', updated_at: '' }),
+      generateProposals: async () => ({
+        ruleId: 'mock',
+        ruleName: 'Mock',
+        pattern: '{category}/{YYYY}',
+        totalFiles: 0,
+        estimatedBytes: 0,
+        duplicatesAvoided: 0,
+        conflictCount: 0,
+        warningsCount: 0,
+        items: [],
+      }),
+      execute: async () => ({
+        operationId: 'mock-organize',
+        success: true,
+        totalFiles: 0,
+        completedFiles: 0,
+        failedFiles: 0,
+        errors: [],
+      }),
+    },
+    library: {
+      reconcile: async () => ({ checkedCount: 0, missingCount: 0, restoredCount: 0 }),
+      rescan: async () => ({ rootId: '', totalFound: 0, indexedNew: 0, updatedExisting: 0, reusedCached: 0, failedCount: 0, durationMs: 0 }),
+    },
     app: {
-      getVersion: async () => '0.1.0',
+      getVersion: async () => '0.3.0',
       getPaths: async () => ({
         userData: '', appData: '', temp: '', home: '', documents: '',
       }),
@@ -104,7 +143,6 @@ export function api(): ElectronAPI {
     try {
       _api = getAPI();
     } catch {
-      console.warn('Running outside Electron — using mock API');
       _api = createMockAPI();
     }
   }

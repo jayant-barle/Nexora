@@ -2,8 +2,8 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 1.0.0  
-**Status:** Approved & Implemented  
+**Version:** 1.3.0  
+**Status:** Implemented (v0.3.1 Mandatory Rule: Filename, Duplicate Detection & Person Identification Release)  
 **Platform:** Windows 11 (x64) desktop  
 **Visual Identity:** Cinematic, futuristic, minimal black/charcoal surfaces (`#0a0a0a`), neon-lime accents (`#b4ff32`), glassmorphism  
 
@@ -35,33 +35,59 @@ graph TB
         WinManager[Window Manager: index.ts]
         FSService[Filesystem Service: filesystem.ts]
         DBService[SQLite Database: database.ts]
-        JobQueue[Background Job Queue & Watcher]
+        FileOps[Safe File Operations: file-operations.ts]
+        Indexer[Incremental Indexer: indexer.ts]
+        Organizer[Metadata Organizer: organizer.ts]
+        JobQueue[Persistent Job Runner: job-runner.ts]
+        Watcher[Chokidar Watcher: watcher.ts]
+        AIClient[AI Worker Client: ai-worker-client.ts]
         
         ContextBridge -->|IPC invoke / handle| IPC
         IPC --> FSService
         IPC --> DBService
+        IPC --> FileOps
+        IPC --> Indexer
+        IPC --> Organizer
         IPC --> JobQueue
+        IPC --> Watcher
         WinManager --> IPC
+        JobQueue --> Indexer
+        JobQueue --> FileOps
+        JobQueue --> DBService
+        Organizer --> FileOps
+        Watcher --> JobQueue
+        Indexer --> AIClient
+        Indexer --> DBService
     end
 
     subgraph "Embedded Database"
-        SQLite[(better-sqlite3 WAL Mode)]
+        SQLite[(better-sqlite3 WAL Mode - Schema v2)]
         FTS5[(FTS5 Full-Text Index)]
         DBService --> SQLite
         DBService --> FTS5
     end
 
-    subgraph "AI Worker Subprocess (Python 3)"
+    subgraph "AI Worker Subprocess (Python 3.14 + OpenCV 5.0)"
         JSONRPC[JSON-RPC Engine: stdin/stdout]
         HashEngine[SHA-256 & Perceptual dHash]
-        EXIFParser[EXIF, GPS & Metadata Parser]
+        MetadataEngine[Metadata Intelligence Engine]
+        EXIFParser[EXIF, Camera & GPS Extractor]
+        DocParser[PDF & Office OpenXML Parser]
+        AudioParser[WAV, MP3 ID3 & FLAC Extractor]
+        ArchiveParser[ZIP & TAR Entry Inspector]
         FaceEngine[Face Detection & Cosine Clustering]
-        ThumbnailGen[Pillow JPEG Downscaler]
+        VideoEngine[Video Frame Sampler & Codec Info]
+        ThumbnailGen[Lanczos JPEG Downscaler]
         
-        JobQueue -->|spawn / JSON Lines| JSONRPC
+        AIClient -->|spawn / JSON Lines| JSONRPC
         JSONRPC --> HashEngine
-        JSONRPC --> EXIFParser
+        JSONRPC --> MetadataEngine
+        MetadataEngine --> EXIFParser
+        MetadataEngine --> DocParser
+        MetadataEngine --> AudioParser
+        MetadataEngine --> ArchiveParser
         JSONRPC --> FaceEngine
+        JSONRPC --> VideoEngine
         JSONRPC --> ThumbnailGen
     end
 ```
@@ -189,6 +215,16 @@ State is managed via modular [Zustand](https://github.com/pmndrs/zustand) stores
 - **Context**: Automated photo organization tools risk accidental data loss if move or overwrite operations fail.
 - **Decision**: All organization workflows use copy-first operations with mandatory SHA-256 source/destination hash verifications and maintain a reversible transaction history in `operation_history`.
 - **Consequences**: User data is protected against corruption, partial transfers, or disk disconnections.
+
+### ADR-04: Mandatory Invariants for Filename Handling, Duplicate Verification & Person Identity
+- **Context**: Relying on filenames for duplicate detection or person attribution leads to false associations, while unmonitored concurrent file writes during hashing/copying can lead to corrupt copies or stale records.
+- **Decision**: 
+  1. Every file is an autonomous entity keyed by its canonical filesystem path and distinct `files.id`.
+  2. Identical filenames across different paths are never duplicates or associated with the same person without identical SHA-256 hash or verified face matches.
+  3. Exact duplicate detection requires byte-for-byte SHA-256 cryptographic verification; duplicates are registered in `duplicate_groups` with `status = 'pending'` and are never automatically deleted or overwritten.
+  4. Person identities are strictly prohibited from being inferred from filenames. Person folders require confirmed/reviewed review status (`review_status IN ('confirmed', 'reviewed')`); unreviewed matches safely fallback to `Unassigned`. Multiple confirmed people in a single file are aggregated (e.g. `Alice & Bob`).
+  5. In-flight file modifications during hashing (`computeFileSha256`) and copying (`copyFileWithVerification`) are detected via pre/post stream `stat` comparisons, aborting the operation, removing staging files, and invalidating affected results without corrupting targets.
+- **Consequences**: Eliminates false-positive deduplication, prevents erroneous biometric tagging from filenames, ensures multi-person safety, and guarantees 100% original file preservation.
 
 ---
 
