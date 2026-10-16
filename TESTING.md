@@ -2,7 +2,7 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 1.0.0  
+**Version:** 0.1.0  
 **Test Framework:** [Vitest 2.1.8](https://vitest.dev/)  
 **Environment:** Node.js / Windows 11  
 

@@ -2,6 +2,7 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
+**Canonical Version:** `0.1.0`  
 **Database Engine:** SQLite 3 (via `better-sqlite3` v11.6.0)  
 **Schema Version:** 1 (`001_initial.sql`)  
 **Storage Location:** `%APPDATA%\nexora\nexora.db`  

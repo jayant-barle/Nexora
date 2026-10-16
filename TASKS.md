@@ -2,7 +2,7 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 1.0.0  
+**Version:** 0.1.0  
 **Tracking Status:** Synchronized with v0.1.0 codebase  
 
 ---
@@ -95,3 +95,14 @@
 | `QA-04` | Execute Full Verification Pipeline (`typecheck`, `test`, `build`) | P0 | **Completed** | `QA-02`, `QA-03` | All TypeScript checks pass; all tests pass; renderer and main bundles build with zero errors. |
 | `QA-05` | Windows NSIS Installer Packaging Verification | P2 | Planned | `QA-04` | `npm run package` builds standalone `.exe` installer. |
 | `QA-06` | Integration Test Suite for SQLite IPC Queries | P2 | Planned | `QA-04` | Automated test verifies concurrent insert and FTS5 search queries. |
+
+---
+
+## 7. Documentation & Version Management System
+
+| Task ID | Description | Priority | Status | Dependencies | Completion Criteria |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `DOC-01` | Establish Canonical Version Source of Truth | P0 | **Completed** | None | Root [VERSION](file:///e:/Code%20Tresure/File%20manager/VERSION) established at `0.1.0` and aligned with [package.json](file:///e:/Code%20Tresure/File%20manager/package.json). |
+| `DOC-02` | Implement Version Management & Release Workflow | P1 | **Completed** | `DOC-01` | Defined 9-step version update workflow and SemVer standards in [CONTRIBUTING.md](file:///e:/Code%20Tresure/File%20manager/CONTRIBUTING.md). |
+| `DOC-03` | Author Domain-Specific Engineering Specifications | P1 | **Completed** | None | Created [FILE_OPERATIONS.md](file:///e:/Code%20Tresure/File%20manager/FILE_OPERATIONS.md), [AI_PIPELINE.md](file:///e:/Code%20Tresure/File%20manager/AI_PIPELINE.md), [PRIVACY_SECURITY.md](file:///e:/Code%20Tresure/File%20manager/PRIVACY_SECURITY.md), [SEARCH_DUPLICATES.md](file:///e:/Code%20Tresure/File%20manager/SEARCH_DUPLICATES.md), [WATCH_FOLDERS.md](file:///e:/Code%20Tresure/File%20manager/WATCH_FOLDERS.md), [ERROR_HANDLING.md](file:///e:/Code%20Tresure/File%20manager/ERROR_HANDLING.md), [PERFORMANCE.md](file:///e:/Code%20Tresure/File%20manager/PERFORMANCE.md), [DEPENDENCIES.md](file:///e:/Code%20Tresure/File%20manager/DEPENDENCIES.md), and [UI_UX_SPEC.md](file:///e:/Code%20Tresure/File%20manager/UI_UX_SPEC.md). |
+| `DOC-04` | Maintain Chronological Release History in Changelog | P1 | **Completed** | `DOC-01` | Formatted [CHANGELOG.md](file:///e:/Code%20Tresure/File%20manager/CHANGELOG.md) adhering to Keep a Changelog standards. |

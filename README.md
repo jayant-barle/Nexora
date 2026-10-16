@@ -2,6 +2,7 @@
 
 > **"Your files. Your intelligence. Your control."**
 
+[![Version](https://img.shields.io/badge/Version-0.1.0-b4ff32.svg)](VERSION)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![Electron Version](https://img.shields.io/badge/Electron-33.2.1-blue)](https://www.electronjs.org/)
 [![React Version](https://img.shields.io/badge/React-18.3.1-61dafb)](https://react.dev/)
@@ -157,6 +158,35 @@ Generate a standalone Windows NSIS installer (`.exe`):
 npm run package
 ```
 *Installers are generated inside the `release/` folder as `Nexora Setup <version>.exe`.*
+
+---
+
+## Documentation & Engineering Specifications
+
+Nexora includes an extensive, production-grade technical documentation system:
+
+| Document | Purpose & Scope |
+| :--- | :--- |
+| [VERSION](file:///e:/Code%20Tresure/File%20manager/VERSION) | Canonical single source of truth for the project version (`0.1.0`) |
+| [PRD.md](file:///e:/Code%20Tresure/File%20manager/PRD.md) | Product requirements, scope, constraints, and acceptance criteria |
+| [ARCHITECTURE.md](file:///e:/Code%20Tresure/File%20manager/ARCHITECTURE.md) | System topology, multi-process IPC, state management, and data flow |
+| [FILE_OPERATIONS.md](file:///e:/Code%20Tresure/File%20manager/FILE_OPERATIONS.md) | Copy-first preservation, SHA-256 verification, and rollback mechanics |
+| [AI_PIPELINE.md](file:///e:/Code%20Tresure/File%20manager/AI_PIPELINE.md) | Subprocess JSON-RPC worker, hashing, EXIF, and facial recognition |
+| [PRIVACY_SECURITY.md](file:///e:/Code%20Tresure/File%20manager/PRIVACY_SECURITY.md) | Zero-cloud architecture, biometric data isolation, and Electron hardening |
+| [SEARCH_DUPLICATES.md](file:///e:/Code%20Tresure/File%20manager/SEARCH_DUPLICATES.md) | SQLite FTS5 search indexing and exact/perceptual deduplication engine |
+| [WATCH_FOLDERS.md](file:///e:/Code%20Tresure/File%20manager/WATCH_FOLDERS.md) | Chokidar directory monitoring, debounce windows, and offline re-sync |
+| [ERROR_HANDLING.md](file:///e:/Code%20Tresure/File%20manager/ERROR_HANDLING.md) | Multi-tier error boundaries, database transactions, and crash recovery |
+| [PERFORMANCE.md](file:///e:/Code%20Tresure/File%20manager/PERFORMANCE.md) | Large-library scalability targets, WAL tuning, and 60 FPS rendering |
+| [DEPENDENCIES.md](file:///e:/Code%20Tresure/File%20manager/DEPENDENCIES.md) | Production and development dependency inventory, licenses, and ABI guide |
+| [DATABASE_SCHEMA.md](file:///e:/Code%20Tresure/File%20manager/DATABASE_SCHEMA.md) | SQLite 3 schema documentation for all 25 tables and FTS5 indices |
+| [UI_UX_SPEC.md](file:///e:/Code%20Tresure/File%20manager/UI_UX_SPEC.md) | Design tokens, visual identity, and specifications for all 12 views |
+| [API.md](file:///e:/Code%20Tresure/File%20manager/API.md) | Complete IPC channel specifications and payload contracts |
+| [IMPLEMENTATION_PLAN.md](file:///e:/Code%20Tresure/File%20manager/IMPLEMENTATION_PLAN.md) | Phased development roadmap and milestones |
+| [TASKS.md](file:///e:/Code%20Tresure/File%20manager/TASKS.md) | Status tracker for completed, in-progress, and planned engineering tasks |
+| [TESTING.md](file:///e:/Code%20Tresure/File%20manager/TESTING.md) | Automated testing strategy, Vitest commands, and acceptance criteria |
+| [SECURITY.md](file:///e:/Code%20Tresure/File%20manager/SECURITY.md) | Security vulnerability disclosure and threat policies |
+| [CHANGELOG.md](file:///e:/Code%20Tresure/File%20manager/CHANGELOG.md) | Chronological release and change history |
+| [CONTRIBUTING.md](file:///e:/Code%20Tresure/File%20manager/CONTRIBUTING.md) | Contribution standards, code style, and version update workflow |
 
 ---
 

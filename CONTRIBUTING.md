@@ -118,3 +118,37 @@ Before submitting a Pull Request, ensure that:
 - [ ] Code follows the established styling tokens and design system.
 - [ ] Relevant documentation has been updated to reflect any new or modified functionality.
 - [ ] PR description clearly explains the changes and references any related issues.
+
+---
+
+## 5. Version Management & Release Workflow
+
+Nexora adheres strictly to [Semantic Versioning (SemVer 2.0.0)](https://semver.org/):
+
+$$\text{MAJOR}.\text{MINOR}.\text{PATCH}$$
+
+- **`MAJOR`**: Incompatible architectural breaking changes or major framework shifts.
+- **`MINOR`**: New backward-compatible capabilities, views, or AI pipelines.
+- **`PATCH`**: Backward-compatible bug fixes, security patches, or documentation updates.
+
+### 5.1. Canonical Version Single Source of Truth
+1. The **canonical version** of the project is defined in the root [VERSION](file:///e:/Code%20Tresure/File%20manager/VERSION) file and mirrored in [package.json](file:///e:/Code%20Tresure/File%20manager/package.json).
+2. The version must remain consistent across:
+   - [VERSION](file:///e:/Code%20Tresure/File%20manager/VERSION)
+   - [package.json](file:///e:/Code%20Tresure/File%20manager/package.json)
+   - [README.md](file:///e:/Code%20Tresure/File%20manager/README.md)
+   - [CHANGELOG.md](file:///e:/Code%20Tresure/File%20manager/CHANGELOG.md)
+   - UI application telemetry in [SettingsPage.tsx](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/SettingsPage.tsx) via `electronAPI.app.getVersion()`.
+
+### 5.2. Mandatory Version Update Workflow
+Whenever a meaningful project modification is performed, engineers and coding agents must execute the following 9-step workflow:
+
+1. **Inspect Status**: Inspect the current project version (`VERSION`, `package.json`) and repository status (`git status`).
+2. **Review Scope**: Review the requested changes and determine whether they represent a `PATCH`, `MINOR`, or `MAJOR` increment.
+3. **Identify Increment**: Establish the target version according to SemVer rules (do not bump versions for trivial typos).
+4. **Implement Safely**: Implement requested code changes without disturbing unrelated features or breaking existing invariants.
+5. **Execute Validation**: Run full validation test suites (`npm test`, `npm run typecheck`, `npm run build`).
+6. **Update Changelog**: Add an entry in [CHANGELOG.md](file:///e:/Code%20Tresure/File%20manager/CHANGELOG.md) formatted with the version, date, categorized sections (`Added`, `Changed`, `Fixed`, `Security and Privacy`, `Documentation`, `Affected Areas`, `Validation`).
+7. **Synchronize Version**: Update the canonical version in [VERSION](file:///e:/Code%20Tresure/File%20manager/VERSION) and [package.json](file:///e:/Code%20Tresure/File%20manager/package.json) when a release version changes.
+8. **Update Documentation**: Update [README.md](file:///e:/Code%20Tresure/File%20manager/README.md) and specialized technical documentation when project behavior or setup changes.
+9. **Deliver Report**: Report the old version, new version, files modified, tests performed, and any unresolved issues or TODOs.

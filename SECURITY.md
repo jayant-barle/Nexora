@@ -2,7 +2,7 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 1.0.0  
+**Version:** 0.1.0  
 **Security Model:** Local-First, Sandboxed Chromium Renderer, Least Privilege IPC  
 
 ---

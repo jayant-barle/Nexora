@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.0] - 2026-10-16
+### [0.1.0] — 2026-10-16
 
-### Added
+**Added**
 - **Electron Desktop Shell**:
   - Secure multi-process desktop foundation with `contextIsolation: true` and `nodeIntegration: false`.
   - Native window controls, custom background color, and production menu suppression.
@@ -46,17 +46,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `HistoryPage`: Operation audit log with one-click reversible rollback.
   - `WatchedFoldersPage`: Directory watcher management with native folder dialog and auto-index toggling.
   - `SettingsPage`: AI model confidence sliders, cluster distance thresholds, library path picker, and diagnostics.
-- **Testing & Verification**:
-  - Vitest test runner configuration (`vitest.config.ts`).
-  - Unit tests for Windows path normalization, null-byte injection detection, and default safety invariants.
 
-### Fixed
+**Fixed**
 - Fixed TypeScript compiler configuration in `tsconfig.json` and `tsconfig.main.json` to resolve deprecated `baseUrl` and module resolution errors under TypeScript 7+.
 - Rebuilt native C++ addon `better-sqlite3` targeting Electron 33.4.11 ABI via `@electron/rebuild`.
 - Corrected relative type import paths in renderer components and pages.
 - Resolved TypeScript typing in `TimelinePage.tsx` for `Object.entries` mapping in strict mode.
 
-### Security
+**Security and Privacy**
 - Implemented strict null-byte (`\0`) path validation and ID sanitization across all IPC handlers.
 - Hardened Electron window security with `contents.setWindowOpenHandler` denial and `contents.on('will-navigate')` external URL interception.
 - Enforced copy-first non-destructive semantics for all automated library reorganizations.
+- 100% local processing guarantee with zero cloud telemetry and air-gapped biometric storage.
+
+**Documentation**
+- Established canonical version source of truth in root `VERSION` file (`0.1.0`).
+- Authored domain-specific engineering specifications:
+  - `FILE_OPERATIONS.md`: Copy operations, original-file preservation, verification, undo, and rollback.
+  - `AI_PIPELINE.md`: Local AI models, JSON-RPC subprocess worker, inference, indexing, and face-recognition workflows.
+  - `PRIVACY_SECURITY.md`: Local-only processing, sensitive metadata, permissions, and Electron security hardening.
+  - `SEARCH_DUPLICATES.md`: Search indexing, FTS5 tokenization, and exact/perceptual duplicate-handling rules.
+  - `WATCH_FOLDERS.md`: Chokidar folder monitoring, event debouncing, and startup reconciliation.
+  - `ERROR_HANDLING.md`: Multi-layer error reporting, database transactions, and crash recovery.
+  - `PERFORMANCE.md`: Large-library performance, database WAL tuning, and 60 FPS rendering.
+  - `DEPENDENCIES.md`: Dependency inventory, license compliance analysis, and native ABI maintenance.
+  - `UI_UX_SPEC.md`: Screen-by-screen specifications for all 12 views, design tokens, and interactions.
+- Updated `CONTRIBUTING.md` with the mandatory 9-step Version Update Workflow and SemVer guidelines.
+- Updated `README.md`, `PRD.md`, `ARCHITECTURE.md`, `TASKS.md`, and `docs/` cross-referencing all technical specifications.
+
+**Affected Areas**
+- Root configuration and version files (`VERSION`, `package.json`, `.gitignore`)
+- Main process (`src/main/index.ts`, `src/main/database.ts`, `src/main/filesystem.ts`, `src/main/ipc-handlers.ts`)
+- Preload bridge (`src/preload/index.ts`)
+- Renderer application (`src/renderer/App.tsx`, `src/renderer/components/Sidebar.tsx`, 12 view pages, Zustand stores, styles)
+- Python worker (`ai-worker/src/main.py`, `ai-worker/requirements.txt`)
+- Database migrations (`database/migrations/001_initial.sql`, `scripts/migrate.js`)
+- Comprehensive documentation suite (all 20 markdown specification documents)
+
+**Validation**
+- `npm test`: 2 test files, 6 unit tests executed and passed (`tests/unit/filesystem.test.ts`, `tests/unit/types.test.ts`).
+- `npm run typecheck`: TypeScript compiler checks executed with zero type errors.
+- `npm run build`: Production bundle for Vite renderer and Electron main compiled cleanly.
+- IPC path validation: Null-byte rejection and path normalization verified.

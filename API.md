@@ -2,7 +2,7 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 1.0.0  
+**Version:** 0.1.0  
 **Transport Layers:**
 1. **Preload Context Bridge (`window.electronAPI`)**: Type-safe asynchronous interface between Chromium Renderer and Electron Main.
 2. **Electron IPC Channels**: Inter-process communication (`ipcMain.handle` / `ipcRenderer.invoke`).
