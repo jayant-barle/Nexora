@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — File Explorer Page
+// Nexora — File Explorer Page
 // ============================================================================
 
 import React, { useEffect, useCallback } from 'react';

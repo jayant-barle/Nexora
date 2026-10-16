@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Duplicates Page
+// Nexora — Duplicates Page
 // Deduplication, exact SHA-256 match, and perceptual image similarity
 // ============================================================================
 

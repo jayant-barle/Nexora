@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Settings Page
+// Nexora — Settings Page
 // System preferences, AI model parameters, library paths, and hardware tuning
 // ============================================================================
 
@@ -241,7 +241,7 @@ export const SettingsPage: React.FC = () => {
 
             <span style={{ color: 'var(--color-text-tertiary)' }}>Local Database:</span>
             <span style={{ fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
-              {appPaths.userData ? `${appPaths.userData}\\ai-file-manager.db` : '—'}
+              {appPaths.userData ? `${appPaths.userData}\\nexora.db` : '—'}
             </span>
           </div>
         </div>

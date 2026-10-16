@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Activity & Background Jobs Page
+// Nexora — Activity & Background Jobs Page
 // Live background worker queue, job management, progress telemetry, and logs
 // ============================================================================
 

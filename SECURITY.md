@@ -1,6 +1,7 @@
 # Security Policy & Architecture
 
-## Project: AI File Manager for Windows 11
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
 **Version:** 1.0.0  
 **Security Model:** Local-First, Sandboxed Chromium Renderer, Least Privilege IPC  
 
@@ -8,7 +9,7 @@
 
 ## 1. Threat Model & Security Posture
 
-Desktop applications handling user files face distinct threat vectors compared to traditional web applications. **AI File Manager** interacts directly with the local Windows filesystem, executes image processing algorithms on untrusted user media, and performs background batch file copies.
+Desktop applications handling user files face distinct threat vectors compared to traditional web applications. **Nexora** interacts directly with the local Windows filesystem, executes image processing algorithms on untrusted user media, and performs background batch file copies.
 
 ### Threat Vectors Considered:
 1. **Malicious File Paths & Path Traversal**: Attackers attempting to pass malicious path strings containing `../` or null bytes (`\0`) to read or overwrite system directories.
@@ -20,7 +21,7 @@ Desktop applications handling user files face distinct threat vectors compared t
 
 ## 2. Electron Security Controls
 
-AI File Manager strictly adheres to the official [Electron Security Best Practices](https://www.electronjs.org/docs/latest/tutorial/security):
+Nexora strictly adheres to the official [Electron Security Best Practices](https://www.electronjs.org/docs/latest/tutorial/security):
 
 ```
 +-------------------------------------------------------------+
@@ -110,7 +111,7 @@ function validateId(value: unknown): string {
 
 - **Zero Cloud Ingestion**: The application contains no analytics tracking, no third-party telemetry beacons, and no cloud-dependent AI APIs.
 - **Local Neural Inference**: All facial detection, embedding vectors, and clustering are computed entirely on the user's local machine via the Python worker.
-- **Local Data Storage**: The SQLite database and generated thumbnails reside exclusively in the user's local `%APPDATA%\ai-file-manager\` directory.
+- **Local Data Storage**: The SQLite database and generated thumbnails reside exclusively in the user's local `%APPDATA%\nexora\` directory.
 
 ---
 
@@ -125,8 +126,8 @@ To prevent accidental data loss:
 
 ## 6. Vulnerability Reporting
 
-If you discover a security vulnerability in AI File Manager, please report it privately:
-- **Email**: `security@aifilemanager.local` (or file a private security advisory on GitHub).
+If you discover a security vulnerability in Nexora, please report it privately:
+- **Email**: `security@nexora.local` (or file a private security advisory on GitHub).
 - **Include**:
   - Description of the vulnerability.
   - Step-by-step reproduction instructions or proof-of-concept.

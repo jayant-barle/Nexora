@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================================
-# AI File Manager — Python AI Worker Subprocess
+# Nexora — Python AI Worker Subprocess
 # High-performance local inference: Face detection, clustering, perceptual hashing,
 # metadata extraction, and thumbnail generation over standard I/O (JSON-RPC)
 # ============================================================================

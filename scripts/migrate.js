@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Standalone DB Migration Runner
+// Nexora — Standalone DB Migration Runner
 // ============================================================================
 
 const fs = require('fs');
@@ -12,7 +12,9 @@ function runMigrations() {
     fs.mkdirSync(dbDir, { recursive: true });
   }
 
-  const dbPath = process.env.DB_PATH || path.join(dbDir, 'ai-file-manager.db');
+  const legacyDb = path.join(dbDir, 'ai-file-manager.db');
+  const defaultDb = fs.existsSync(legacyDb) ? legacyDb : path.join(dbDir, 'nexora.db');
+  const dbPath = process.env.DB_PATH || defaultDb;
   console.log(`[Migrate] Target database: ${dbPath}`);
 
   const db = new Database(dbPath);

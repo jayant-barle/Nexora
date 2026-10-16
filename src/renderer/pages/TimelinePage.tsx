@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Timeline Page
+// Nexora — Timeline Page
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';

@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Dashboard Page
+// Nexora — Dashboard Page
 // ============================================================================
 
 import React, { useEffect } from 'react';
@@ -65,10 +65,10 @@ export const DashboardPage: React.FC = () => {
     <div className="page-content">
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <h2 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
-          Dashboard
+          Nexora Dashboard
         </h2>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-base)' }}>
-          {isEmpty ? 'Welcome! Add folders to start indexing your media.' : 'Your media library at a glance'}
+          {isEmpty ? 'Your files. Your intelligence. Your control.' : 'Your media library at a glance'}
         </p>
       </div>
 
@@ -77,7 +77,7 @@ export const DashboardPage: React.FC = () => {
           <div className="empty-icon">📂</div>
           <div className="empty-title">No folders indexed yet</div>
           <div className="empty-description">
-            Start by adding folders to index. The AI File Manager will scan your files,
+            Start by adding folders to index. Nexora will scan your files,
             detect faces, and organize your media — all locally on your machine.
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-3)' }}>

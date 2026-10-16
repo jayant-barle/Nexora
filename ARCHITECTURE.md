@@ -1,15 +1,17 @@
 # System Architecture Documentation
 
-## Project: AI File Manager for Windows 11
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
 **Version:** 1.0.0  
 **Status:** Approved & Implemented  
-**Platform:** Windows 10 / 11 (x64)  
+**Platform:** Windows 11 (x64) desktop  
+**Visual Identity:** Cinematic, futuristic, minimal black/charcoal surfaces (`#0a0a0a`), neon-lime accents (`#b4ff32`), glassmorphism  
 
 ---
 
 ## 1. High-Level System Architecture
 
-AI File Manager adopts a decoupled, multi-process desktop architecture designed for maximum security, local data privacy, and non-blocking asynchronous processing:
+**Nexora** adopts a decoupled, multi-process desktop architecture designed for maximum security, local data privacy, and non-blocking asynchronous processing:
 
 ```mermaid
 graph TB

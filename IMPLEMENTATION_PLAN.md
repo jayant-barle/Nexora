@@ -1,6 +1,7 @@
 # Implementation Plan
 
-## Project: AI File Manager for Windows 11
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
 **Version:** 1.0.0  
 **Status:** Executing / Phase 4 Complete  
 
@@ -10,7 +11,7 @@
 
 ```mermaid
 gantt
-    title AI File Manager Implementation Roadmap
+    title Nexora Implementation Roadmap
     dateFormat  YYYY-MM-DD
     section Phase 1: Core Shell
     Project Structure & TS Config      :done, p1_1, 2026-10-01, 3d

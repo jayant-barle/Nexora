@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Preload Script (Secure Bridge)
+// Nexora — Preload Script (Secure Bridge)
 // Exposes only approved APIs to the renderer via contextBridge
 // ============================================================================
 

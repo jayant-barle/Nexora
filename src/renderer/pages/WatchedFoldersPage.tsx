@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Watched Folders Page
+// Nexora — Watched Folders Page
 // Live Windows filesystem event listeners, auto-indexing, and auto-sorting
 // ============================================================================
 

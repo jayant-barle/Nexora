@@ -1,4 +1,4 @@
--- AI File Manager — Database Schema v1
+-- Nexora — Database Schema v1
 -- SQLite with foreign keys, FTS5, and versioned migrations
 
 PRAGMA journal_mode = WAL;

@@ -1,6 +1,7 @@
 # API Specification & IPC Reference
 
-## Project: AI File Manager for Windows 11
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
 **Version:** 1.0.0  
 **Transport Layers:**
 1. **Preload Context Bridge (`window.electronAPI`)**: Type-safe asynchronous interface between Chromium Renderer and Electron Main.
@@ -284,7 +285,7 @@ Generates downscaled JPEG thumbnail.
   ```json
   {
     "file_path": "C:\\Photos\\img01.jpg",
-    "output_path": "C:\\Users\\Name\\AppData\\Roaming\\ai-file-manager\\thumbs\\thumb1.jpg",
+    "output_path": "C:\\Users\\Name\\AppData\\Roaming\\nexora\\thumbs\\thumb1.jpg",
     "max_size": 256
   }
   ```

@@ -1,6 +1,7 @@
 # Actionable Engineering Tasks
 
-## Project: AI File Manager for Windows 11
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
 **Version:** 1.0.0  
 **Tracking Status:** Synchronized with v0.1.0 codebase  
 

@@ -1,9 +1,10 @@
 # Database Schema Documentation
 
-## Project: AI File Manager for Windows 11
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
 **Database Engine:** SQLite 3 (via `better-sqlite3` v11.6.0)  
 **Schema Version:** 1 (`001_initial.sql`)  
-**Storage Location:** `%APPDATA%\ai-file-manager\ai-file-manager.db`  
+**Storage Location:** `%APPDATA%\nexora\nexora.db`  
 
 ---
 

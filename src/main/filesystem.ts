@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Filesystem Service
+// Nexora — Filesystem Service
 // Handles file/folder operations in the main process
 // ============================================================================
 

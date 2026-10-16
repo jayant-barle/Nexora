@@ -1,6 +1,7 @@
 # Testing Strategy & Quality Assurance
 
-## Project: AI File Manager for Windows 11
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
 **Version:** 1.0.0  
 **Test Framework:** [Vitest 2.1.8](https://vitest.dev/)  
 **Environment:** Node.js / Windows 11  
@@ -9,7 +10,7 @@
 
 ## 1. Testing Philosophy & Architecture
 
-AI File Manager adopts a multi-tiered testing strategy emphasizing data safety, path isolation, and deterministic execution:
+**Nexora** adopts a multi-tiered testing strategy emphasizing data safety, path isolation, and deterministic execution:
 
 1. **Unit Testing**: Focuses on core utility functions, path normalization, safety guards, input validation, and data model invariants. Fast, zero-dependency, and executed in milliseconds.
 2. **Subprocess & Worker Testing**: Verifies that the Python AI inference engine adheres strictly to the JSON-RPC protocol over standard input/output.

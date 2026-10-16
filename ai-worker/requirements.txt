@@ -1,4 +1,4 @@
-# AI File Manager — AI Worker Dependencies
+# Nexora — AI Worker Dependencies
 # Optional heavy ML packages with graceful fallback
 pillow>=10.0.0
 numpy>=1.24.0

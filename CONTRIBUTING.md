@@ -1,6 +1,6 @@
-# Contributing to AI File Manager
+# Contributing to Nexora
 
-Thank you for your interest in contributing to **AI File Manager**! We welcome contributions from developers, designers, and documentation architects. Please review this guide to understand our engineering standards, development workflow, and pull request process.
+Thank you for your interest in contributing to **Nexora**! We welcome contributions from developers, designers, and documentation architects. Please review this guide to understand our engineering standards, development workflow, and pull request process.
 
 ---
 
@@ -16,8 +16,8 @@ Thank you for your interest in contributing to **AI File Manager**! We welcome c
 ### 1.2 Local Setup
 1. Fork and clone the repository:
    ```bash
-   git clone https://github.com/your-username/ai-file-manager.git
-   cd "ai-file-manager"
+   git clone https://github.com/your-username/nexora.git
+   cd "nexora"
    ```
 
 2. Install Node.js dependencies:

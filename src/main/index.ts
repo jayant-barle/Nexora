@@ -1,10 +1,11 @@
 // ============================================================================
-// AI File Manager — Electron Main Process Entry
+// Nexora — Electron Main Process Entry
 // Secure desktop shell with contextIsolation, no nodeIntegration
 // ============================================================================
 
 import { app, BrowserWindow, Menu } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { initDatabase, closeDatabase } from './database';
 import { registerIpcHandlers } from './ipc-handlers';
 
@@ -18,7 +19,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 1000,
     minHeight: 700,
-    title: 'AI File Manager',
+    title: 'Nexora — AI File Manager',
     backgroundColor: '#0f0f0f',
     show: false,
     frame: true,
@@ -59,7 +60,10 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   // Initialize database
-  const dbPath = path.join(app.getPath('userData'), 'ai-file-manager.db');
+  const legacyDb = path.join(app.getPath('userData'), 'ai-file-manager.db');
+  const dbPath = fs.existsSync(legacyDb)
+    ? legacyDb
+    : path.join(app.getPath('userData'), 'nexora.db');
   console.log(`Database path: ${dbPath}`);
   initDatabase(dbPath);
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — History & Organization Operations Page
+// Nexora — History & Organization Operations Page
 // Audit log of file reorganization operations with safe undo/rollback capability
 // ============================================================================
 

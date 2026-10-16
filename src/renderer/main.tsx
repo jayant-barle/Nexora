@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Renderer Entry Point
+// Nexora — Renderer Entry Point
 // React 18 createRoot mounting with global stylesheets
 // ============================================================================
 

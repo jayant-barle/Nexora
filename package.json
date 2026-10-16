@@ -1,9 +1,9 @@
 {
-  "name": "ai-file-manager",
+  "name": "nexora",
   "version": "0.1.0",
-  "description": "AI-powered local file manager for Windows 11 with face detection, media organization, and smart search",
+  "description": "Nexora — AI File Manager. Your files. Your intelligence. Your control.",
   "main": "dist/main/index.js",
-  "author": "AI File Manager",
+  "author": "Nexora",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -52,8 +52,8 @@
     "zustand": "^5.0.2"
   },
   "build": {
-    "appId": "com.aifilemanager.app",
-    "productName": "AI File Manager",
+    "appId": "com.nexora.app",
+    "productName": "Nexora",
     "directories": {
       "output": "release"
     },

@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Storage Analytics Page
+// Nexora — Storage Analytics Page
 // Drive space visualization, file category breakdown, and large file finder
 // ============================================================================
 

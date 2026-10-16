@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Main Application Shell
+// Nexora — Main Application Shell
 // Topbar, Sidebar navigation, view switcher, and global modals
 // ============================================================================
 
@@ -121,8 +121,8 @@ export const App: React.FC = () => {
         <header className="main-header">
           {/* Breadcrumb / Section Label */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <span style={{ fontSize: 'var(--font-size-sm)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)' }}>
-              AI File Manager
+            <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-accent)' }}>
+              Nexora
             </span>
             <span style={{ color: 'var(--color-border)' }}>/</span>
             <h1 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, color: 'var(--color-text-primary)', textTransform: 'capitalize' }}>

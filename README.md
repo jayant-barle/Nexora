@@ -1,4 +1,6 @@
-# AI File Manager for Windows 11
+# Nexora — AI File Manager for Windows 11
+
+> **"Your files. Your intelligence. Your control."**
 
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![Electron Version](https://img.shields.io/badge/Electron-33.2.1-blue)](https://www.electronjs.org/)
@@ -7,14 +9,16 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-yellow)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-An intelligent, local-first desktop file management system for Windows 11. **AI File Manager** unites native Windows filesystem capabilities with on-device AI to provide facial recognition, perceptual deduplication, EXIF timeline visualization, natural search, and automated organization—all executed completely offline with zero cloud telemetry.
+**Nexora** is an intelligent, local-first desktop file management system for Windows 11. Designed with a cinematic, futuristic, minimal visual identity—deep black and charcoal surfaces with restrained neon-lime accents and subtle glass effects—Nexora unites native Windows filesystem capabilities with on-device artificial intelligence. 
+
+All face recognition, perceptual deduplication, EXIF timeline visualization, natural search, and media organization run **100% locally on your machine with zero cloud uploads or telemetry**.
 
 ---
 
-## Key Features
+## Primary Features
 
 - 📁 **Native Windows File Explorer**: Full disk navigation across logical drives (`C:`, `D:`, etc.), path breadcrumbs, sorting, list/grid toggles, and direct integration with native Windows File Explorer.
-- 👤 **On-Device Facial Recognition**: Local neural face detection, vector embedding, and cosine clustering. Review, name, confirm, hide, or merge identity clusters.
+- 👤 **On-Device Facial Recognition**: Local neural face detection, vector embedding, and cosine clustering across photos and videos. Review, name, confirm, hide, or merge identity clusters.
 - 🔄 **Safe Perceptual & Hash Deduplication**: Detect bit-for-bit identical files (SHA-256) and visually similar photos (perceptual difference hashing) with non-destructive resolution actions (Keep Best, Move to Trash, Hardlink).
 - 🔍 **Instant Smart Search**: High-performance SQLite FTS5 search indexing with filters by filename, extension, file size, date range, tags, and recognized people.
 - 📅 **EXIF Media Timeline**: Chronologically group and browse photos and videos by Year, Month, or Day derived directly from camera metadata.
@@ -22,7 +26,7 @@ An intelligent, local-first desktop file management system for Windows 11. **AI 
 - 👁 **Continuous Folder Watcher**: Automated background detection of new and modified media in monitored folders using `chokidar`.
 - ⚡ **Background Worker Queue**: Resilient, priority-driven job processing with live progress telemetry, pause/resume/cancel controls, and error logs.
 - 📜 **Non-Destructive Operations & Rollback**: Safe copy-based file reorganizations with mandatory checksum verifications and instant one-click rollback.
-- 🎨 **Modern Windows 11 Fluent UI**: Dark charcoal aesthetic, neon-lime accents, smooth micro-animations, glassmorphism, and responsive layouts.
+- 🎨 **Cinematic Windows 11 Visual Identity**: Dark charcoal surfaces (`#0a0a0a`), vibrant neon-lime accents (`#b4ff32`), glassmorphism, smooth micro-animations, and responsive layouts.
 
 ---
 
@@ -46,7 +50,7 @@ An intelligent, local-first desktop file management system for Windows 11. **AI 
 
 ```
 +-------------------------------------------------------------------------+
-|                          Electron Desktop Shell                         |
+|                        Nexora Desktop Shell                             |
 |                                                                         |
 |  +-------------------------------------------------------------------+  |
 |  |                     React 18 Renderer UI                          |  |
@@ -85,8 +89,8 @@ An intelligent, local-first desktop file management system for Windows 11. **AI 
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/ai-file-manager.git
-   cd "ai-file-manager"
+   git clone https://github.com/your-username/nexora.git
+   cd "nexora"
    ```
 
 2. **Install Node.js dependencies**:
@@ -152,14 +156,14 @@ Generate a standalone Windows NSIS installer (`.exe`):
 ```bash
 npm run package
 ```
-*Installers are generated inside the `release/` folder.*
+*Installers are generated inside the `release/` folder as `Nexora Setup <version>.exe`.*
 
 ---
 
 ## Project Structure
 
 ```
-ai-file-manager/
+nexora/
 ├── ai-worker/                    # Python AI subprocess inference engine
 │   ├── requirements.txt          # Python ML & image dependencies
 │   └── src/
@@ -169,7 +173,8 @@ ai-file-manager/
 │   └── migrations/
 │       └── 001_initial.sql       # Versioned SQLite initial schema
 ├── docs/                         # Extended technical documentation
-│   └── ARCHITECTURE.md           # Detailed architectural breakdown
+│   ├── ARCHITECTURE.md           # Detailed architectural breakdown
+│   └── PRD.md                    # Product requirements document
 ├── scripts/                      # Developer utility scripts
 │   └── migrate.js                # Standalone database migration runner
 ├── src/
@@ -202,19 +207,12 @@ ai-file-manager/
 
 ---
 
-## Troubleshooting
+## Trademark & Distribution Notice
 
-### 1. `better-sqlite3.node` Bindings Error
-**Symptom**: `Error: Could not locate the bindings file` when launching the main process.  
-**Resolution**: Run `npx electron-builder install-app-deps`. Ensure Visual Studio C++ Build Tools or Windows SDK is present if compiling from source.
-
-### 2. Python Subprocess Not Responding
-**Symptom**: Face detection or hashing tasks remain pending.  
-**Resolution**: Verify that `python` is available in your system `PATH` by running `python --version` in PowerShell. The worker communicates over standard input/output using JSON Lines.
-
-### 3. Blank White Screen in Development
-**Symptom**: Electron window opens with a blank screen.  
-**Resolution**: Ensure the Vite dev server is running on `http://localhost:5173`. Start the renderer first with `npm run dev:renderer` before launching `npm run dev:main`.
+**Nexora** is the official trademark and product name. Before public release or commercial distribution:
+1. Ensure the Windows Application User Model ID (`AppId`) is set to `com.nexora.app`.
+2. Verify trademark and namespace availability in target application stores (e.g., Microsoft Store, winget).
+3. Ensure distribution packages do not bundle uncredited proprietary assets or third-party trademarks.
 
 ---
 

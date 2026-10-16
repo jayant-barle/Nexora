@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Electron API Bridge
+// Nexora — Electron API Bridge
 // Type-safe access to preload APIs from renderer
 // ============================================================================
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — IPC Handlers
+// Nexora — IPC Handlers
 // Secure bridge between renderer and main process
 // ============================================================================
 

@@ -1,104 +1,191 @@
-# AI File Manager — Architecture & Operational Documentation
+# System Architecture Documentation
 
-## Overview
-**AI File Manager** is a high-performance, local-first Windows 11 desktop application that unites traditional Windows file system operations with automated on-device AI intelligence:
-- **Facial Recognition & Clustering**: Group photos and videos by detected faces with review/confirmation workflows.
-- **Smart Natural & Metadata Search**: Full-text indexing, EXIF dates, dimensions, GPS locations, and tags.
-- **Deduplication & Safety**: Exact SHA-256 hash deduplication, perceptual difference hashing, and non-destructive operations.
-- **Continuous Monitoring**: Windows filesystem change watchers for automatic background indexing.
-
----
-
-## Architecture Diagram
-
-```
-+-------------------------------------------------------------------------+
-|                          Electron Desktop App                           |
-|                                                                         |
-|  +-------------------------------------------------------------------+  |
-|  |                     React 18 Renderer UI                          |  |
-|  |  * Modern Windows 11 Dark Charcoal & Neon-Lime Design             |  |
-|  |  * Zustand Store (Explorer, People, Search, Jobs, Watchers)       |  |
-|  |  * 12 Dedicated Views (Dashboard, Explorer, People, Duplicates...) |  |
-|  +---------------------------------+---------------------------------+  |
-|                                    | contextBridge (Safe API)           |
-|  +---------------------------------v---------------------------------+  |
-|  |                     Electron Main Process                         |  |
-|  |  * Node.js runtime with contextIsolation & CSP                   |  |
-|  |  * Native Windows Drive & Filesystem APIs                         |  |
-|  |  * SQLite DB (WAL mode, FTS5, versioned migrations)              |  |
-|  |  * Background Task Manager & Job Queue                            |  |
-|  +---------------------------------+---------------------------------+  |
-|                                    | JSON-RPC (stdin / stdout)          |
-|  +---------------------------------v---------------------------------+  |
-|  |                     Python AI Worker                              |  |
-|  |  * SHA-256 & Perceptual Hashing (dHash)                           |  |
-|  |  * EXIF & GPS Metadata Extraction                                 |  |
-|  |  * Face Detection, Feature Embedding & Cosine Clustering         |  |
-|  |  * Graceful fallbacks for standard library & pure Python          |  |
-+--+-------------------------------------------------------------------+--+
-```
+## Product: Nexora — AI File Manager
+**Tagline:** *"Your files. Your intelligence. Your control."*  
+**Version:** 1.0.0  
+**Status:** Approved & Implemented  
+**Platform:** Windows 11 (x64) desktop  
+**Visual Identity:** Cinematic, futuristic, minimal black/charcoal surfaces (`#0a0a0a`), neon-lime accents (`#b4ff32`), glassmorphism  
 
 ---
 
-## Project Structure
+## 1. High-Level System Architecture
 
-```
-├── ai-worker/
-│   ├── requirements.txt         # Python AI dependencies
-│   └── src/
-│       └── main.py              # Subprocess JSON-RPC AI inference engine
-├── database/
-│   └── migrations/
-│       └── 001_initial.sql      # SQLite schema v1 (roots, files, people, jobs, etc.)
-├── scripts/
-│   └── migrate.js               # Standalone DB migration runner
-├── src/
-│   ├── main/
-│   │   ├── database.ts          # SQLite connection, queries, and migrations
-│   │   ├── filesystem.ts        # Drive scanning, Windows directory listing
-│   │   ├── index.ts             # Electron main process entry & window creation
-│   │   └── ipc-handlers.ts      # Type-safe IPC channels with validation
-│   ├── preload/
-│   │   └── index.ts             # contextBridge secure API expose
-│   ├── renderer/
-│   │   ├── components/          # Sidebar, layout components
-│   │   ├── pages/               # 12 views (Dashboard, Explorer, People, Search...)
-│   │   ├── services/api.ts      # Renderer Electron API bridge with browser mock
-│   │   ├── store/index.ts       # Global Zustand state management
-│   │   ├── styles/              # Design tokens and global CSS
-│   │   ├── App.tsx              # App shell with topbar & modals
-│   │   ├── index.html           # Vite root HTML
-│   │   └── main.tsx             # React 18 createRoot
-│   └── shared/
-│       └── types.ts             # Unified TypeScript data models & contracts
-├── tests/
-│   └── unit/                    # Vitest unit test suites
-└── vite.config.ts               # Vite configuration for renderer
+**Nexora** adopts a decoupled, multi-process desktop architecture designed for maximum security, local data privacy, and non-blocking asynchronous processing:
+
+```mermaid
+graph TB
+    subgraph "Renderer Process (Chromium)"
+        UI[React 18 UI Shell]
+        Stores[Zustand State Stores]
+        APIBridge[Renderer API Bridge: services/api.ts]
+        UI --> Stores
+        Stores --> APIBridge
+    end
+
+    subgraph "Preload Layer (Isolated Context)"
+        ContextBridge[contextBridge.exposeInMainWorld]
+        PreloadAPI[electronAPI: preload/index.ts]
+        APIBridge --> PreloadAPI
+        PreloadAPI --> ContextBridge
+    end
+
+    subgraph "Main Process (Node.js)"
+        IPC[IPC Handlers: ipc-handlers.ts]
+        WinManager[Window Manager: index.ts]
+        FSService[Filesystem Service: filesystem.ts]
+        DBService[SQLite Database: database.ts]
+        JobQueue[Background Job Queue & Watcher]
+        
+        ContextBridge -->|IPC invoke / handle| IPC
+        IPC --> FSService
+        IPC --> DBService
+        IPC --> JobQueue
+        WinManager --> IPC
+    end
+
+    subgraph "Embedded Database"
+        SQLite[(better-sqlite3 WAL Mode)]
+        FTS5[(FTS5 Full-Text Index)]
+        DBService --> SQLite
+        DBService --> FTS5
+    end
+
+    subgraph "AI Worker Subprocess (Python 3)"
+        JSONRPC[JSON-RPC Engine: stdin/stdout]
+        HashEngine[SHA-256 & Perceptual dHash]
+        EXIFParser[EXIF, GPS & Metadata Parser]
+        FaceEngine[Face Detection & Cosine Clustering]
+        ThumbnailGen[Pillow JPEG Downscaler]
+        
+        JobQueue -->|spawn / JSON Lines| JSONRPC
+        JSONRPC --> HashEngine
+        JSONRPC --> EXIFParser
+        JSONRPC --> FaceEngine
+        JSONRPC --> ThumbnailGen
+    end
 ```
 
 ---
 
-## Completed Views & Features
+## 2. Process Model & Separation of Concerns
 
-1. **Dashboard (`DashboardPage.tsx`)**: Real-time KPI counters (indexed files, images, videos, detected people, active jobs, storage used) and quick shortcuts.
-2. **File Explorer (`ExplorerPage.tsx`)**: Windows drive selector, breadcrumb trail, forward/backward/up navigation, grid/list toggle, file selection, and opening items in Windows File Explorer.
-3. **People (`PeoplePage.tsx`)**: Face cluster grouping, renaming, review status filters (Unreviewed, Reviewed, Confirmed), hiding/excluding, and cluster merging.
-4. **Smart Search (`SearchPage.tsx`)**: High-speed database search filtered by text, extension, date ranges, and file size with timing telemetry.
-5. **Timeline (`TimelinePage.tsx`)**: Chronological grouping by Year, Month, or Day extracted from EXIF capture timestamps.
-6. **Events & Places (`EventsPage.tsx`)**: Grouping media by detected events and GPS coordinates.
-7. **Duplicates (`DuplicatesPage.tsx`)**: Side-by-side duplicate comparison, exact SHA-256 vs perceptual similarity filters, and resolution actions (Keep Best, Move to Trash, Hardlink).
-8. **Storage Analytics (`StoragePage.tsx`)**: Physical drive capacity meters, space allocation breakdown, and heaviest file locator.
-9. **Activity & Jobs (`ActivityPage.tsx`)**: Real-time worker thread monitor with pause, resume, cancel controls and error stack logs.
-10. **Operations History (`HistoryPage.tsx`)**: Audit log of file reorganization operations with one-click rollback.
-11. **Watched Folders (`WatchedFoldersPage.tsx`)**: Windows directory watcher management with native folder dialog and auto-indexing toggles.
-12. **Settings (`SettingsPage.tsx`)**: Model confidence threshold sliders, library folder path selection, SHA-256 verification toggles, and system diagnostics.
+### 2.1 The Renderer Process (`src/renderer/`)
+- **Technology**: React 18, Vite 6, TypeScript 5.7+, Vanilla CSS.
+- **Responsibilities**:
+  - Render all 12 views ([DashboardPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/DashboardPage.tsx), [ExplorerPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/ExplorerPage.tsx), [PeoplePage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/PeoplePage.tsx), [SearchPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/SearchPage.tsx), [TimelinePage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/TimelinePage.tsx), [EventsPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/EventsPage.tsx), [DuplicatesPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/DuplicatesPage.tsx), [StoragePage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/StoragePage.tsx), [ActivityPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/ActivityPage.tsx), [HistoryPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/HistoryPage.tsx), [WatchedFoldersPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/WatchedFoldersPage.tsx), [SettingsPage](file:///e:/Code%20Tresure/File%20manager/src/renderer/pages/SettingsPage.tsx)).
+  - Manage state via scoped Zustand stores (`useNavigationStore`, `useExplorerStore`, `useDashboardStore`, `useJobsStore`, `usePeopleStore`, `useWatcherStore`).
+  - Render modal overlays, progress bars, and reactive toast notifications.
+- **Security Constraint**: Zero access to Node.js `require`, `fs`, `child_process`, or direct OS APIs.
+
+### 2.2 The Preload Bridge (`src/preload/`)
+- **Technology**: Electron `contextBridge`, `ipcRenderer`.
+- **Responsibilities**:
+  - Expose a strictly typed `window.electronAPI` interface to the renderer.
+  - Mediate request/response cycles and filter incoming event channels (`job:progress`, `job:completed`, `job:error`, `watcher:change`).
+- **Security Constraint**: Runs in an isolated execution context (`contextIsolation: true`). Does not leak Electron internal references.
+
+### 2.3 The Main Process (`src/main/`)
+- **Technology**: Node.js, Electron, `better-sqlite3`, `chokidar`.
+- **Responsibilities**:
+  - App lifecycle, window creation, menu management, and security lockdowns (`will-navigate`, `setWindowOpenHandler`).
+  - Handle all IPC commands, validating and sanitizing paths, IDs, and payload parameters.
+  - Execute native Windows drive queries via `wmic logicaldisk` and filesystem traversals.
+  - Maintain the SQLite database in Write-Ahead Logging (`WAL`) mode with versioned migrations.
+  - Supervise background task queues and dispatch jobs.
+
+### 2.4 The Python AI Worker (`ai-worker/`)
+- **Technology**: Python 3.10+, Standard Library, Pillow, NumPy, SciPy (optional).
+- **Responsibilities**:
+  - Long-running computational inference: SHA-256 and perceptual difference hashing (`dHash`).
+  - EXIF header parsing, GPS latitude/longitude extraction, camera model detection.
+  - Face detection bounding box normalization, feature embedding, and pairwise cosine distance clustering.
+  - Thumbnail resizing and JPEG compression.
+- **Protocol**: Standard I/O (stdin/stdout) line-delimited JSON-RPC messages.
 
 ---
 
-## Verification & Commands
+## 3. Core Sequence Flows
 
-- **Unit Tests**: `npm test` (Runs Vitest suite)
-- **Type Checking**: `npm run typecheck` and `npm run typecheck:main`
-- **Build Full Application**: `npm run build`
-- **Run Electron Desktop Dev**: `npm run dev`
+### 3.1 Folder Indexing & Background Processing Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Renderer as React UI (App.tsx)
+    participant Preload as Preload Bridge
+    participant Main as Electron Main (ipc-handlers.ts)
+    participant DB as SQLite (database.ts)
+    participant Worker as Python AI Worker
+
+    User->>Renderer: Clicks "Index Folder" & Selects Path
+    Renderer->>Preload: electronAPI.jobs.create('folder_scan', folderPath)
+    Preload->>Main: ipcMain.handle('jobs:create')
+    Main->>DB: INSERT INTO jobs (status='queued', type='folder_scan')
+    Main-->>Renderer: Return Job Record
+    Renderer->>User: Display Active Jobs Badge
+
+    Note over Main,Worker: Asynchronous Queue Execution
+    Main->>DB: UPDATE jobs SET status='running'
+    Main->>Main: Traverse directory & collect media files
+    loop For Each Media File
+        Main->>Worker: {"action": "extract_metadata", "params": {"file_path": ...}}
+        Worker-->>Main: {"status": "ok", "result": {...EXIF, dimensions, GPS...}}
+        Main->>Worker: {"action": "compute_hashes", "params": {"file_path": ...}}
+        Worker-->>Main: {"status": "ok", "result": {"sha256": "...", "phash": "..."}}
+        Main->>DB: INSERT OR REPLACE INTO files (...)
+        Main->>DB: INSERT INTO search_index (fts5)
+        Main->>Renderer: emit('job:progress', {jobId, progress, total})
+    end
+    Main->>DB: UPDATE jobs SET status='completed'
+    Main->>Renderer: emit('job:completed', {jobId})
+```
+
+---
+
+## 4. State Management Architecture
+
+State is managed via modular [Zustand](https://github.com/pmndrs/zustand) stores located in `src/renderer/store/index.ts`:
+
+| Store | State Variables | Primary Actions |
+| :--- | :--- | :--- |
+| `useNavigationStore` | `currentPage`, `sidebarCollapsed` | `setPage(page)`, `toggleSidebar()` |
+| `useExplorerStore` | `currentPath`, `entries`, `drives`, `selectedFiles`, `viewMode`, `sortBy`, `sortOrder`, `history` | `navigateTo(path)`, `loadDrives()`, `toggleSelection()`, `goBack()`, `goForward()`, `goUp()` |
+| `useDashboardStore` | `stats`, `loading`, `error` | `fetchStats()` |
+| `usePeopleStore` | `people`, `loading`, `selectedPersonId` | `fetchPeople()`, `selectPerson()`, `updatePerson()`, `deletePerson()` |
+| `useJobsStore` | `jobs`, `loading` | `fetchJobs()`, `cancelJob()`, `pauseJob()`, `resumeJob()` |
+| `useWatcherStore` | `watchRoots`, `loading` | `fetchWatchRoots()`, `addWatchRoot()`, `removeWatchRoot()`, `toggleWatchRoot()` |
+
+---
+
+## 5. Security & Isolation Controls
+
+1. **Context Isolation**: `webPreferences.contextIsolation = true` ensures the renderer cannot modify or tamper with preload prototypes.
+2. **Node Integration Disabled**: `webPreferences.nodeIntegration = false` prevents the execution of arbitrary Node.js scripts in the Chromium DOM.
+3. **No External Script Ingestion**: Content Security Policy (`CSP`) defined in `src/renderer/index.html` restricts scripts to `'self'` and blocks remote executable code.
+4. **Navigation Interception**:
+   - `contents.setWindowOpenHandler(() => ({ action: 'deny' }))` denies unauthorized popup windows.
+   - `contents.on('will-navigate', ...)` blocks top-level navigation to external web destinations.
+5. **Path Traversal & Injection Defense**:
+   - `validatePath()` normalizes incoming Windows paths and rejects null bytes (`\0`).
+   - `validateId()` verifies UUID or alphanumeric formats to prevent SQL injection in dynamic statements.
+
+---
+
+## 6. Architecture Decision Records (ADRs)
+
+### ADR-01: SQLite (`better-sqlite3`) as the Primary Data Store
+- **Context**: The app must index hundreds of thousands of files with complex relationships (faces, clusters, GPS, tags) without cloud dependencies.
+- **Decision**: Adopt SQLite via the synchronous, high-throughput `better-sqlite3` driver with Write-Ahead Logging (`WAL`).
+- **Consequences**: Instant query execution, zero external daemon processes, full ACID compliance, and built-in FTS5 full-text search. Requires Electron native module compilation during install.
+
+### ADR-02: Decoupled Python Subprocess for AI Inference
+- **Context**: Face detection, clustering, and perceptual image hashing require numerical algorithms often best supported in Python.
+- **Decision**: Isolate AI inference into a dedicated Python worker running over standard I/O (JSON-RPC) rather than binding heavyweight C++ libraries into the Electron main process.
+- **Consequences**: If the AI model crashes on a corrupt image, the main application remains stable. Includes pure-Python fallbacks to run on minimal Python installations.
+
+### ADR-03: Copy-First Non-Destructive File Organization
+- **Context**: Automated photo organization tools risk accidental data loss if move or overwrite operations fail.
+- **Decision**: All organization workflows use copy-first operations with mandatory SHA-256 source/destination hash verifications and maintain a reversible transaction history in `operation_history`.
+- **Consequences**: User data is protected against corruption, partial transfers, or disk disconnections.

@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Database Service
+// Nexora — Database Service
 // Handles SQLite connection, migrations, and core queries
 // ============================================================================
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// AI File Manager — Sidebar Component
+// Nexora — Sidebar Component
 // ============================================================================
 
 import React from 'react';
@@ -37,8 +37,11 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
-        <div className="sidebar-logo">AI</div>
-        <span className="sidebar-title">AI File Manager</span>
+        <div className="sidebar-logo">N</div>
+        <div className="sidebar-title-group" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          <span className="sidebar-title" style={{ letterSpacing: '0.04em', fontWeight: 700 }}>Nexora</span>
+          <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '-2px' }}>AI File Manager</span>
+        </div>
       </div>
 
       <nav className="sidebar-nav">
