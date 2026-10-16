@@ -116,6 +116,10 @@ const electronAPI = {
       ipcRenderer.invoke('organizer:generate-proposals', fileIds, ruleIdOrPattern, destinationRoot),
     execute: (proposals: import('../shared/types').OrganizationProposalItem[], destinationRoot: string, options?: { removeSourceOnSuccess?: boolean }) =>
       ipcRenderer.invoke('organizer:execute', proposals, destinationRoot, options),
+    getStoredProposals: (status?: string, limit?: number) =>
+      ipcRenderer.invoke('organizer:get-stored-proposals', status, limit),
+    runAutoPipeline: (rootIdOrPath?: string, destinationRootOverride?: string) =>
+      ipcRenderer.invoke('organizer:run-auto-pipeline', rootIdOrPath, destinationRootOverride),
   },
 
   // ── Library ─────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { getDb, getSettings } from './database';
 import { getAiWorkerClient } from './ai-worker-client';
 import { getHardwareMonitor } from './hardware-monitor';
 import { getMimeType, isImageFile, isVideoFile } from './filesystem';
+import { runAutoOrganizationPipeline } from './organizer';
 
 export interface ScanOptions {
   recursive?: boolean;
@@ -548,6 +549,14 @@ export async function indexFolderIncremental(
     recalculateDuplicates();
   } catch (err) {
     console.warn('[Indexer] Duplicate detection grouping error:', err);
+  }
+
+  // Trigger automatic organization pipeline (generates proposals and runs auto-organize if enabled)
+  try {
+    const orgResult = await runAutoOrganizationPipeline(rootId);
+    console.log(`[Indexer] Auto-organization pipeline finished for root ${rootId}: ${orgResult.proposalSummary.totalFiles} proposals generated, executed: ${orgResult.executed}`);
+  } catch (orgErr) {
+    console.warn('[Indexer] Auto-organization pipeline error:', orgErr);
   }
 
   const durationMs = Date.now() - startTime;

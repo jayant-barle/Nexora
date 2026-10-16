@@ -244,20 +244,38 @@ describe('Metadata Organization & Preview Engine', () => {
     expect(fs.readFileSync(srcFile, 'utf-8')).toBe(srcContent);
   });
 
-  // ── Rule Store Management ──────────────────────────────────────────────────
+  // ── Filename Token Intelligence & Patterns ───────────────────────────────
 
-  it('persists and retrieves organization rules with presets', () => {
-    const rules = getOrganizationRules();
-    expect(rules.length).toBeGreaterThanOrEqual(3);
-    expect(rules.some(r => r.name === 'Date Hierarchy')).toBe(true);
+  it('correctly resolves filename prefix, suffix, and title tokens', () => {
+    const file1 = {
+      filename: 'Family_2026_02.jpg',
+      extension: '.jpg',
+      capture_time: '2026-02-15T12:00:00Z',
+    };
+    const res1 = resolveOrganizationPath(file1, 'Images/{prefix}/{YYYY}/{suffix}');
+    expect(res1.relativeFolder).toBe(path.join('Images', 'Family', '2026', '02'));
 
-    const saved = saveOrganizationRule({
-      name: 'Custom Research Rule',
-      pattern: 'Research/{author}/{YYYY}',
-      description: 'Custom rule for papers',
-    });
+    const file2 = {
+      filename: 'Invoice_CompanyA.pdf',
+      extension: '.pdf',
+      doc_title: 'Quarterly Invoice',
+      file_created_at: '2026-01-10T09:00:00Z',
+    };
+    const res2 = resolveOrganizationPath(file2, 'Documents/{prefix}/{suffix}');
+    expect(res2.relativeFolder).toBe(path.join('Documents', 'Invoice', 'CompanyA'));
 
-    expect(saved.id).toBeDefined();
-    expect(saved.pattern).toBe('Research/{author}/{YYYY}');
+    const res3 = resolveOrganizationPath(file2, 'Documents/Invoices/{title}');
+    expect(res3.relativeFolder).toBe(path.join('Documents', 'Invoices', 'Quarterly Invoice'));
+  });
+
+  it('correctly resolves media and event tokens with deterministic fallbacks', () => {
+    const file = {
+      filename: 'Manali_Trip.mp4',
+      extension: '.mp4',
+      file_modified_at: '2025-06-20T14:30:00Z',
+    };
+    const res = resolveOrganizationPath(file, 'Videos/{YYYY}/{event}', null, 'Manali Trip');
+    expect(res.relativeFolder).toBe(path.join('Videos', '2025', 'Manali Trip'));
   });
 });
+

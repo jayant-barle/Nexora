@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { id: 'search', label: 'Smart Search', icon: '🔍', section: 'AI Features' },
   { id: 'timeline', label: 'Timeline', icon: '📅', section: 'AI Features' },
   { id: 'events', label: 'Events & Places', icon: '📍', section: 'AI Features' },
+  { id: 'organize', label: 'Organize & Sort', icon: '🪄', section: 'Tools' },
   { id: 'duplicates', label: 'Duplicates', icon: '🔄', section: 'Tools' },
   { id: 'storage', label: 'Storage', icon: '💾', section: 'Tools' },
   { id: 'activity', label: 'Activity', icon: '⚡', section: 'System' },

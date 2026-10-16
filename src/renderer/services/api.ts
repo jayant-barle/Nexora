@@ -126,6 +126,13 @@ function createMockAPI(): ElectronAPI {
         failedFiles: 0,
         errors: [],
       }),
+      getStoredProposals: async () => [],
+      runAutoPipeline: async () => ({
+        proposalsGenerated: 0,
+        executed: false,
+        warningsCount: 0,
+        errors: [],
+      }),
     },
     library: {
       reconcile: async () => ({ checkedCount: 0, missingCount: 0, restoredCount: 0 }),

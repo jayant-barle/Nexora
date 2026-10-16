@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+### [0.5.2] — 2026-10-17
+
+**Added**
+- **Core Automatic File Intelligence & Organization Engine**:
+  - **Automatic Scanning & Organization Pipeline (`src/main/organizer.ts`, `src/main/indexer.ts`)**:
+    - Adding or authorizing a folder in `App.tsx` now immediately registers the folder in `roots`, binds the incremental filesystem watcher (`watcher:add`), and dispatches persistent scan jobs (`folder_scan`).
+    - Completion of indexing (`indexFolderIncremental`) automatically triggers `runAutoOrganizationPipeline(rootId)` to evaluate classification rules across all three intelligence sources without requiring manual user initiation.
+    - If the user has configured `autoOrganize` to `'true'`, the system automatically proceeds to execute verified batch copying into the managed destination; otherwise, proposals are persisted in SQLite `organization_proposals` in `'pending'` state for preview and user approval.
+  - **Three Sources of Organization Intelligence (`src/main/organizer.ts`)**:
+    - **Filename-based grouping**: Tokenized resolution for `{prefix}`, `{suffix}`, `{title}`, `{doc_title}`, `{filename}`, `{basename}`, and `{extension}` handling structured patterns such as `Family_2026_02.jpg`, `Manali_Trip.mp4`, and `Invoice_CompanyA.pdf`.
+    - **Metadata-based grouping**: Granular hierarchical mapping using EXIF capture timestamps (`{YYYY}`, `{MM}`, `{DD}`), camera make/model (`{camera}`), GPS locations (`{city}`, `{country}`), and document authors (`{author}`).
+    - **Face-based grouping**: Safe person-based destinations (`People/{person}/{YYYY}`) gated strictly on confirmed/reviewed people identity (`file_people` + `people.review_status IN ('confirmed', 'reviewed')`); files without confirmed identities fallback safely to `Unassigned` and are flagged for review rather than guessing identity.
+  - **Safe Verified File Organization & Collision Resolution (`src/main/file-operations.ts`, `src/main/organizer.ts`)**:
+    - Copy-first architecture with strict source file immutability (original files are never deleted or modified).
+    - Content hash (SHA-256) duplicate avoidance skips redundant copies when an identical file already exists at the destination.
+    - Filename collision detection automatically increments destinations (`file (1).jpg`) to avoid overwriting distinct files with identical names.
+  - **Dedicated Organization & Proposals Review UI (`src/renderer/pages/OrganizePage.tsx`)**:
+    - Added dedicated "Organize & Sort" tool view to the sidebar navigation (`Sidebar.tsx`) and application router (`App.tsx`).
+    - Provides real-time preview of proposed destinations, intelligence source filters (All, Metadata, Filename, People), total volume calculation, collision warnings, custom managed destination folder selection, and one-click verified copy execution.
+  - **Automated Tests (`tests/unit/organizer.test.ts`)**:
+    - Added unit tests for filename token extraction (`{prefix}`, `{suffix}`, `{title}`), event/media metadata resolution, duplicate detection, and source immutability. All 82 test suite cases passing cleanly.
+
 ### [0.5.1] — 2026-10-17
 
 **Fixed**

@@ -13,7 +13,7 @@ import { getHardwareMonitor } from './hardware-monitor';
 import { getWatcherService } from './watcher';
 import { getAiWorkerClient } from './ai-worker-client';
 import { executeBatchCopyOperation, revertBatchOperation, CopyItem } from './file-operations';
-import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization } from './organizer';
+import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization, getStoredProposals, runAutoOrganizationPipeline } from './organizer';
 import { reconcileLibrary, indexFolderIncremental } from './indexer';
 import type { OrganizationRule, OrganizationProposalItem } from '../shared/types';
 
@@ -387,6 +387,18 @@ export function registerIpcHandlers(): void {
     if (!Array.isArray(proposals)) throw new Error('proposals must be an array');
     const dest = validatePath(destinationRoot);
     return executeOrganization(proposals as OrganizationProposalItem[], dest, options as any);
+  });
+
+  ipcMain.handle('organizer:get-stored-proposals', async (_event, status?: unknown, limit?: unknown) => {
+    const s = typeof status === 'string' ? status : undefined;
+    const l = typeof limit === 'number' ? limit : 200;
+    return getStoredProposals(s, l);
+  });
+
+  ipcMain.handle('organizer:run-auto-pipeline', async (_event, rootIdOrPath?: unknown, destinationRootOverride?: unknown) => {
+    const root = typeof rootIdOrPath === 'string' ? rootIdOrPath : undefined;
+    const dest = typeof destinationRootOverride === 'string' ? destinationRootOverride : undefined;
+    return runAutoOrganizationPipeline(root, dest);
   });
 
   // ── Library Reconciliation & Rescan ─────────────────────────────────────

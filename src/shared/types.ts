@@ -497,6 +497,7 @@ export interface OrganizationPreviewSummary {
 export type NavigationPage =
   | 'dashboard'
   | 'explorer'
+  | 'organize'
   | 'people'
   | 'search'
   | 'timeline'

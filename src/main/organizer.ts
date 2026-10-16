@@ -147,6 +147,12 @@ export function resolveOrganizationPath(
     ? fullFilename.slice(0, -extWithDot.length)
     : path.parse(fullFilename).name;
 
+  // Extract meaningful prefix and suffix from filename (e.g. "Family_2026_02", "Invoice_CompanyA")
+  const parts = baseName.split(/[-_.]+/).filter(Boolean);
+  const prefix = parts.length > 0 ? parts[0] : baseName;
+  const suffix = parts.length > 1 ? parts[parts.length - 1] : baseName;
+  const title = file.doc_title || file.audio_title || baseName;
+
   // Replace tokens in pattern
   let folder = pattern
     .replace(/\{category\}/gi, category)
@@ -162,6 +168,10 @@ export function resolveOrganizationPath(
     .replace(/\{event\}/gi, ev)
     .replace(/\{doc_author\}/gi, author)
     .replace(/\{author\}/gi, author)
+    .replace(/\{doc_title\}/gi, title)
+    .replace(/\{title\}/gi, title)
+    .replace(/\{prefix\}/gi, prefix)
+    .replace(/\{suffix\}/gi, suffix)
     .replace(/\{filename\}/gi, fullFilename)
     .replace(/\{basename\}/gi, baseName)
     .replace(/\{name\}/gi, baseName)
@@ -404,4 +414,165 @@ export function saveOrganizationRule(rule: Partial<OrganizationRule>): Organizat
   );
 
   return db.prepare('SELECT * FROM organization_rules WHERE id = ?').get(id) as OrganizationRule;
+}
+
+// ─── Proposal Persistence & Automatic Execution Pipeline ────────────────────
+
+export function resolveDefaultManagedLibrary(): string {
+  const db = getDb();
+  // 1. Check user configured setting
+  const settingRow = db.prepare("SELECT value FROM app_settings WHERE key = 'managedLibraryPath'").get() as { value: string } | undefined;
+  if (settingRow && settingRow.value && settingRow.value.trim()) {
+    return settingRow.value.trim();
+  }
+
+  // 2. Check roots for a managed root
+  const managedRoot = db.prepare("SELECT path FROM roots WHERE type = 'managed' AND active = 1 LIMIT 1").get() as { path: string } | undefined;
+  if (managedRoot && managedRoot.path) {
+    return managedRoot.path;
+  }
+
+  // 3. Fallback: Default safe directory inside user home/documents
+  const homeDir = process.env.USERPROFILE || process.env.HOME || 'C:\\Nexora';
+  return path.join(homeDir, 'Nexora Organized');
+}
+
+export function saveProposalItemsToDb(proposals: OrganizationProposalItem[], ruleId?: string | null): void {
+  const db = getDb();
+  const insertProposalStmt = db.prepare(`
+    INSERT INTO organization_proposals (id, rule_id, source_file_id, source_path, proposed_destination, status, warning_flags, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      proposed_destination = excluded.proposed_destination,
+      status = excluded.status,
+      warning_flags = excluded.warning_flags
+  `);
+
+  const tx = db.transaction((items: OrganizationProposalItem[]) => {
+    for (const p of items) {
+      insertProposalStmt.run(
+        p.id,
+        ruleId ?? p.rule_id ?? null,
+        p.source_file_id,
+        p.source_path,
+        p.proposed_destination,
+        p.status,
+        p.warnings && p.warnings.length > 0 ? JSON.stringify(p.warnings) : null
+      );
+    }
+  });
+
+  tx(proposals);
+}
+
+export function getStoredProposals(status = 'proposed', limit = 200): OrganizationProposalItem[] {
+  const db = getDb();
+  try {
+    const rows = db.prepare(`
+      SELECT op.*, f.filename, f.extension, f.size_bytes, f.capture_time, f.camera_make, f.camera_model, f.doc_author, f.hash_sha256,
+             COALESCE(r.name, 'Metadata Rule') as rule_name
+      FROM organization_proposals op
+      JOIN files f ON op.source_file_id = f.id
+      LEFT JOIN organization_rules r ON op.rule_id = r.id
+      WHERE op.status = ?
+      ORDER BY op.created_at DESC
+      LIMIT ?
+    `).all(status, limit) as any[];
+
+    return rows.map((r) => {
+      let warnings: string[] = [];
+      try {
+        if (r.warning_flags) warnings = JSON.parse(r.warning_flags);
+      } catch {}
+
+      return {
+        id: r.id,
+        rule_id: r.rule_id,
+        source_file_id: r.source_file_id,
+        source_path: r.source_path,
+        proposed_destination: r.proposed_destination,
+        rule_name: r.rule_name,
+        status: r.status,
+        warnings,
+        metadata_snapshot: {
+          category: getFileCategory(r.extension || ''),
+          capture_time: r.capture_time,
+          camera_make: r.camera_make,
+          camera_model: r.camera_model,
+          doc_author: r.doc_author,
+          hash_sha256: r.hash_sha256,
+        },
+        file_size: r.size_bytes || 0,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function runAutoOrganizationPipeline(
+  rootIdOrPath?: string,
+  destinationRootOverride?: string
+): Promise<{ proposalSummary: OrganizationPreviewSummary; executed: boolean; operationResult?: OperationResult }> {
+  const db = getDb();
+
+  // Find root
+  let targetRootId = rootIdOrPath;
+  if (rootIdOrPath) {
+    const rootRow = db.prepare('SELECT id, path FROM roots WHERE id = ? OR path = ?').get(rootIdOrPath, rootIdOrPath) as any;
+    if (rootRow) {
+      targetRootId = rootRow.id;
+    }
+  }
+
+  // Get active or default rule
+  const defaultRule = db.prepare('SELECT id, name, pattern FROM organization_rules WHERE is_default = 1 LIMIT 1').get() as any
+    || { id: 'rule_default_date', name: 'Date Hierarchy', pattern: '{category}/{YYYY}/{MM}' };
+
+  const destRoot = destinationRootOverride || resolveDefaultManagedLibrary();
+
+  // Generate proposals for files in this root
+  const proposalSummary = await generateOrganizationProposals({
+    rootId: targetRootId,
+    rulePattern: defaultRule.pattern,
+    ruleName: defaultRule.name,
+    destinationRoot: destRoot,
+  });
+
+  // Save proposals to database
+  saveProposalItemsToDb(proposalSummary.proposals, defaultRule.id);
+
+  // Check user auto-organize setting
+  const settings = db.prepare("SELECT value FROM app_settings WHERE key = 'autoOrganize'").get() as { value: string } | undefined;
+  const isAutoOrganizeEnabled = settings?.value === 'true';
+
+  let executed = false;
+  let opResult: OperationResult | undefined;
+
+  if (isAutoOrganizeEnabled && proposalSummary.proposals.length > 0) {
+    // User authorized automatic copy execution
+    opResult = await executeOrganization(
+      proposalSummary.proposals,
+      destRoot,
+      `Automatic Organization: ${defaultRule.name}`
+    );
+    executed = true;
+
+    // Mark successfully organized proposals as executed
+    if (opResult.success) {
+      const updateStmt = db.prepare("UPDATE organization_proposals SET status = 'executed' WHERE id = ?");
+      const tx = db.transaction((proposals: OrganizationProposalItem[]) => {
+        for (const p of proposals) {
+          updateStmt.run(p.id);
+        }
+      });
+      tx(proposalSummary.proposals);
+    }
+  }
+
+  return {
+    proposalSummary,
+    executed,
+    operationResult: opResult,
+  };
 }

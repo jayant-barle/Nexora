@@ -17,6 +17,7 @@ import { SearchPage } from './pages/SearchPage';
 import { TimelinePage } from './pages/TimelinePage';
 import { EventsPage } from './pages/EventsPage';
 import { DuplicatesPage } from './pages/DuplicatesPage';
+import { OrganizePage } from './pages/OrganizePage';
 import { StoragePage } from './pages/StoragePage';
 import { ActivityPage } from './pages/ActivityPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -102,9 +103,21 @@ export const App: React.FC = () => {
     if (!selectedScanFolder) return;
     setIsQueueingScan(true);
     try {
-      await api().jobs.create('folder_scan', selectedScanFolder);
       const folderName = selectedScanFolder.split(/[\\/]/).pop() || selectedScanFolder;
-      toast.success(`Indexing scan queued for "${folderName}". Tracking in Activity.`, 'Scan Initiated');
+      // 1. Authorize root in database
+      await api().roots.add(selectedScanFolder, folderName, 'indexed');
+      // 2. Attach incremental filesystem watcher
+      try {
+        await api().watcher.add(selectedScanFolder, folderName);
+      } catch (watcherErr) {
+        console.warn('Could not attach watcher to folder:', watcherErr);
+      }
+      // 3. Dispatch folder scan job (runs discovery, metadata, face recognition, and auto-organization)
+      await api().jobs.create('folder_scan', selectedScanFolder);
+      toast.success(
+        `Authorized "${folderName}". Scan, metadata indexing & automatic organization started.`,
+        'Workflow Initiated'
+      );
       setScanModalOpen(false);
       setSelectedScanFolder(null);
       setPage('activity');
@@ -133,6 +146,8 @@ export const App: React.FC = () => {
         return <EventsPage />;
       case 'duplicates':
         return <DuplicatesPage />;
+      case 'organize':
+        return <OrganizePage />;
       case 'storage':
         return <StoragePage />;
       case 'activity':
