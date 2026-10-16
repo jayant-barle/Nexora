@@ -195,7 +195,7 @@ export interface Collection {
 export interface CopyOperation {
   id: string;
   type: 'person_organize' | 'timeline_organize' | 'manual_copy' | 'export';
-  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'undone';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'undone' | 'reverted';
   source_description: string;
   destination_root: string;
   total_files: number;

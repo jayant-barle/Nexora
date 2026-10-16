@@ -17,9 +17,10 @@ export const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [savedMessage, setSavedMessage] = useState(false);
   const [appPaths, setAppPaths] = useState<Record<string, string>>({});
-  const [appVersion, setAppVersion] = useState<string>('0.4.0');
+  const [appVersion, setAppVersion] = useState<string>('0.5.0');
   const [metrics, setMetrics] = useState<HardwareMetrics | null>(null);
   const [queueStats, setQueueStats] = useState<JobQueueStats | null>(null);
+  const [modelManifest, setModelManifest] = useState<any>(null);
   const [isTogglingQueue, setIsTogglingQueue] = useState(false);
 
   useEffect(() => {
@@ -35,14 +36,16 @@ export const SettingsPage: React.FC = () => {
 
   async function loadSettings() {
     try {
-      const [stored, paths, version] = await Promise.all([
+      const [stored, paths, version, manifest] = await Promise.all([
         api().settings.getAll() as Promise<Record<string, unknown>>,
         api().app.getPaths(),
         api().app.getVersion(),
+        api().ai.getModelManifest().catch(() => null),
       ]);
 
       setAppPaths(paths || {});
-      setAppVersion(version || '0.4.0');
+      setAppVersion(version || '0.5.0');
+      if (manifest) setModelManifest(manifest);
 
       if (stored && Object.keys(stored).length > 0) {
         setSettings(prev => ({
@@ -569,6 +572,81 @@ export const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </label>
+          </div>
+        </div>
+
+        {/* Bundled Offline AI Models & Manifest */}
+        <div className="card" style={{ padding: 'var(--space-5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+            <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600 }}>
+              Bundled Offline AI Models & Integrity Verification
+            </h3>
+            <span
+              style={{
+                fontSize: 'var(--font-size-xs)',
+                fontWeight: 600,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                background: 'rgba(57, 255, 20, 0.1)',
+                color: 'var(--color-primary, #39ff14)',
+                border: '1px solid rgba(57, 255, 20, 0.3)',
+              }}
+            >
+              100% Offline & Local-First
+            </span>
+          </div>
+          <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
+            All required AI neural models are bundled directly into the installation package and cryptographically verified against SHA-256 hashes prior to initialization. Zero internet downloads or cloud API connections.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            {modelManifest?.models?.length ? (
+              modelManifest.models.map((m: any, idx: number) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 'var(--space-3)',
+                    background: 'var(--color-surface-hover, #181818)',
+                    borderRadius: 'var(--radius-sm, 6px)',
+                    border: '1px solid var(--color-border, #2a2a2a)',
+                    fontSize: 'var(--font-size-xs)',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                      {m.name} <span style={{ opacity: 0.6, fontWeight: 400 }}>({m.filename})</span>
+                    </div>
+                    <div style={{ color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
+                      {m.description} • {m.license} License • Runtime: {m.runtime}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 'var(--space-3)' }}>
+                    <span
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        background: m.verified ? 'rgba(57, 255, 20, 0.15)' : 'rgba(255, 59, 48, 0.15)',
+                        color: m.verified ? '#39ff14' : '#ff453a',
+                      }}
+                    >
+                      {m.verified ? 'Verified & Bundled' : 'Integrity Error'}
+                    </span>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
+                      {(m.size_bytes / 1024 / 1024).toFixed(2)} MB
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-xs)' }}>
+                Offline models catalog bundled in resources/models.
+              </div>
+            )}
           </div>
         </div>
 

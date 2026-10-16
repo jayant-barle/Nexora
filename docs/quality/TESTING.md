@@ -24,7 +24,8 @@ Nexora adheres to strict quality guidelines to protect user data and ensure cons
 | :--- | :--- | :--- | :--- |
 | `tests/unit/filesystem.test.ts` | Drive detection & statfs | 4 | Real-time drive letter parsing, capacity, free space, 0ms latency |
 | `tests/unit/types.test.ts` | Type definitions & schema | 2 | Contract validation for `FileRecord`, `Job`, `Person`, `Settings` |
-| `tests/unit/database.test.ts` | SQLite schema & WAL | 6 | WAL mode, foreign keys, `integrity_check`, VACUUM, priority jobs, merge |
+| `tests/unit/toast.test.ts` | Desktop In-App Notifications | 4 | Auto-generated ID, 6s error duration, manual dismissal, timer auto-dismissal |
+| `tests/unit/database.test.ts` | SQLite schema & WAL | 9 | WAL mode, foreign keys, `integrity_check`, VACUUM, priority jobs, merge, copy ops history, candidate duplicates, full path resolution |
 | `tests/unit/file-operations.test.ts` | Safe copy & rollback | 7 | SHA-256 integrity, source immutability, collisions, rollback, modified-file guard |
 | `tests/unit/ai-pipeline.test.ts` | Python JSON-RPC worker | 5 | Ping capabilities, OpenCV clustering, strict distance thresholds, SHA-256 |
 | `tests/integration/indexer-pipeline.test.ts` | End-to-end indexer | 3 | Incremental scanning, cached mtime hit, exact vs visual duplicate grouping |
@@ -32,8 +33,8 @@ Nexora adheres to strict quality guidelines to protect user data and ensure cons
 | `tests/unit/organizer.test.ts` | Organization & Proposal Engine | 6 | Pattern resolution, deterministic fallbacks, collision renaming, duplicate avoidance, verified copy |
 | `tests/integration/metadata-intelligence.test.ts` | End-to-end metadata & search | 3 | Incremental cache hit reuse, force rescan, non-destructive missing file reconciliation, rich metadata search |
 | `tests/unit/mandatory-rules.test.ts` | Filename, Duplicate & Person Rules | 7 | Distinct canonical paths, SHA-256 duplicate verification, non-inference of persons, multi-person grouping, in-flight modification detection |
-| `tests/unit/hardware-and-adaptive.test.ts` | Hardware & Adaptive Resource Tuning | 16 | Non-admin hardware detection, low/balanced/performance profiles, memory/CPU dynamic throttling, hysteresis dampening, queue pause/resume, crash recovery, 1600px AI accuracy preservation, scheduling adaptivity, transparent pending tracking, completeness guarantee |
-| **Total** | | **67** | **100% Passing** |
+| `tests/unit/hardware-and-adaptive.test.ts` | Hardware & Adaptive Resource Tuning | 17 | Non-admin hardware detection, low/balanced/performance profiles, quad-core scaling, memory/CPU dynamic throttling, hysteresis dampening, queue pause/resume, crash recovery, 1600px AI accuracy preservation, scheduling adaptivity, transparent pending tracking, completeness guarantee |
+| **Total** | | **75** | **100% Passing** |
 
 ---
 

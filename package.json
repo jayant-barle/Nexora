@@ -19,7 +19,11 @@
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "electron-builder --win",
+    "pack": "electron-builder --win --dir",
+    "dist": "electron-builder --win",
+    "package": "npm run build && npm run dist",
+    "package:dir": "npm run build && npm run pack",
+    "generate:icons": "node scripts/generate-icon.js",
     "postinstall": "electron-builder install-app-deps",
     "db:migrate": "node scripts/migrate.js"
   },
@@ -58,22 +62,50 @@
       "output": "release"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Nexora",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "uninstallDisplayName": "${productName} ${version}",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "files": [
       "dist/**/*",
-      "node_modules/**/*",
       "assets/**/*"
     ],
     "extraResources": [
       {
         "from": "ai-worker",
         "to": "ai-worker"
+      },
+      {
+        "from": "database/migrations",
+        "to": "database/migrations"
+      },
+      {
+        "from": "config",
+        "to": "config"
+      },
+      {
+        "from": "models",
+        "to": "models"
       }
     ]
   }

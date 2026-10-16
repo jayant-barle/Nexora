@@ -3,12 +3,13 @@
 // Topbar, Sidebar navigation, view switcher, and global modals
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
-import { useNavigationStore, useJobsStore } from './store';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigationStore, useJobsStore, toast } from './store';
 import { api } from './services/api';
 
 // Components & Pages
 import { Sidebar } from './components/Sidebar';
+import { ToastContainer } from './components/Toast';
 import { DashboardPage } from './pages/DashboardPage';
 import { ExplorerPage } from './pages/ExplorerPage';
 import { PeoplePage } from './pages/PeoplePage';
@@ -29,6 +30,36 @@ export const App: React.FC = () => {
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [selectedScanFolder, setSelectedScanFolder] = useState<string | null>(null);
   const [isQueueingScan, setIsQueueingScan] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Global desktop keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+F / Ctrl+K: focus search or jump to search view
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'k')) {
+        e.preventDefault();
+        setPage('search');
+        searchInputRef.current?.focus();
+      }
+      // Ctrl+I: open folder indexing dialog
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+        e.preventDefault();
+        setScanModalOpen(true);
+      }
+      // Ctrl+,: settings
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        setPage('settings');
+      }
+      // Escape: close open modal
+      if (e.key === 'Escape') {
+        setScanModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setPage]);
 
   // Monitor jobs in background
   useEffect(() => {
@@ -67,12 +98,14 @@ export const App: React.FC = () => {
     setIsQueueingScan(true);
     try {
       await api().jobs.create('folder_scan', selectedScanFolder);
+      const folderName = selectedScanFolder.split(/[\\/]/).pop() || selectedScanFolder;
+      toast.success(`Indexing scan queued for "${folderName}". Tracking in Activity.`, 'Scan Initiated');
       setScanModalOpen(false);
       setSelectedScanFolder(null);
       setPage('activity');
     } catch (err) {
       console.error('Failed to queue scan:', err);
-      alert('Failed to start folder scan: ' + (err instanceof Error ? err.message : String(err)));
+      toast.error(err instanceof Error ? err.message : String(err), 'Failed to start scan');
     } finally {
       setIsQueueingScan(false);
     }
@@ -135,8 +168,9 @@ export const App: React.FC = () => {
             {/* Quick Search Bar */}
             <form onSubmit={handleQuickSearchSubmit} style={{ position: 'relative' }}>
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder="Search files, people, tags... (Enter)"
+                placeholder="Search files, people, tags... (Ctrl+F)"
                 value={quickSearch}
                 onChange={e => setQuickSearch(e.target.value)}
                 style={{
@@ -261,6 +295,8 @@ export const App: React.FC = () => {
           </div>
         </div>
       )}
+      {/* In-app Toast Notifications */}
+      <ToastContainer />
     </div>
   );
 };

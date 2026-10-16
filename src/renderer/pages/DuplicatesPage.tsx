@@ -5,7 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import type { DuplicateGroup } from '@shared/types';
+import { toast } from '../store';
+import type { DuplicateGroup, FileRecord } from '@shared/types';
 
 function formatSize(bytes: number): string {
   if (!bytes || bytes === 0) return '0 B';
@@ -20,10 +21,25 @@ export const DuplicatesPage: React.FC = () => {
   const [filterType, setFilterType] = useState<'all' | 'exact' | 'similar'>('all');
   const [scanning, setScanning] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<DuplicateGroup | null>(null);
+  const [groupFiles, setGroupFiles] = useState<Array<FileRecord & { is_original: boolean; full_path?: string }>>([]);
+  const [isResolving, setIsResolving] = useState(false);
 
   useEffect(() => {
     loadDuplicates();
   }, []);
+
+  useEffect(() => {
+    if (selectedGroup) {
+      api().duplicates.getFiles(selectedGroup.id)
+        .then((files) => setGroupFiles((files as any) || []))
+        .catch((err) => {
+          console.error('Failed to load group files:', err);
+          setGroupFiles([]);
+        });
+    } else {
+      setGroupFiles([]);
+    }
+  }, [selectedGroup]);
 
   async function loadDuplicates() {
     setLoading(true);
@@ -32,6 +48,9 @@ export const DuplicatesPage: React.FC = () => {
       setGroups(data || []);
       if (data && data.length > 0) {
         setSelectedGroup(data[0]);
+      } else {
+        setSelectedGroup(null);
+        setGroupFiles([]);
       }
     } catch (err) {
       console.error('Failed to load duplicates:', err);
@@ -44,11 +63,34 @@ export const DuplicatesPage: React.FC = () => {
     setScanning(true);
     try {
       await api().jobs.create('hash_compute');
-      alert('Duplicate scan job queued! You can monitor progress in the Activity tab.');
+      toast.success('Duplicate scan job queued! You can monitor progress in the Activity tab.', 'Scan Queued');
     } catch (err) {
       console.error('Failed to start scan:', err);
+      toast.error(err instanceof Error ? err.message : String(err), 'Scan Failed');
     } finally {
       setScanning(false);
+    }
+  }
+
+  async function handleResolve(action: 'keep_best' | 'recycle' | 'hardlink') {
+    if (!selectedGroup || isResolving) return;
+    setIsResolving(true);
+    try {
+      const res = await api().duplicates.resolve(selectedGroup.id, action);
+      if (res.success) {
+        toast.success(
+          action === 'recycle'
+            ? `Reclaimed ${formatSize(res.bytesReclaimed)} across ${res.filesAffected} redundant files.`
+            : `Duplicate group resolved successfully.`,
+          'Duplicates Resolved'
+        );
+        await loadDuplicates();
+      }
+    } catch (err) {
+      console.error('Failed to resolve duplicates:', err);
+      toast.error(err instanceof Error ? err.message : String(err), 'Resolution Failed');
+    } finally {
+      setIsResolving(false);
     }
   }
 
@@ -198,55 +240,74 @@ export const DuplicatesPage: React.FC = () => {
                   <div>
                     <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600 }}>Group Details</h3>
                     <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-                      Resolve duplicates by choosing which file to keep as original.
+                      Resolve duplicates safely. Non-original copies can be cleaned while the original master file is preserved.
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <button className="btn btn-sm btn-secondary" onClick={() => alert('Keeping highest quality file as master')}>
-                      Keep Best Quality
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => handleResolve('keep_best')}
+                      disabled={isResolving}
+                    >
+                      ✓ Mark Master as Resolved
                     </button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => alert('Keeping newest timestamp file')}>
-                      Keep Newest
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={() => handleResolve('recycle')}
+                      disabled={isResolving}
+                      style={{ background: 'var(--color-error)', borderColor: 'var(--color-error)' }}
+                    >
+                      🗑 Clean Duplicates
                     </button>
                   </div>
                 </div>
 
-                <div className="duplicate-pair">
-                  <div className="duplicate-item">
-                    <div className="duplicate-preview">
-                      <span style={{ fontSize: '3rem' }}>📄</span>
-                    </div>
-                    <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-sm)', fontWeight: 600 }}>
-                      Candidate File 1 (Original)
-                    </div>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-                      Size: {formatSize(Math.floor(selectedGroup.total_size / selectedGroup.file_count))}
-                    </div>
-                    <div style={{ marginTop: 'var(--space-3)' }}>
-                      <span className="badge badge-success">Recommended to Keep</span>
-                    </div>
+                {groupFiles.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 'var(--space-6)' }}>
+                    <div className="empty-icon animate-pulse">🔍</div>
+                    <div className="empty-title">Loading files in group...</div>
                   </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--space-3)' }}>
+                    {groupFiles.map((file, idx) => {
+                      const isImg = file.mime_type?.startsWith('image/');
+                      const isVid = file.mime_type?.startsWith('video/');
+                      const isMaster = file.is_original || idx === 0;
 
-                  <div className="duplicate-item">
-                    <div className="duplicate-preview">
-                      <span style={{ fontSize: '3rem' }}>📄</span>
-                    </div>
-                    <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-sm)', fontWeight: 600 }}>
-                      Candidate File 2 (Duplicate)
-                    </div>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-                      Size: {formatSize(Math.floor(selectedGroup.total_size / selectedGroup.file_count))}
-                    </div>
-                    <div style={{ marginTop: 'var(--space-3)', display: 'flex', gap: 'var(--space-2)' }}>
-                      <button className="btn btn-sm btn-ghost" style={{ color: 'var(--color-error)' }} onClick={() => alert('Moved to Recycle Bin')}>
-                        Move to Trash
-                      </button>
-                      <button className="btn btn-sm btn-secondary" onClick={() => alert('Replaced with NTFS Hardlink')}>
-                        Hardlink
-                      </button>
-                    </div>
+                      return (
+                        <div key={file.id || idx} className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', border: isMaster ? '1px solid var(--color-border-accent)' : '1px solid var(--color-border)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span style={{ fontSize: '1.8rem' }}>{isImg ? '🖼' : isVid ? '🎬' : '📄'}</span>
+                            <span className={`badge ${isMaster ? 'badge-success' : 'badge-secondary'}`}>
+                              {isMaster ? 'Master File' : 'Duplicate Copy'}
+                            </span>
+                          </div>
+
+                          <div style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', wordBreak: 'break-all' }} title={file.filename}>
+                            {file.filename}
+                          </div>
+
+                          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', wordBreak: 'break-all' }}>
+                            {file.relative_path}
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginTop: 'auto', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-subtle)' }}>
+                            <span>Size: {formatSize(file.size_bytes)}</span>
+                            <span>{file.file_modified_at ? new Date(file.file_modified_at).toLocaleDateString() : '—'}</span>
+                          </div>
+
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => api().fs.revealInExplorer((file as any).full_path || file.relative_path)}
+                            style={{ marginTop: 'var(--space-1)', width: '100%', fontSize: 'var(--font-size-xs)' }}
+                          >
+                            Show in Explorer
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>

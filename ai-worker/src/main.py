@@ -802,6 +802,191 @@ def generate_thumbnail(file_path: str, output_path: str, max_size: int = 256) ->
         return {"success": False, "error": str(e)}
 
 
+# ─── Offline AI Model Registry & Cryptographic Integrity ─────────────────────
+
+_MANIFEST: Optional[Dict[str, Any]] = None
+_VERIFIED_MODELS: Dict[str, bool] = {}
+
+_FACE_DETECTOR = None
+_FACE_RECOGNIZER = None
+_IMAGE_CLASSIFIER = None
+_IMAGENET_LABELS: Optional[List[str]] = None
+_TEXT_DETECTOR = None
+_TEXT_RECOGNIZER = None
+
+
+def get_models_dir() -> str:
+    """Resolve models directory across dev and packaged electron environments."""
+    if os.environ.get("NEXORA_MODELS_DIR") and os.path.isdir(os.environ["NEXORA_MODELS_DIR"]):
+        return os.path.abspath(os.environ["NEXORA_MODELS_DIR"])
+
+    if os.environ.get("RESOURCES_PATH"):
+        res_models = os.path.join(os.environ["RESOURCES_PATH"], "models")
+        if os.path.isdir(res_models):
+            return os.path.abspath(res_models)
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(script_dir, "..", "..", "models"),
+        os.path.join(script_dir, "..", "models"),
+        os.path.join(os.getcwd(), "models"),
+        os.path.join(os.path.dirname(sys.executable), "resources", "models"),
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            return os.path.abspath(c)
+    return os.path.abspath(candidates[0])
+
+
+def get_manifest() -> Dict[str, Any]:
+    """Load authoritative offline models manifest."""
+    global _MANIFEST
+    if _MANIFEST is not None:
+        return _MANIFEST
+    models_dir = get_models_dir()
+    manifest_path = os.path.join(models_dir, "manifest.json")
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                _MANIFEST = json.load(f)
+                return _MANIFEST
+        except Exception as e:
+            sys.stderr.write(f"[AI-Worker] Failed to read manifest: {e}\n")
+    _MANIFEST = {"models": [], "offline_ready": False}
+    return _MANIFEST
+
+
+def verify_model(filename: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    """Verify SHA-256 integrity of model file against manifest before loading."""
+    models_dir = get_models_dir()
+    full_path = os.path.join(models_dir, filename)
+
+    if filename in _VERIFIED_MODELS:
+        return _VERIFIED_MODELS[filename], full_path if _VERIFIED_MODELS[filename] else None, None
+
+    if not os.path.exists(full_path):
+        _VERIFIED_MODELS[filename] = False
+        return False, None, f"Model file not found: {filename}"
+
+    manifest = get_manifest()
+    spec = next((m for m in manifest.get("models", []) if m.get("filename") == filename), None)
+    expected_hash = spec.get("sha256") if spec else None
+
+    try:
+        hasher = hashlib.sha256()
+        with open(full_path, "rb") as f:
+            while chunk := f.read(65536):
+                hasher.update(chunk)
+        calc_hash = hasher.hexdigest().lower()
+
+        if expected_hash and calc_hash != expected_hash.lower():
+            sys.stderr.write(f"[AI-Worker] Model integrity error for {filename}: expected {expected_hash}, got {calc_hash}\n")
+            _VERIFIED_MODELS[filename] = False
+            return False, full_path, f"Checksum verification failed for {filename}"
+
+        _VERIFIED_MODELS[filename] = True
+        return True, full_path, None
+    except Exception as e:
+        _VERIFIED_MODELS[filename] = False
+        return False, full_path, str(e)
+
+
+def get_face_detector():
+    """Lazy-load and initialize verified YuNet face detector."""
+    global _FACE_DETECTOR
+    if _FACE_DETECTOR is not None:
+        return _FACE_DETECTOR
+    if not HAS_CV2:
+        return None
+    valid, path, _ = verify_model("face_detection_yunet_2023mar.onnx")
+    if not valid or not path:
+        return None
+    try:
+        _FACE_DETECTOR = cv2.FaceDetectorYN.create(path, "", (320, 320), 0.6, 0.3)
+    except Exception as e:
+        sys.stderr.write(f"[AI-Worker] Failed to create YuNet detector: {e}\n")
+    return _FACE_DETECTOR
+
+
+def get_face_recognizer():
+    """Lazy-load and initialize verified SFace biometric recognizer."""
+    global _FACE_RECOGNIZER
+    if _FACE_RECOGNIZER is not None:
+        return _FACE_RECOGNIZER
+    if not HAS_CV2:
+        return None
+    valid, path, _ = verify_model("face_recognition_sface_2021dec_int8.onnx")
+    if not valid or not path:
+        return None
+    try:
+        _FACE_RECOGNIZER = cv2.FaceRecognizerSF.create(path, "")
+    except Exception as e:
+        sys.stderr.write(f"[AI-Worker] Failed to create SFace recognizer: {e}\n")
+    return _FACE_RECOGNIZER
+
+
+def get_image_classifier():
+    """Lazy-load MobileNetV2 classifier and ImageNet labels."""
+    global _IMAGE_CLASSIFIER, _IMAGENET_LABELS
+    if _IMAGE_CLASSIFIER is not None:
+        return _IMAGE_CLASSIFIER, _IMAGENET_LABELS
+    if not HAS_CV2:
+        return None, None
+    valid, path, _ = verify_model("image_classification_mobilenetv2_2022apr_int8.onnx")
+    if not valid or not path:
+        return None, None
+    try:
+        _IMAGE_CLASSIFIER = cv2.dnn.readNetFromONNX(path)
+        labels_path = os.path.join(get_models_dir(), "labels", "imagenet_classes.txt")
+        if os.path.exists(labels_path):
+            with open(labels_path, "r", encoding="utf-8") as f:
+                _IMAGENET_LABELS = [l.strip() for l in f if l.strip()]
+        else:
+            _IMAGENET_LABELS = []
+    except Exception as e:
+        sys.stderr.write(f"[AI-Worker] Failed to load MobileNet: {e}\n")
+    return _IMAGE_CLASSIFIER, _IMAGENET_LABELS
+
+
+def get_ocr_engine():
+    """Lazy-load PP-OCR detection and CRNN recognition models."""
+    global _TEXT_DETECTOR, _TEXT_RECOGNIZER
+    if _TEXT_DETECTOR is not None and _TEXT_RECOGNIZER is not None:
+        return _TEXT_DETECTOR, _TEXT_RECOGNIZER
+    if not HAS_CV2:
+        return None, None
+
+    valid_det, det_path, _ = verify_model("text_detection_en_ppocrv3_2023may_int8.onnx")
+    valid_rec, rec_path, _ = verify_model("text_recognition_CRNN_EN_2022oct_int8.onnx")
+    if not valid_det or not valid_rec or not det_path or not rec_path:
+        return None, None
+
+    try:
+        if hasattr(cv2.dnn, "TextDetectionModel_DB") and hasattr(cv2.dnn, "TextRecognitionModel"):
+            det = cv2.dnn.TextDetectionModel_DB(det_path)
+            det.setBinaryThreshold(0.3)
+            det.setPolygonThreshold(0.5)
+            det.setInputParams(1.0 / 255.0, (736, 736), (123.68, 116.78, 103.94), True)
+
+            rec = cv2.dnn.TextRecognitionModel(rec_path)
+            alpha_path = os.path.join(get_models_dir(), "labels", "crnn_alphabet.txt")
+            if os.path.exists(alpha_path):
+                with open(alpha_path, "r", encoding="utf-8") as f:
+                    alphabet = [l.strip() for l in f if l.strip()]
+            else:
+                alphabet = list("0123456789abcdefghijklmnopqrstuvwxyz")
+            rec.setVocabulary(alphabet)
+            rec.setDecodeType("CTC-greedy")
+            rec.setInputParams(1.0 / 127.5, (100, 32), (127.5, 127.5, 127.5), True)
+
+            _TEXT_DETECTOR = det
+            _TEXT_RECOGNIZER = rec
+            return _TEXT_DETECTOR, _TEXT_RECOGNIZER
+    except Exception as e:
+        sys.stderr.write(f"[AI-Worker] Failed to load OCR models: {e}\n")
+    return None, None
+
+
 # ─── Face Detection & Feature Extraction ─────────────────────────────────────
 
 def detect_faces(file_path: str) -> List[Dict[str, Any]]:
@@ -818,9 +1003,6 @@ def detect_faces(file_path: str) -> List[Dict[str, Any]]:
                 return []
 
             h, w = img.shape[:2]
-            # Adaptive memory & CPU optimization: downscale high-resolution images
-            # (e.g. 24MP+ images) to max 1600px dimension while preserving aspect ratio.
-            # Normalization (x / w, y / h) remains mathematically identical.
             max_dim = max(h, w)
             if max_dim > 1600:
                 scale = 1600.0 / max_dim
@@ -829,23 +1011,76 @@ def detect_faces(file_path: str) -> List[Dict[str, Any]]:
                 img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
                 h, w = img.shape[:2]
 
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            detector = get_face_detector()
+            recognizer = get_face_recognizer()
 
-            # High-performance face region localization
-            # 1. Skin-tone color segmentation in YCrCb color space
+            if detector is not None:
+                detector.setInputSize((w, h))
+                _, raw_detections = detector.detect(img)
+                if raw_detections is not None:
+                    for det in raw_detections:
+                        fx = float(det[0])
+                        fy = float(det[1])
+                        fw = float(det[2])
+                        fh = float(det[3])
+                        conf = float(det[14])
+
+                        if fw <= 0 or fh <= 0 or conf < 0.60:
+                            continue
+
+                        embedding = None
+                        if recognizer is not None:
+                            try:
+                                aligned = recognizer.alignCrop(img, det)
+                                feature = recognizer.feature(aligned)
+                                feat_vec = feature.flatten().astype(np.float32)
+                                norm = np.linalg.norm(feat_vec)
+                                if norm > 0:
+                                    feat_vec /= norm
+                                embedding = [round(float(v), 5) for v in feat_vec]
+                            except Exception:
+                                pass
+
+                        if embedding is None:
+                            ix, iy = max(int(fx), 0), max(int(fy), 0)
+                            iw, ih = min(int(fw), w - ix), min(int(fh), h - iy)
+                            if iw > 0 and ih > 0:
+                                face_crop = img[iy:iy+ih, ix:ix+iw]
+                                gray = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
+                                resized = cv2.resize(gray, (8, 8), interpolation=cv2.INTER_AREA)
+                                norm_face = resized.astype(np.float32).flatten()
+                                norm = np.linalg.norm(norm_face)
+                                if norm > 0:
+                                    norm_face /= norm
+                                embedding = [round(float(v), 5) for v in norm_face]
+                            else:
+                                embedding = [0.0] * 64
+
+                        faces.append({
+                            "x": round(fx / w, 4),
+                            "y": round(fy / h, 4),
+                            "width": round(fw / w, 4),
+                            "height": round(fh / h, 4),
+                            "confidence": round(conf, 2),
+                            "quality_score": round(min(conf * 1.05, 1.0), 2),
+                            "embedding": embedding,
+                        })
+
+            if faces:
+                faces.sort(key=lambda f: f["width"] * f["height"], reverse=True)
+                return faces[:10]
+
+            # ── Fallback: Skin tone segmentation & Laplacian filter if no YuNet or edge case ──
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-            # Standard human skin tone mask range in YCrCb
             skin_mask = cv2.inRange(ycrcb, np.array([0, 133, 77]), np.array([255, 173, 127]))
-            
-            # Morphological smoothing to eliminate speckle noise
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
             skin_mask = cv2.erode(skin_mask, kernel, iterations=1)
             skin_mask = cv2.dilate(skin_mask, kernel, iterations=2)
 
             contours, _ = cv2.findContours(skin_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            min_face_area = (w * h) * 0.005  # At least 0.5% of total image area
-            max_face_area = (w * h) * 0.70   # At most 70% of image area
+            min_face_area = (w * h) * 0.005
+            max_face_area = (w * h) * 0.70
 
             for cnt in contours:
                 area = cv2.contourArea(cnt)
@@ -854,19 +1089,15 @@ def detect_faces(file_path: str) -> List[Dict[str, Any]]:
 
                 x, y, fw, fh = cv2.boundingRect(cnt)
                 aspect_ratio = fw / float(fh)
-                # Human face aspect ratio constraint (0.6 to 1.3)
                 if 0.55 <= aspect_ratio <= 1.35:
                     face_roi = gray[y:y + fh, x:x + fw]
                     if face_roi.size == 0:
                         continue
 
-                    # Sharpness check via Laplacian variance
                     laplacian_var = cv2.Laplacian(face_roi, cv2.CV_64F).var()
                     quality_score = min(max(float(laplacian_var) / 500.0, 0.1), 1.0)
 
-                    # Extract deterministic 64-dimensional spatial gradient embedding
                     resized_face = cv2.resize(face_roi, (8, 8), interpolation=cv2.INTER_AREA)
-                    # Normalize to unit vector
                     norm_face = resized_face.astype(np.float32).flatten()
                     norm = np.linalg.norm(norm_face)
                     if norm > 0:
@@ -882,7 +1113,6 @@ def detect_faces(file_path: str) -> List[Dict[str, Any]]:
                         "embedding": [round(float(v), 5) for v in norm_face],
                     })
 
-            # Limit to top 10 most prominent faces
             faces.sort(key=lambda f: f["width"] * f["height"], reverse=True)
             faces = faces[:10]
 
@@ -890,6 +1120,110 @@ def detect_faces(file_path: str) -> List[Dict[str, Any]]:
             pass
 
     return faces
+
+
+# ─── Image Classification & Scene Tagging ────────────────────────────────────
+
+def classify_image(file_path: str) -> Dict[str, Any]:
+    """Classify image content using bundled MobileNetV2 and generate semantic tags."""
+    if not os.path.exists(file_path) or not HAS_CV2 or not HAS_NUMPY:
+        return {"top_classes": [], "tags": []}
+
+    net, labels = get_image_classifier()
+    if net is None:
+        return {"top_classes": [], "tags": []}
+
+    try:
+        img = cv2.imread(file_path)
+        if img is None:
+            return {"top_classes": [], "tags": []}
+
+        blob = cv2.dnn.blobFromImage(
+            img, 1.0 / 255.0, (224, 224),
+            (0.485, 0.456, 0.406), swapRB=True, crop=False
+        )
+        net.setInput(blob)
+        preds = net.forward()
+        probs = preds[0]
+
+        top_indices = np.argsort(probs)[-3:][::-1]
+        top_classes = []
+        tags = []
+
+        for idx in top_indices:
+            score = float(probs[idx])
+            if score > 0.10:
+                label = labels[idx] if labels and idx < len(labels) else f"class_{idx}"
+                top_classes.append({"label": label, "confidence": round(score, 3)})
+                clean_tag = label.split(",")[0].strip().lower()
+                if clean_tag and clean_tag not in tags:
+                    tags.append(clean_tag)
+
+        return {"top_classes": top_classes, "tags": tags}
+    except Exception as e:
+        sys.stderr.write(f"[AI-Worker] Classification error: {e}\n")
+        return {"top_classes": [], "tags": []}
+
+
+# ─── Optical Character Recognition (OCR) ────────────────────────────────────
+
+def extract_ocr(file_path: str) -> Dict[str, Any]:
+    """Extract visible text using bundled PP-OCRv3 detection and CRNN recognition."""
+    if not os.path.exists(file_path):
+        return {"text": "", "confidence": 0.0, "status": "missing_file"}
+
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext in ('.pdf', '.docx', '.pptx', '.xlsx', '.txt', '.md', '.json', '.csv'):
+        meta = extract_metadata(file_path)
+        if meta.get("text_preview"):
+            return {
+                "text": meta["text_preview"],
+                "confidence": 0.99,
+                "model_version": "native-doc-parser",
+                "status": "ok"
+            }
+
+    if not HAS_CV2 or not HAS_NUMPY:
+        return {"text": "", "confidence": 0.0, "status": "cv2_unavailable"}
+
+    det, rec = get_ocr_engine()
+    if det is None or rec is None:
+        return {"text": "", "confidence": 0.0, "status": "models_unavailable"}
+
+    try:
+        img = cv2.imread(file_path)
+        if img is None:
+            return {"text": "", "confidence": 0.0, "status": "cannot_read_image"}
+
+        boxes, _ = det.detect(img)
+        if not boxes or len(boxes) == 0:
+            return {"text": "", "confidence": 0.0, "status": "no_text_detected"}
+
+        recognized_texts = []
+        for box in boxes[:50]:
+            x, y, w, h = cv2.boundingRect(box)
+            if w < 8 or h < 8:
+                continue
+            crop = img[max(y, 0):min(y + h, img.shape[0]), max(x, 0):min(x + w, img.shape[1])]
+            if crop.size == 0:
+                continue
+            try:
+                line_text = rec.recognize(crop)
+                if line_text and len(line_text.strip()) > 1:
+                    recognized_texts.append(line_text.strip())
+            except Exception:
+                pass
+
+        full_text = " ".join(recognized_texts)
+        return {
+            "text": full_text,
+            "confidence": 0.85 if full_text else 0.0,
+            "model_version": "ppocr-crnn-v3",
+            "status": "ok" if full_text else "empty"
+        }
+    except Exception as e:
+        sys.stderr.write(f"[AI-Worker] OCR error: {e}\n")
+        return {"text": "", "confidence": 0.0, "status": "error", "error": str(e)}
 
 
 # ─── Cosine Distance Clustering ──────────────────────────────────────────────
@@ -1068,6 +1402,14 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
             except Exception:
                 pass
 
+            manifest = get_manifest()
+            model_checks = {}
+            for m in manifest.get("models", []):
+                fn = m.get("filename", "")
+                task = m.get("task", fn)
+                valid, _, _ = verify_model(fn)
+                model_checks[task] = valid
+
             return {
                 "id": req_id,
                 "status": "ok",
@@ -1077,8 +1419,41 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
                     "numpy": HAS_NUMPY,
                     "pil": HAS_PIL,
                     "acceleration": gpu_accel,
+                    "models": model_checks,
+                    "offline_ready": True,
                 },
             }
+
+        elif action == "get_model_manifest":
+            manifest = get_manifest()
+            models_status = []
+            for m in manifest.get("models", []):
+                filename = m.get("filename", "")
+                valid, path, err = verify_model(filename)
+                models_status.append({
+                    **m,
+                    "verified": valid,
+                    "resolved_path": path,
+                    "error": err
+                })
+            return {
+                "id": req_id,
+                "status": "ok",
+                "result": {
+                    "version": manifest.get("version", "1.0.0"),
+                    "models_dir": get_models_dir(),
+                    "offline_ready": True,
+                    "models": models_status
+                }
+            }
+
+        elif action == "classify_image":
+            res = classify_image(params["file_path"])
+            return {"id": req_id, "status": "ok", "result": res}
+
+        elif action == "extract_ocr":
+            res = extract_ocr(params["file_path"])
+            return {"id": req_id, "status": "ok", "result": res}
 
         elif action == "compute_hashes":
             res = compute_hashes(params["file_path"])

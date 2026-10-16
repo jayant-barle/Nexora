@@ -1,0 +1,78 @@
+{
+  "version": "1.0.0",
+  "description": "Nexora Offline AI Model Manifest & Cryptographic Integrity Registry",
+  "models_dir": "models",
+  "offline_guarantee": "100% On-Device Local Processing. Zero Cloud APIs. Zero Remote Downloads.",
+  "models": [
+    {
+      "name": "YuNet Face Detector",
+      "task": "face_detection",
+      "version": "2023mar",
+      "filename": "face_detection_yunet_2023mar.onnx",
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "size_bytes": 232589,
+      "license": "MIT",
+      "source": "https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet",
+      "required": true,
+      "runtime": "cv2.FaceDetectorYN / cv2.dnn",
+      "description": "Millisecond-level face detector outputting bounding boxes and 5 facial landmarks (eyes, nose, mouth corners).",
+      "offline_ready": true
+    },
+    {
+      "name": "SFace Face Recognizer",
+      "task": "face_recognition",
+      "version": "2021dec_int8",
+      "filename": "face_recognition_sface_2021dec_int8.onnx",
+      "sha256": "2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a",
+      "size_bytes": 9896933,
+      "license": "Apache-2.0",
+      "source": "https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface",
+      "required": true,
+      "runtime": "cv2.FaceRecognizerSF / cv2.dnn",
+      "description": "Robust deep biometric face feature extractor generating 128-dimensional cosine embeddings with 99.4% LFW accuracy.",
+      "offline_ready": true
+    },
+    {
+      "name": "MobileNetV2 Classifier",
+      "task": "image_classification",
+      "version": "2022apr_int8",
+      "filename": "image_classification_mobilenetv2_2022apr_int8.onnx",
+      "sha256": "cc028fe6cae7bc11a4ff53cfc9b79c920e8be65ce33a904ec3e2a8f66d77f95f",
+      "size_bytes": 3655033,
+      "license": "Apache-2.0",
+      "source": "https://github.com/opencv/opencv_zoo/tree/main/models/image_classification_mobilenet",
+      "required": false,
+      "runtime": "cv2.dnn",
+      "description": "Quantized lightweight vision classifier categorizing scene content across 1,000 ImageNet semantic classes.",
+      "offline_ready": true
+    },
+    {
+      "name": "PP-OCRv3 Text Detector",
+      "task": "text_detection",
+      "version": "2023may_int8",
+      "filename": "text_detection_en_ppocrv3_2023may_int8.onnx",
+      "sha256": "5700c6d43bfc022b4bf2905cd0bac1a3d7dc41f4f954e9c171314ae9b4f0e41a",
+      "size_bytes": 705007,
+      "license": "Apache-2.0",
+      "source": "https://github.com/opencv/opencv_zoo/tree/main/models/text_detection_ppocr",
+      "required": false,
+      "runtime": "cv2.dnn.TextDetectionModel_DB / cv2.dnn",
+      "description": "High-efficiency DBNet-based optical text segmenter detecting text bounding boxes in images and documents.",
+      "offline_ready": true
+    },
+    {
+      "name": "CRNN Text Recognizer",
+      "task": "text_recognition",
+      "version": "2022oct_int8",
+      "filename": "text_recognition_CRNN_EN_2022oct_int8.onnx",
+      "sha256": "94117b4c2652337b3f1aef81b2ec15a74e97973b1c58f743e86380b95b95ffa2",
+      "size_bytes": 16378030,
+      "license": "Apache-2.0",
+      "source": "https://github.com/opencv/opencv_zoo/tree/main/models/text_recognition_crnn",
+      "required": false,
+      "runtime": "cv2.dnn.TextRecognitionModel / cv2.dnn",
+      "description": "Convolutional Recurrent Neural Network sequence reader transcribing detected text crops to UTF-8 strings.",
+      "offline_ready": true
+    }
+  ]
+}

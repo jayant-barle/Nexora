@@ -17,6 +17,13 @@ let mainWindow: BrowserWindow | null = null;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 function createWindow(): void {
+  const possibleIcons = [
+    path.join(__dirname, '..', '..', 'assets', 'icon.ico'),
+    path.join(process.resourcesPath, 'assets', 'icon.ico'),
+    path.join(app.getAppPath(), 'assets', 'icon.ico'),
+  ];
+  const windowIcon = possibleIcons.find((p) => fs.existsSync(p));
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -24,6 +31,7 @@ function createWindow(): void {
     minHeight: 700,
     title: 'Nexora — AI File Manager',
     backgroundColor: '#0f0f0f',
+    icon: windowIcon,
     show: false,
     frame: true,
     webPreferences: {

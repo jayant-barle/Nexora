@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import type { DashboardStats, FileRecord, Job, Person, SearchQuery, SearchResult, Root, WatchRoot, DuplicateGroup } from '../shared/types';
+import type { DashboardStats, FileRecord, Job, Person, SearchQuery, SearchResult, Root, WatchRoot, DuplicateGroup, CopyOperation } from '../shared/types';
 
 let db: Database.Database | null = null;
 
@@ -52,6 +52,7 @@ function runMigrations(database: Database.Database): void {
     migrationsDir,
     path.join(__dirname, '..', '..', '..', 'database', 'migrations'),
     path.join(process.cwd(), 'database', 'migrations'),
+    path.join((process as any).resourcesPath || '', 'database', 'migrations'),
   ];
 
   for (const p of possiblePaths) {
@@ -572,6 +573,37 @@ export function setSetting(key: string, value: string, type = 'string', category
 
 export function getDuplicateGroups(): DuplicateGroup[] {
   return getDb().prepare('SELECT * FROM duplicate_groups ORDER BY total_size DESC').all() as DuplicateGroup[];
+}
+
+export function getDuplicateGroupFiles(groupId: string): Array<FileRecord & { is_original: boolean; full_path: string }> {
+  const database = getDb();
+  const rows = database.prepare(`
+    SELECT f.*, dgf.is_original, (r.path || '/' || f.relative_path) AS full_path
+    FROM duplicate_group_files dgf
+    JOIN files f ON dgf.file_id = f.id
+    JOIN roots r ON f.root_id = r.id
+    WHERE dgf.group_id = ?
+    ORDER BY dgf.is_original DESC, f.file_created_at ASC
+  `).all(groupId) as Array<FileRecord & { is_original: boolean; full_path: string }>;
+  return rows;
+}
+
+export function getCopyOperations(limit = 100): CopyOperation[] {
+  const database = getDb();
+  return database.prepare('SELECT * FROM copy_operations ORDER BY created_at DESC LIMIT ?').all(limit) as CopyOperation[];
+}
+
+export function resolveFileFullPath(relOrPartialPath: string): string | null {
+  const database = getDb();
+  const normalized = relOrPartialPath.replace(/\\/g, '/');
+  const row = database.prepare(`
+    SELECT (r.path || '/' || f.relative_path) AS full_path
+    FROM files f
+    JOIN roots r ON f.root_id = r.id
+    WHERE f.relative_path = ? OR f.relative_path LIKE ?
+    LIMIT 1
+  `).get(normalized, `%${normalized}`) as { full_path: string } | undefined;
+  return row?.full_path ?? null;
 }
 
 export function checkDatabaseIntegrity(): { ok: boolean; message: string } {

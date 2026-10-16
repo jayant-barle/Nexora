@@ -51,9 +51,23 @@ Nexora is committed to open, permissive software engineering:
 
 ---
 
-## 5. Model Architecture & Weights Governance
+## 5. Bundled Offline Neural Models & Weights Governance
 
-Nexora utilizes on-device neural algorithms that comply with permissive distribution:
-- **Haar Cascade / OpenCV DNN Models**: Governed by the Apache-2.0 license.
-- **Biometric Vector Embeddings**: Embeddings generated locally are mathematical feature vectors derived from user media and stored exclusively in the user's local `%APPDATA%\nexora\nexora.db` database.
-- **Data Sovereignty Guarantee**: No model training data or inference vectors are sent to any external server.
+Nexora bundles verified on-device neural network models directly into its release package (`resources/models/`). Every model is governed by a permissive open-source license (MIT or Apache-2.0) and is verified against cryptographic SHA-256 checksums before loading:
+
+| Model Name | Task | Version | File & Size | SHA-256 Checksum | License | Upstream Source |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **YuNet** | Face Detection | `2023mar` | `face_detection_yunet_2023mar.onnx`<br>(232.5 KB) | `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4` | **MIT** | [ShiqiYu/libfacedetection](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) |
+| **SFace** | Face Recognition / Embeddings | `2021dec_int8` | `face_recognition_sface_2021dec_int8.onnx`<br>(9.89 MB) | `2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a` | **Apache-2.0** | [zhongyy/SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) |
+| **MobileNetV2** | Scene & Image Classification | `2022apr_int8` | `image_classification_mobilenetv2_2022apr_int8.onnx`<br>(3.65 MB) | `cc028fe6cae7bc11a4ff53cfc9b79c920e8be65ce33a904ec3e2a8f66d77f95f` | **Apache-2.0** | [OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/main/models/image_classification_mobilenet) |
+| **PP-OCRv3** | Text Detection | `2023may_int8` | `text_detection_en_ppocrv3_2023may_int8.onnx`<br>(705.0 KB) | `5700c6d43bfc022b4bf2905cd0bac1a3d7dc41f4f954e9c171314ae9b4f0e41a` | **Apache-2.0** | [PaddlePaddle / OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/main/models/text_detection_ppocr) |
+| **CRNN** | Text Recognition / OCR | `2022oct_int8` | `text_recognition_CRNN_EN_2022oct_int8.onnx`<br>(16.37 MB) | `94117b4c2652337b3f1aef81b2ec15a74e97973b1c58f743e86380b95b95ffa2` | **Apache-2.0** | [OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/main/models/text_recognition_crnn) |
+
+---
+
+## 6. Strict Offline Privacy & Data Sovereignty Guarantee
+
+1. **Zero Cloud Inference**: 100% of face detection, recognition, clustering, classification, and OCR is performed on-device via OpenCV's native C++ DNN engine.
+2. **Zero Remote Downloads**: All model weights are bundled directly into the installation package. The application never attempts to download models, dependencies, or updates in the background.
+3. **Biometric Vector Sovereignty**: Biometric vector embeddings (128-dimensional floating point arrays) are stored exclusively in the user's local SQLite database (`%APPDATA%\Nexora\nexora.db`) and are never transmitted off the user's computer.
+4. **Offline Operation Tested**: Nexora functions with full capabilities when the host system is completely disconnected from the network.

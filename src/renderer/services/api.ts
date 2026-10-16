@@ -53,6 +53,7 @@ function createMockAPI(): ElectronAPI {
     operations: {
       copy: async () => ({ operationId: 'mock-op', success: true, totalFiles: 0, completedFiles: 0, failedFiles: 0, errors: [] }),
       revert: async () => ({ operationId: 'mock-op', success: true, revertedFiles: 0, skippedFiles: 0, protectedFiles: [], errors: [] }),
+      list: async () => [],
     },
     search: {
       query: async () => ({ files: [], totalCount: 0, query: {}, executionTimeMs: 0 }),
@@ -83,10 +84,14 @@ function createMockAPI(): ElectronAPI {
     },
     duplicates: {
       list: async () => [],
+      getFiles: async () => [],
       resolve: async () => ({ success: true, filesAffected: 0, bytesReclaimed: 0 }),
     },
     ai: {
-      getStatus: async () => ({ ok: true, capabilities: { pong: true, cv2: true, numpy: true, pil: false } }),
+      getStatus: async () => ({ ok: true, capabilities: { pong: true, cv2: true, numpy: true, pil: false, offline_ready: true } }),
+      getModelManifest: async () => ({ version: '1.0.0', offline_ready: true, models: [] }),
+      classifyImage: async () => ({ top_classes: [], tags: [] }),
+      extractOcr: async () => ({ text: '', confidence: 0 }),
     },
     settings: {
       getAll: async () => ({}),
@@ -159,7 +164,7 @@ function createMockAPI(): ElectronAPI {
       resumeAllJobs: async () => true,
     },
     app: {
-      getVersion: async () => '0.3.0',
+      getVersion: async () => '0.5.0',
       getPaths: async () => ({
         userData: '', appData: '', temp: '', home: '', documents: '',
       }),

@@ -4,12 +4,13 @@
 // ============================================================================
 
 import React, { useEffect, useState } from 'react';
-import { useWatcherStore } from '../store';
+import { useWatcherStore, toast } from '../store';
 import { api } from '../services/api';
 
 export const WatchedFoldersPage: React.FC = () => {
   const { watchRoots, loading, fetchWatchRoots, addWatchRoot, removeWatchRoot, toggleWatchRoot } = useWatcherStore();
   const [adding, setAdding] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchWatchRoots();
@@ -22,11 +23,32 @@ export const WatchedFoldersPage: React.FC = () => {
       if (selectedFolder) {
         const folderName = selectedFolder.split(/[\\/]/).filter(Boolean).pop() || 'Watched Folder';
         await addWatchRoot(selectedFolder, folderName);
+        toast.success(`Watching "${folderName}" for real-time filesystem changes`, 'Folder Added');
       }
     } catch (err) {
       console.error('Failed to add watched folder:', err);
+      toast.error(err instanceof Error ? err.message : String(err), 'Failed to Add Folder');
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function handleToggle(id: string, active: boolean, label: string) {
+    try {
+      await toggleWatchRoot(id, active);
+      toast.info(active ? `Monitoring resumed for "${label}"` : `Monitoring paused for "${label}"`, 'Watcher Updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err), 'Update Failed');
+    }
+  }
+
+  async function handleRemove(id: string, label: string) {
+    try {
+      await removeWatchRoot(id);
+      setConfirmRemoveId(null);
+      toast.info(`Watched folder "${label}" removed. Existing indexed metadata is preserved.`, 'Watcher Removed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err), 'Removal Failed');
     }
   }
 
@@ -48,33 +70,34 @@ export const WatchedFoldersPage: React.FC = () => {
           onClick={handleBrowseAndAdd}
           disabled={adding}
         >
-          {adding ? 'Selecting...' : '+ Add Folder to Watch'}
+          {adding ? 'Adding...' : '+ Add Folder to Watch'}
         </button>
       </div>
 
       {loading && watchRoots.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon animate-pulse">👁</div>
-          <div className="empty-title">Loading watched folders...</div>
+          <div className="empty-title">Loading watched directories...</div>
         </div>
       ) : watchRoots.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">📁</div>
           <div className="empty-title">No watched folders configured</div>
           <div className="empty-description">
-            Add a folder (such as your Pictures, Downloads, or Camera SD card) to enable continuous background scanning, thumbnail creation, and AI facial recognition.
+            Watched folders are monitored for filesystem events (create, rename, delete).
+            When new media arrives in these folders, Nexora automatically indexes metadata and extracts thumbnails.
           </div>
-          <button className="btn btn-primary" onClick={handleBrowseAndAdd} style={{ marginTop: 'var(--space-3)' }}>
-            + Select Folder
+          <button className="btn btn-secondary" onClick={handleBrowseAndAdd}>
+            Choose Folder to Watch
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {watchRoots.map(root => (
-            <div key={root.id} className="card" style={{ padding: 'var(--space-5)' }}>
+            <div key={root.id} className="card" style={{ padding: 'var(--space-4)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                  <span style={{ fontSize: '1.75rem' }}>📁</span>
+                  <span style={{ fontSize: '1.8rem' }}>📂</span>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                       <span style={{ fontWeight: 600, fontSize: 'var(--font-size-md)' }}>{root.label}</span>
@@ -91,22 +114,38 @@ export const WatchedFoldersPage: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <button
                     className={`btn btn-sm ${root.active ? 'btn-ghost' : 'btn-secondary'}`}
-                    onClick={() => toggleWatchRoot(root.id, !root.active)}
+                    onClick={() => handleToggle(root.id, !root.active, root.label)}
                   >
                     {root.active ? 'Pause Watch' : 'Resume'}
                   </button>
 
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    style={{ color: 'var(--color-error)' }}
-                    onClick={() => {
-                      if (confirm(`Remove watched folder "${root.label}"? Existing indexed metadata will be preserved.`)) {
-                        removeWatchRoot(root.id);
-                      }
-                    }}
-                  >
-                    Remove
-                  </button>
+                  {confirmRemoveId === root.id ? (
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--color-error)' }}>Remove?</span>
+                      <button
+                        className="btn btn-sm"
+                        style={{ background: 'var(--color-error)', color: '#fff', fontSize: '11px', padding: '2px 8px' }}
+                        onClick={() => handleRemove(root.id, root.label)}
+                      >
+                        Yes
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        style={{ fontSize: '11px', padding: '2px 8px' }}
+                        onClick={() => setConfirmRemoveId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      style={{ color: 'var(--color-error)' }}
+                      onClick={() => setConfirmRemoveId(root.id)}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
 

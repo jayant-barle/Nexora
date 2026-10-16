@@ -5,6 +5,7 @@
 
 import { ipcMain, dialog, shell, BrowserWindow, app } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import * as db from './database';
 import * as fsService from './filesystem';
 import { getJobRunner } from './job-runner';
@@ -70,8 +71,16 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('fs:reveal-in-explorer', async (_event, filePath: unknown) => {
-    const validPath = validatePath(filePath);
-    shell.showItemInFolder(validPath);
+    let validPath = validatePath(filePath);
+    if (!path.isAbsolute(validPath)) {
+      const resolved = db.resolveFileFullPath(validPath);
+      if (resolved) validPath = resolved;
+    }
+    if (fs.existsSync(validPath)) {
+      shell.showItemInFolder(validPath);
+    } else {
+      shell.openPath(path.dirname(validPath));
+    }
     return true;
   });
 
@@ -159,6 +168,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('operations:revert', async (_event, operationId: unknown) => {
     const id = validateId(operationId);
     return revertBatchOperation(id);
+  });
+
+  ipcMain.handle('operations:list', async (_event, limit?: unknown) => {
+    const l = typeof limit === 'number' && limit > 0 ? limit : 100;
+    return db.getCopyOperations(l);
   });
 
   // ── People ────────────────────────────────────────────────────────────────
@@ -257,6 +271,11 @@ export function registerIpcHandlers(): void {
     return db.getDuplicateGroups();
   });
 
+  ipcMain.handle('duplicates:get-files', async (_event, groupId: unknown) => {
+    const gid = validateId(groupId);
+    return db.getDuplicateGroupFiles(gid);
+  });
+
   ipcMain.handle('duplicates:resolve', async (_event, groupId: unknown, action: unknown) => {
     const gid = validateId(groupId);
     const act = validateString(action, 'action') as 'keep_best' | 'recycle' | 'hardlink';
@@ -294,6 +313,24 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
+  });
+
+  ipcMain.handle('ai:get-model-manifest', async () => {
+    try {
+      return await getAiWorkerClient().getModelManifest();
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('ai:classify-image', async (_event, filePath: unknown) => {
+    const validPath = validatePath(filePath);
+    return getAiWorkerClient().classifyImage(validPath);
+  });
+
+  ipcMain.handle('ai:extract-ocr', async (_event, filePath: unknown) => {
+    const validPath = validatePath(filePath);
+    return getAiWorkerClient().extractOcr(validPath);
   });
 
   // ── Dialogs ───────────────────────────────────────────────────────────────

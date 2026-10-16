@@ -161,12 +161,18 @@ The compiled assets will be placed into the `dist/` directory:
 - `dist/main/` — Compiled Electron main process scripts
 - `dist/preload/` — Preload bridge scripts
 
-### Package Desktop Executable
+### Package Windows Executable & Installer
 Generate a standalone Windows NSIS installer (`.exe`):
 ```bash
 npm run package
 ```
-*Installers are generated inside the `release/` folder as `Nexora Setup <version>.exe`.*
+*The installer is generated inside the `release/` folder as `Nexora-Setup-0.5.0.exe`.*
+
+To build an unpacked portable application folder for rapid testing without running the installer:
+```bash
+npm run package:dir
+```
+*The standalone executable is generated at `release/win-unpacked/Nexora.exe`.*
 
 ---
 

@@ -30,6 +30,7 @@ const electronAPI = {
     copy: (sourceDescription: string, destinationRoot: string, items: Array<{ sourcePath: string; destinationPath: string }>) =>
       ipcRenderer.invoke('operations:copy', sourceDescription, destinationRoot, items),
     revert: (operationId: string) => ipcRenderer.invoke('operations:revert', operationId),
+    list: (limit?: number) => ipcRenderer.invoke('operations:list', limit),
   },
 
   // ── Search ──────────────────────────────────────────────────────────────
@@ -77,13 +78,17 @@ const electronAPI = {
   // ── Duplicates ──────────────────────────────────────────────────────────
   duplicates: {
     list: () => ipcRenderer.invoke('duplicates:list'),
+    getFiles: (groupId: string) => ipcRenderer.invoke('duplicates:get-files', groupId),
     resolve: (groupId: string, action: 'keep_best' | 'recycle' | 'hardlink') =>
       ipcRenderer.invoke('duplicates:resolve', groupId, action),
   },
 
-  // ── AI Worker Status ────────────────────────────────────────────────────
+  // ── AI Worker Status & Offline Models ───────────────────────────────────
   ai: {
     getStatus: () => ipcRenderer.invoke('ai:get-status'),
+    getModelManifest: () => ipcRenderer.invoke('ai:get-model-manifest'),
+    classifyImage: (filePath: string) => ipcRenderer.invoke('ai:classify-image', filePath),
+    extractOcr: (filePath: string) => ipcRenderer.invoke('ai:extract-ocr', filePath),
   },
 
   // ── Settings ────────────────────────────────────────────────────────────

@@ -124,6 +124,15 @@ vi.mock('better-sqlite3', () => {
         if (sql.includes('SELECT * FROM files f')) {
           return { all: () => [] };
         }
+        if (sql.includes('SELECT * FROM copy_operations')) {
+          return { all: () => [{ id: 'op1', type: 'person_organize', status: 'completed', source_description: 'Photos', destination_root: 'C:\\Lib', total_files: 5, completed_files: 5, failed_files: 0, total_bytes: 1000, copied_bytes: 1000, started_at: null, completed_at: null, created_at: new Date().toISOString() }] };
+        }
+        if (sql.includes('SELECT f.*, dgf.is_original')) {
+          return { all: () => [{ id: 'f1', filename: 'photo1.jpg', relative_path: 'photo1.jpg', size_bytes: 500, is_original: true, full_path: 'C:\\Lib\\photo1.jpg' }] };
+        }
+        if (sql.includes('SELECT (r.path || \'/\' || f.relative_path) AS full_path')) {
+          return { get: () => ({ full_path: 'C:\\Lib\\photo1.jpg' }) };
+        }
         return {
           get: () => null,
           all: () => [],
@@ -147,6 +156,9 @@ import {
   getJobs,
   updateJobStatus,
   searchFiles,
+  getCopyOperations,
+  getDuplicateGroupFiles,
+  resolveFileFullPath,
 } from '../../src/main/database';
 
 describe('Database Engine & Relational Schema', () => {
@@ -214,5 +226,26 @@ describe('Database Engine & Relational Schema', () => {
     const result = searchFiles({ text: 'sample', limit: 10 });
     expect(result.files).toBeInstanceOf(Array);
     expect(typeof result.executionTimeMs).toBe('number');
+  });
+
+  it('retrieves copy operations history with status and metrics', () => {
+    const ops = getCopyOperations();
+    expect(ops).toBeInstanceOf(Array);
+    expect(ops.length).toBeGreaterThan(0);
+    expect(ops[0].type).toBe('person_organize');
+    expect(ops[0].status).toBe('completed');
+  });
+
+  it('retrieves candidate duplicate files for group resolution', () => {
+    const files = getDuplicateGroupFiles('group-1');
+    expect(files).toBeInstanceOf(Array);
+    expect(files.length).toBe(1);
+    expect(files[0].is_original).toBe(true);
+    expect(files[0].full_path).toContain('photo1.jpg');
+  });
+
+  it('resolves relative file path to full path via roots', () => {
+    const full = resolveFileFullPath('photo1.jpg');
+    expect(full).toBe('C:\\Lib\\photo1.jpg');
   });
 });

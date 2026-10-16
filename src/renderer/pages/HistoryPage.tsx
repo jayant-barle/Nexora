@@ -4,6 +4,8 @@
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
+import { toast } from '../store';
 import type { CopyOperation } from '@shared/types';
 
 function formatSize(bytes: number): string {
@@ -16,12 +18,45 @@ function formatSize(bytes: number): string {
 export const HistoryPage: React.FC = () => {
   const [operations, setOperations] = useState<CopyOperation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
 
   useEffect(() => {
-    // In a full environment this calls api().history.list()
-    // For now we initialize with real status or empty list
-    setLoading(false);
+    loadHistory();
   }, []);
+
+  async function loadHistory() {
+    setLoading(true);
+    try {
+      const ops = await api().operations.list();
+      setOperations((ops as CopyOperation[]) || []);
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRollback(operationId: string) {
+    if (revertingId) return;
+    setRevertingId(operationId);
+    try {
+      const res = await api().operations.revert(operationId);
+      if (res.success) {
+        toast.success(
+          `Rolled back operation: ${res.revertedFiles} files reverted, ${res.protectedFiles.length} modified user files protected.`,
+          'Rollback Completed'
+        );
+        await loadHistory();
+      } else {
+        toast.error('Rollback completed with warnings. Check logs for details.', 'Rollback Warning');
+      }
+    } catch (err) {
+      console.error('Rollback error:', err);
+      toast.error(err instanceof Error ? err.message : String(err), 'Rollback Failed');
+    } finally {
+      setRevertingId(null);
+    }
+  }
 
   return (
     <div className="page-content animate-fadeIn">
@@ -35,6 +70,9 @@ export const HistoryPage: React.FC = () => {
             Audit trail of non-destructive copies, folder reorganizations, and batch export actions.
           </p>
         </div>
+        <button className="btn btn-secondary" onClick={loadHistory} disabled={loading}>
+          ↻ Refresh Log
+        </button>
       </div>
 
       {loading ? (
@@ -52,32 +90,48 @@ export const HistoryPage: React.FC = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {operations.map(op => (
-            <div key={op.id} className="card" style={{ padding: 'var(--space-4)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <span className="badge badge-success">{op.status.toUpperCase()}</span>
-                    <span style={{ fontWeight: 600 }}>{op.type.replace(/_/g, ' ')}</span>
+          {operations.map(op => {
+            const isReverted = op.status === 'reverted';
+            const isCompleted = op.status === 'completed';
+
+            return (
+              <div key={op.id} className="card" style={{ padding: 'var(--space-4)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                      <span className={`badge ${isCompleted ? 'badge-success' : isReverted ? 'badge-secondary' : 'badge-warning'}`}>
+                        {op.status.toUpperCase()}
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{op.type.replace(/_/g, ' ')}</span>
+                      {op.created_at && (
+                        <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                          • {new Date(op.created_at).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px', wordBreak: 'break-all' }}>
+                      Destination: {op.destination_root}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                    Destination: {op.destination_root}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <div style={{ textAlign: 'right', fontSize: 'var(--font-size-xs)' }}>
+                      <div>{op.completed_files} / {op.total_files} files</div>
+                      <div style={{ color: 'var(--color-text-secondary)' }}>{formatSize(op.copied_bytes)}</div>
+                    </div>
+                    {isCompleted && (
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleRollback(op.id)}
+                        disabled={revertingId === op.id}
+                      >
+                        {revertingId === op.id ? 'Rolling back...' : '↺ Undo / Rollback'}
+                      </button>
+                    )}
                   </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                  <div style={{ textAlign: 'right', fontSize: 'var(--font-size-xs)' }}>
-                    <div>{op.completed_files} / {op.total_files} files</div>
-                    <div style={{ color: 'var(--color-text-secondary)' }}>{formatSize(op.copied_bytes)}</div>
-                  </div>
-                  {op.status === 'completed' && (
-                    <button className="btn btn-sm btn-secondary" onClick={() => alert('Rollback operation triggered')}>
-                      ↺ Undo / Rollback
-                    </button>
-                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -101,9 +101,21 @@ export class AiWorkerClient extends EventEmitter {
     const candidatePaths = [
       path.join(__dirname, '..', '..', 'ai-worker', 'src', 'main.py'),
       path.join(process.cwd(), 'ai-worker', 'src', 'main.py'),
+      path.join((process as any).resourcesPath || '', 'ai-worker', 'src', 'main.py'),
     ];
     this.scriptPath = candidatePaths.find(p => fs.existsSync(p)) || candidatePaths[0];
-    this.pythonPath = process.platform === 'win32' ? 'python' : 'python3';
+
+    // Resolve python binary path
+    const candidatePythonPaths = [
+      process.env.NEXORA_PYTHON_PATH,
+      path.join(process.cwd(), '.venv', 'Scripts', 'python.exe'),
+      path.join(process.cwd(), 'venv', 'Scripts', 'python.exe'),
+      path.join((process as any).resourcesPath || '', 'python', 'python.exe'),
+      path.join((process as any).resourcesPath || '', '.venv', 'Scripts', 'python.exe'),
+    ].filter(Boolean) as string[];
+
+    const foundPython = candidatePythonPaths.find(p => fs.existsSync(p));
+    this.pythonPath = foundPython || (process.platform === 'win32' ? 'python' : 'python3');
   }
 
   public async start(): Promise<boolean> {
@@ -118,9 +130,21 @@ export class AiWorkerClient extends EventEmitter {
     }
 
     try {
+      const candidateModelDirs = [
+        path.join((process as any).resourcesPath || '', 'models'),
+        path.join(process.cwd(), 'models'),
+        path.join(__dirname, '..', '..', 'models'),
+      ];
+      const modelsDir = candidateModelDirs.find((p) => fs.existsSync(p)) || candidateModelDirs[0];
+
       this.process = spawn(this.pythonPath, [this.scriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: '1',
+          NEXORA_MODELS_DIR: modelsDir,
+          RESOURCES_PATH: (process as any).resourcesPath || '',
+        },
       });
 
       this.process.stdout?.setEncoding('utf-8');
@@ -301,6 +325,18 @@ export class AiWorkerClient extends EventEmitter {
       file_path: filePath,
       interval_seconds: intervalSeconds,
     });
+  }
+
+  public async classifyImage(filePath: string): Promise<{ top_classes: Array<{ label: string; confidence: number }>; tags: string[] }> {
+    return this.sendRequest('classify_image', { file_path: filePath });
+  }
+
+  public async extractOcr(filePath: string): Promise<{ text: string; confidence: number; model_version?: string; status?: string }> {
+    return this.sendRequest('extract_ocr', { file_path: filePath });
+  }
+
+  public async getModelManifest(): Promise<any> {
+    return this.sendRequest('get_model_manifest', {});
   }
 }
 

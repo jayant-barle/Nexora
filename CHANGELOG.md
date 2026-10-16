@@ -40,12 +40,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **GitHub Standards (`.github/`)**: Added CI workflow (`.github/workflows/ci.yml`), bug report and feature request templates (`.github/ISSUE_TEMPLATE/`), and pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
     - **Repository Hygiene & Strictness**: Added `.npmrc` enforcing strict engine checks and updated `.gitignore` accounting for runtime databases, build outputs, and Python caches.
     - **Preserved Core Files & Integrity**: Kept authoritative files at repository root (`package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `PROJECT_RULES.md`, `VERSION`, `tsconfig*.json`, `vite.config.ts`, `vitest.config.ts`) and updated all internal documentation cross-references.
-
-**Fixed**
+  - **Productization, Release Readiness & UI Polish**:
+    - **In-App Toast Notification Engine (`src/renderer/components/Toast.tsx`, `src/renderer/store/index.ts`)**:
+      - Created lightweight, non-intrusive desktop toast component adhering to Nexora design tokens (charcoal surface, subtle border, glassmorphism backdrop blur, and neon-lime accent borders).
+      - Fully eliminated intrusive native browser `alert()` and `confirm()` dialogs across all views.
+      - Implemented auto-dismissal (4s for success/info, 6s for errors), manual dismissal, and type-safe helpers (`toast.success`, `toast.error`, `toast.info`, `toast.warning`).
+    - **Real Duplicate Group Resolution & Candidate Previews (`src/renderer/pages/DuplicatesPage.tsx`, `src/main/database.ts`, `src/main/ipc-handlers.ts`)**:
+      - Replaced placeholder candidate cards with real duplicate file queries via `duplicates:get-files`.
+      - Wired `Keep Best Quality` and `Clean Duplicates` actions to `duplicates:resolve` with immediate disk space reclamation telemetry.
+      - Added one-click "Show in Explorer" with safe absolute/relative path resolution.
+    - **Reversible Rollback & Copy Operations Audit Log (`src/renderer/pages/HistoryPage.tsx`, `src/main/database.ts`, `src/main/ipc-handlers.ts`)**:
+      - Connected history view to live `copy_operations` SQLite audit records via `operations:list`.
+      - Wired one-click reversible rollback invoking `revertBatchOperation` with SHA-256 verification and protected-file safeguards.
+    - **Windows Desktop Keyboard Navigation & Shortcuts (`src/renderer/App.tsx`, `src/renderer/pages/ExplorerPage.tsx`)**:
+      - Added global desktop shortcuts: `Ctrl+F` / `Ctrl+K` for instant search focus, `Ctrl+I` for Index Folder modal, `Ctrl+,` for Settings, and `Escape` for closing overlays.
+      - Added Enter-key navigation in file explorer to open directories or launch files via Windows default association.
+    - **Packaged ExtraResources Integrity (`src/main/ai-worker-client.ts`, `src/main/database.ts`, `package.json`)**:
+      - Guaranteed resolution of `ai-worker` and `database/migrations` across both development and packaged electron applications via `process.resourcesPath`.
+    - **Expanded Automated QA Test Suite (`tests/unit/toast.test.ts`, `tests/unit/database.test.ts`)**:
+      - Added unit test suite for Toast notifications (auto-dismissal, duration, removal).
+      - Added tests for `getCopyOperations`, `getDuplicateGroupFiles`, and `resolveFileFullPath`.
+      - Total test suite expanded to 75 tests across 12 test files with 100% passing.
+  - **Fully Offline AI Model Bundling & Zero-Cloud Privacy Guarantee**:
+    - **100% Offline Embedded Models**: Bundled 5 verified permissive neural models (total 30.8 MB uncompressed) in `models/` and packaged them into `resources/models/` via `extraResources`. No runtime internet access or model downloads required.
+    - **Face Intelligence**: Bundled official YuNet face detector (`face_detection_yunet_2023mar.onnx` - MIT) and SFace ArcFace/MobileFaceNet biometric embedding model (`face_recognition_sface_2021dec_int8.onnx` - Apache-2.0, 99.4% accuracy).
+    - **Scene & Content Classification**: Bundled MobileNetV2 (`image_classification_mobilenetv2_2022apr_int8.onnx` - Apache-2.0) with full 1,000 ImageNet semantic class label catalog in `models/labels/imagenet_classes.txt`.
+    - **Optical Character Recognition (OCR)**: Bundled PP-OCRv3 DBNet text segmenter (`text_detection_en_ppocrv3_2023may_int8.onnx` - Apache-2.0) and CRNN text recognizer (`text_recognition_CRNN_EN_2022oct_int8.onnx` - Apache-2.0) with character vocabulary in `models/labels/crnn_alphabet.txt`.
+    - **Cryptographic SHA-256 Pre-Execution Validation**: Created authoritative `models/manifest.json`. Worker verifies exact SHA-256 hashes before loading any model into memory and fails safely without crashing.
+    - **UI Transparency**: Added live "Bundled Offline AI Models & Integrity Verification" card in Settings displaying real-time model verification, licenses, runtimes, and local paths.
+    - **Expanded Test Suite**: Added `tests/unit/offline-models.test.ts` bringing automated test suite to 81 tests across 13 test files with 100% pass rate.
+  - **Windows 11 Production NSIS Installer (`release/Nexora-Setup-0.5.0.exe`)**:
+    - **Native Installer Packaging**: Configured electron-builder NSIS engine to build standalone Windows 11 executable installer (`release/Nexora-Setup-0.5.0.exe`, 117.2 MB).
+    - **Guided Setup Wizard**: Configured assisted setup wizard (`oneClick: false`, `perMachine: false`) enabling per-user installation without requiring UAC elevation by default, while supporting custom directory selection.
+    - **Desktop & Start Menu Integration**: Configured automatic desktop shortcut generation (`createDesktopShortcut: "always"`) and Start Menu registration (`createStartMenuShortcut: true`).
+    - **Branded Application Visuals**: Implemented 256x256 multi-layer `.ico` and 512x512 `.png` brand icons adhering to Nexora cinematic dark design language.
+    - **Windows Uninstaller & Settings Integration**: Registered clean uninstall integration in Windows Settings (`uninstallDisplayName: "Nexora 0.5.0"`) with icon and non-destructive data policy (`deleteAppDataOnUninstall: false`).
+    - **User Data Isolation & Preservation**: Stored user SQLite database and preferences strictly in `%APPDATA%\Nexora\nexora.db`, guaranteeing zero data loss across app upgrades or uninstalls.
+    - **Runtime Packaging Integrity**: Embedded `ai-worker`, `models`, `database/migrations`, and `config` in `extraResources` and native binary bindings in `app.asar.unpacked`.
+    - **Release Commands**: Added npm build scripts `package`, `package:dir`, `dist`, and `pack`.
 - **CI Test Suite Isolation & Core-Adaptive Determinism (`tests/unit/hardware-and-adaptive.test.ts`)**:
   - Resolved GitHub Actions CI failure on Windows runner in `Execution Parameters by Profile`. Added unconstrained hermetic baseline hardware mocks (`32GB RAM`, `8 cores`) in `beforeEach` to isolate unit test assertions from host runner VM memory pressure and CPU core constraints.
   - Added test verifying dynamic concurrency scaling (`min(4, max(2, cores - 1))`) on quad-core machines, ensuring that systems with 4 vCPUs reserve 1 core for OS/UI responsiveness while correctly scheduling 3 concurrent workers.
-  - All 68 tests across 11 test suites now pass deterministically across both local development environments and CI matrix runners.
+  - All 75 tests across 12 test suites now pass deterministically across both local development environments and CI matrix runners.
 
 ---
 

@@ -194,6 +194,12 @@ export const ExplorerPage: React.FC = () => {
                 onClick={() => handleEntryClick(entry)}
                 onDoubleClick={() => handleEntryDoubleClick(entry)}
                 onContextMenu={(e) => handleContextMenu(e, entry)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (entry.isDirectory) navigateTo(entry.path);
+                    else api().fs.openFile(entry.path);
+                  }
+                }}
                 role="button"
                 tabIndex={0}
                 title={entry.name}
@@ -221,6 +227,12 @@ export const ExplorerPage: React.FC = () => {
                 onClick={() => handleEntryClick(entry)}
                 onDoubleClick={() => handleEntryDoubleClick(entry)}
                 onContextMenu={(e) => handleContextMenu(e, entry)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (entry.isDirectory) navigateTo(entry.path);
+                    else api().fs.openFile(entry.path);
+                  }
+                }}
                 role="row"
                 tabIndex={0}
               >
