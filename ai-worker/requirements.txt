@@ -1,0 +1,7 @@
+# AI File Manager — AI Worker Dependencies
+# Optional heavy ML packages with graceful fallback
+pillow>=10.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+opencv-python-headless>=4.8.0
+piexif>=1.1.3

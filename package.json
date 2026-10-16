@@ -1,0 +1,80 @@
+{
+  "name": "ai-file-manager",
+  "version": "0.1.0",
+  "description": "AI-powered local file manager for Windows 11 with face detection, media organization, and smart search",
+  "main": "dist/main/index.js",
+  "author": "AI File Manager",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
+    "dev:main": "tsc -p tsconfig.main.json && electron .",
+    "dev:renderer": "vite",
+    "build": "npm run build:renderer && npm run build:main",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit",
+    "typecheck:main": "tsc -p tsconfig.main.json --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "electron-builder --win",
+    "postinstall": "electron-builder install-app-deps",
+    "db:migrate": "node scripts/migrate.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.6.0",
+    "chokidar": "^4.0.3",
+    "electron-store": "^10.0.0",
+    "exif-reader": "^2.0.1",
+    "sharp": "^0.33.5",
+    "uuid": "^10.0.0",
+    "xxhash-wasm": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.15.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.0.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8",
+    "zustand": "^5.0.2"
+  },
+  "build": {
+    "appId": "com.aifilemanager.app",
+    "productName": "AI File Manager",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "ai-worker",
+        "to": "ai-worker"
+      }
+    ]
+  }
+}
