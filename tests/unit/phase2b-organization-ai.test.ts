@@ -51,6 +51,20 @@ const { activeMockDb } = vi.hoisted(() => {
       // Schema / Migrations
       if (sql.includes('SELECT name FROM sqlite_master')) return { get: () => null };
       if (sql.includes('PRAGMA integrity_check')) return { get: () => ({ integrity_check: 'ok' }) };
+      if (sql.includes('PRAGMA table_info(organization_proposals)')) {
+        return {
+          all: () => [
+            { name: 'id' },
+            { name: 'rule_id' },
+            { name: 'source_file_id' },
+            { name: 'source_path' },
+            { name: 'proposed_destination' },
+            { name: 'status' },
+            { name: 'warning_flags' },
+            { name: 'created_at' },
+          ],
+        };
+      }
 
       // App Settings
       if (sql.includes('FROM app_settings WHERE key = ?')) {
@@ -232,14 +246,16 @@ const { activeMockDb } = vi.hoisted(() => {
       if (sql.includes('INSERT INTO organization_proposals')) {
         return {
           run: (...params: any[]) => {
+            const hasRuleName = params.length === 8;
             this.organizationProposals.push({
               id: params[0],
               rule_id: params[1],
               source_file_id: params[2],
               source_path: params[3],
               proposed_destination: params[4],
-              status: params[5],
-              warning_flags: params[6],
+              rule_name: hasRuleName ? params[5] : undefined,
+              status: hasRuleName ? params[6] : params[5],
+              warning_flags: hasRuleName ? params[7] : params[6],
             });
           },
         };
@@ -405,6 +421,7 @@ import {
   sanitizePathSegment,
   resolveOrganizationPath,
   generateOrganizationProposals,
+  saveProposalItemsToDb,
 } from '../../src/main/organizer';
 import {
   validateDestinationRoot,
@@ -792,6 +809,35 @@ describe('Phase 2B: Safe Organization, Local AI, Face Recognition & UI Integrati
       );
 
       expect(unclustered.length).toBe(1);
+    });
+  });
+
+  // ── 10. Organization Proposals & warning_flags Persistence ─────────────────
+  describe('Organization Proposals & warning_flags Schema Compatibility', () => {
+    it('persists proposals with warning flags into organization_proposals table and maps them back', () => {
+      const testItem = {
+        id: 'prop-test-1',
+        rule_id: 'rule_default_date',
+        source_file_id: 'f1',
+        source_path: 'C:\\Source\\photo.jpg',
+        proposed_destination: 'C:\\Organized\\Images\\2025\\photo.jpg',
+        rule_name: 'Date Hierarchy',
+        status: 'proposed' as const,
+        warnings: ['Identical file already exists at destination; redundant copy will be safely skipped'],
+        metadata_snapshot: { category: 'Images' },
+        file_size: 4096,
+      };
+
+      saveProposalItemsToDb([testItem], 'rule_default_date');
+
+      const saved = activeMockDb.organizationProposals.find(p => p.id === 'prop-test-1');
+      expect(saved).toBeDefined();
+      expect(saved?.proposed_destination).toBe('C:\\Organized\\Images\\2025\\photo.jpg');
+      expect(saved?.warning_flags).toContain('Identical file already exists');
+
+      const parsedWarnings = JSON.parse(saved?.warning_flags);
+      expect(parsedWarnings.length).toBe(1);
+      expect(parsedWarnings[0]).toContain('redundant copy will be safely skipped');
     });
   });
 });

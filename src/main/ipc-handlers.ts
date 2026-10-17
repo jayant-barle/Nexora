@@ -13,7 +13,7 @@ import { getHardwareMonitor } from './hardware-monitor';
 import { getWatcherService } from './watcher';
 import { getAiWorkerClient } from './ai-worker-client';
 import { executeBatchCopyOperation, revertBatchOperation, CopyItem } from './file-operations';
-import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization, getStoredProposals, runAutoOrganizationPipeline } from './organizer';
+import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization, getStoredProposals, runAutoOrganizationPipeline, resolveDefaultManagedLibrary } from './organizer';
 import { reconcileLibrary, indexFolderIncremental } from './indexer';
 import type { OrganizationRule, OrganizationProposalItem, SearchQuery } from '../shared/types';
 
@@ -422,7 +422,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('organizer:execute', async (_event, proposals: unknown, destinationRoot: unknown, options?: unknown) => {
     if (!Array.isArray(proposals)) throw new Error('proposals must be an array');
-    const dest = validatePath(destinationRoot);
+    const dest = (typeof destinationRoot === 'string' && destinationRoot.trim())
+      ? validatePath(destinationRoot.trim())
+      : resolveDefaultManagedLibrary();
     return executeOrganization(proposals as OrganizationProposalItem[], dest, options as any);
   });
 

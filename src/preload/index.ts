@@ -119,7 +119,7 @@ const electronAPI = {
       ipcRenderer.invoke('organizer:save-rule', rule),
     generateProposals: (fileIds: string[], ruleIdOrPattern: string, destinationRoot: string) =>
       ipcRenderer.invoke('organizer:generate-proposals', fileIds, ruleIdOrPattern, destinationRoot),
-    execute: (proposals: import('../shared/types').OrganizationProposalItem[], destinationRoot: string, options?: { removeSourceOnSuccess?: boolean }) =>
+    execute: (proposals: import('../shared/types').OrganizationProposalItem[], destinationRoot?: string, options?: { removeSourceOnSuccess?: boolean }) =>
       ipcRenderer.invoke('organizer:execute', proposals, destinationRoot, options),
     getStoredProposals: (status?: string, limit?: number) =>
       ipcRenderer.invoke('organizer:get-stored-proposals', status, limit),

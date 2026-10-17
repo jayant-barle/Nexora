@@ -85,7 +85,16 @@ function runMigrationFiles(database: Database.Database, files: string[], current
 
     console.log(`Running migration ${path.basename(file)}...`);
     const sql = fs.readFileSync(file, 'utf-8');
-    database.exec(sql);
+    try {
+      database.exec(sql);
+    } catch (migErr: any) {
+      // If error is duplicate column (e.g. column already added), ignore and proceed
+      if (migErr && String(migErr.message).includes('duplicate column name')) {
+        console.warn(`[Migrations] Notice in ${path.basename(file)}: column already exists, proceeding.`);
+      } else {
+        throw migErr;
+      }
+    }
     console.log(`Migration ${path.basename(file)} applied.`);
   }
 }
@@ -335,6 +344,8 @@ function createSchemaInline(database: Database.Database): void {
     );
     INSERT OR IGNORE INTO schema_version (version, description) VALUES (1, 'Initial schema');
     INSERT OR IGNORE INTO schema_version (version, description) VALUES (2, 'Metadata Intelligence Engine');
+    INSERT OR IGNORE INTO schema_version (version, description) VALUES (3, 'Scan infrastructure, roots telemetry, and exact duplicate indexing');
+    INSERT OR IGNORE INTO schema_version (version, description) VALUES (4, 'Add warning_flags column to organization_proposals');
 
     INSERT OR IGNORE INTO organization_rules (id, name, pattern, description, is_default)
     VALUES

@@ -329,6 +329,24 @@ export const Sidebar: React.FC = () => {
               </div>
 
               <div
+                className={`nav-item ${currentPage === 'events' ? 'active' : ''}`}
+                onClick={() => setPage('events')}
+                title="Events & Places"
+              >
+                <span className="nav-icon">📍</span>
+                {!sidebarCollapsed && <span className="nav-label">Events & Places</span>}
+              </div>
+
+              <div
+                className={`nav-item ${currentPage === 'watched' ? 'active' : ''}`}
+                onClick={() => setPage('watched')}
+                title="Watched Folders"
+              >
+                <span className="nav-icon">👁</span>
+                {!sidebarCollapsed && <span className="nav-label">Watched Folders</span>}
+              </div>
+
+              <div
                 className={`nav-item ${currentPage === 'storage' ? 'active' : ''}`}
                 onClick={() => setPage('storage')}
                 title="Storage"
@@ -353,6 +371,15 @@ export const Sidebar: React.FC = () => {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div
+                className={`nav-item ${currentPage === 'history' ? 'active' : ''}`}
+                onClick={() => setPage('history')}
+                title="Operations History"
+              >
+                <span className="nav-icon">📜</span>
+                {!sidebarCollapsed && <span className="nav-label">History & Undo</span>}
               </div>
             </div>
           )}

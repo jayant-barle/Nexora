@@ -1,6 +1,6 @@
 {
   "name": "nexora",
-  "version": "0.9.1",
+  "version": "0.9.3",
   "description": "Nexora — AI File Manager. Your files. Your intelligence. Your control.",
   "main": "dist/main/index.js",
   "author": "Nexora",

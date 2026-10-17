@@ -89,7 +89,7 @@ export const OrganizePage: React.FC = () => {
     setExecuting(true);
     try {
       toast.info('Starting verified safe copy operation...', 'Organizing Files');
-      const result = await api().organizer.execute(proposals, destinationRoot || '');
+      const result = await api().organizer.execute(proposals, destinationRoot || undefined);
 
       if (result.success) {
         toast.success(
@@ -98,10 +98,12 @@ export const OrganizePage: React.FC = () => {
         );
         await loadData();
       } else {
+        const errorDetail = result.errors && result.errors.length > 0 ? `: ${result.errors[0].error}` : '';
         toast.error(
-          `Completed ${result.completedFiles} files with ${result.failedFiles} errors.`,
+          `Completed ${result.completedFiles} files with ${result.failedFiles} error(s)${errorDetail}.`,
           'Organization Partial'
         );
+        await loadData();
       }
     } catch (err) {
       console.error('Organization failed:', err);

@@ -38,7 +38,7 @@ class MockDatabase {
 
   close() {}
 
-  prepare(sql: string): { run: (...args: any[]) => any; get: (...args: any[]) => any; all: (...args: any[]) => any[] } {
+  prepare(sql: string): any {
     // 1. Files & Deduplication Queries
     if (sql.includes('SELECT hash_sha256, COUNT(*) as file_count, SUM(size_bytes) as total_size')) {
       return {

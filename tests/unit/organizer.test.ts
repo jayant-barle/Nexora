@@ -25,6 +25,7 @@ class MockOrganizerDb {
   public copyOperations: any[] = [];
   public operationItems: any[] = [];
   public operationHistory: any[] = [];
+  public proposals: any[] = [];
 
   constructor() {
     this.rules = [
@@ -76,6 +77,23 @@ class MockOrganizerDb {
         run: (...params: any[]) => {
           this.operationHistory.push(params);
         },
+      };
+    }
+    if (sql.includes('UPDATE organization_proposals SET status =')) {
+      return {
+        run: (...params: any[]) => {
+          const idOrNull = params[0];
+          const srcPath = params[1];
+          const found = this.proposals.find(p => (idOrNull && p.id === idOrNull) || p.source_path === srcPath);
+          if (found) {
+            found.status = 'executed';
+          }
+        },
+      };
+    }
+    if (sql.includes('FROM organization_proposals')) {
+      return {
+        all: () => [...this.proposals],
       };
     }
     if (sql.includes('FROM files f')) {
@@ -242,6 +260,61 @@ describe('Metadata Organization & Preview Engine', () => {
     // CRITICAL: Original source file must remain intact and unmodified!
     expect(fs.existsSync(srcFile)).toBe(true);
     expect(fs.readFileSync(srcFile, 'utf-8')).toBe(srcContent);
+  });
+
+  it('updates organization proposal status to executed and handles default destination fallback', async () => {
+    const srcFile = path.join(sourceDir, 'photo_2026.jpg');
+    fs.writeFileSync(srcFile, 'JPEG_DATA_2026', 'utf-8');
+
+    const targetFile = path.join(destDir, 'Images', '2026', 'photo_2026.jpg');
+
+    // Register proposal in mockDb
+    mockDb.proposals.push({
+      id: 'prop-12345',
+      source_path: srcFile,
+      proposed_destination: targetFile,
+      status: 'proposed',
+    });
+
+    // Execute with empty string destination (should fallback to default library path safely)
+    const result = await executeOrganization(
+      [
+        {
+          id: 'prop-12345',
+          source_path: srcFile,
+          proposed_destination: targetFile,
+        } as any,
+      ],
+      destDir,
+      'Apply Organization Test'
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.completedFiles).toBe(1);
+
+    // Verify status was updated to executed in DB
+    const propInDb = mockDb.proposals.find(p => p.id === 'prop-12345');
+    expect(propInDb?.status).toBe('executed');
+
+    // Verify source is intact
+    expect(fs.existsSync(srcFile)).toBe(true);
+  });
+
+  it('safely rejects self-copy when source and destination are the exact same path', async () => {
+    const srcFile = path.join(sourceDir, 'file_to_copy_itself.txt');
+    fs.writeFileSync(srcFile, 'Hello same file', 'utf-8');
+
+    const result = await executeOrganization(
+      [{ sourcePath: srcFile, destinationPath: srcFile }],
+      destDir,
+      'Self Copy Test'
+    );
+
+    expect(result.failedFiles).toBe(1);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0].error).toContain('Cannot copy file onto itself');
+    // Source file content is untouched
+    expect(fs.readFileSync(srcFile, 'utf-8')).toBe('Hello same file');
   });
 
   // ── Filename Token Intelligence & Patterns ───────────────────────────────

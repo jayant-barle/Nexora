@@ -388,30 +388,62 @@ export async function generateOrganizationProposals(
 // ─── Execute Verified Organization ───────────────────────────────────────────
 
 export async function executeOrganization(
-  proposalItems: Array<OrganizationProposalItem | { sourcePath: string; destinationPath: string; source_path?: string; proposed_destination?: string }>,
-  destinationRoot: string,
+  proposalItems: Array<OrganizationProposalItem | { id?: string; sourcePath?: string; destinationPath?: string; source_path?: string; proposed_destination?: string }>,
+  destinationRoot?: string,
   optionsOrRuleDesc?: string | { removeSourceOnSuccess?: boolean; ruleDescription?: string },
   onProgress?: (completed: number, total: number) => void
 ): Promise<OperationResult> {
-  const copyItems: CopyItem[] = proposalItems.map(p => {
-    const src = 'sourcePath' in p && p.sourcePath ? p.sourcePath : ('source_path' in p ? p.source_path : '');
-    const dst = 'destinationPath' in p && p.destinationPath ? p.destinationPath : ('proposed_destination' in p ? p.proposed_destination : '');
-    return {
-      sourcePath: src || '',
-      destinationPath: dst || '',
-    };
-  }).filter(item => item.sourcePath && item.destinationPath);
+  const destRoot = destinationRoot && destinationRoot.trim() ? destinationRoot.trim() : resolveDefaultManagedLibrary();
+
+  const validItems: Array<{ proposalId?: string; sourcePath: string; destinationPath: string }> = [];
+  for (const p of proposalItems) {
+    const src = ('sourcePath' in p && p.sourcePath) ? p.sourcePath : ('source_path' in p ? p.source_path : '');
+    const dst = ('destinationPath' in p && p.destinationPath) ? p.destinationPath : ('proposed_destination' in p ? p.proposed_destination : '');
+    if (src && dst) {
+      validItems.push({
+        proposalId: 'id' in p && typeof p.id === 'string' ? p.id : undefined,
+        sourcePath: src,
+        destinationPath: dst,
+      });
+    }
+  }
+
+  const copyItems: CopyItem[] = validItems.map(item => ({
+    sourcePath: item.sourcePath,
+    destinationPath: item.destinationPath,
+  }));
 
   const desc = typeof optionsOrRuleDesc === 'string'
     ? optionsOrRuleDesc
     : (optionsOrRuleDesc?.ruleDescription || 'Metadata Organization');
 
-  return executeBatchCopyOperation(
+  const result = await executeBatchCopyOperation(
     `Organization: ${desc}`,
-    destinationRoot,
+    destRoot,
     copyItems,
     onProgress
   );
+
+  // Update proposal status in SQLite database for executed items
+  try {
+    const db = getDb();
+    const failedSources = new Set(result.errors.map(e => e.file));
+    const updateStmt = db.prepare("UPDATE organization_proposals SET status = 'executed' WHERE id = ? OR source_path = ?");
+
+    const tx = db.transaction(() => {
+      for (const item of validItems) {
+        if (!failedSources.has(item.sourcePath)) {
+          updateStmt.run(item.proposalId || null, item.sourcePath);
+        }
+      }
+    });
+
+    tx();
+  } catch (err) {
+    console.warn('[Organizer] Failed to update organization_proposals status:', err);
+  }
+
+  return result;
 }
 
 // ─── Rule Store Helpers ──────────────────────────────────────────────────────
@@ -476,26 +508,60 @@ export function resolveDefaultManagedLibrary(): string {
 
 export function saveProposalItemsToDb(proposals: OrganizationProposalItem[], ruleId?: string | null): void {
   const db = getDb();
-  const insertProposalStmt = db.prepare(`
-    INSERT INTO organization_proposals (id, rule_id, source_file_id, source_path, proposed_destination, status, warning_flags, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET
-      proposed_destination = excluded.proposed_destination,
-      status = excluded.status,
-      warning_flags = excluded.warning_flags
-  `);
+  
+  // Inspect table columns to maintain full compatibility across schema variants
+  let hasRuleNameCol = false;
+  try {
+    const cols = db.prepare('PRAGMA table_info(organization_proposals)').all() as Array<{ name: string }>;
+    hasRuleNameCol = cols.some((c) => c.name === 'rule_name');
+  } catch {}
+
+  const insertProposalSql = hasRuleNameCol
+    ? `
+      INSERT INTO organization_proposals (id, rule_id, source_file_id, source_path, proposed_destination, rule_name, status, warning_flags, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        proposed_destination = excluded.proposed_destination,
+        rule_name = excluded.rule_name,
+        status = excluded.status,
+        warning_flags = excluded.warning_flags
+    `
+    : `
+      INSERT INTO organization_proposals (id, rule_id, source_file_id, source_path, proposed_destination, status, warning_flags, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        proposed_destination = excluded.proposed_destination,
+        status = excluded.status,
+        warning_flags = excluded.warning_flags
+    `;
+
+  const insertProposalStmt = db.prepare(insertProposalSql);
 
   const tx = db.transaction((items: OrganizationProposalItem[]) => {
     for (const p of items) {
-      insertProposalStmt.run(
-        p.id,
-        ruleId ?? p.rule_id ?? null,
-        p.source_file_id,
-        p.source_path,
-        p.proposed_destination,
-        p.status,
-        p.warnings && p.warnings.length > 0 ? JSON.stringify(p.warnings) : null
-      );
+      const warningJson = p.warnings && p.warnings.length > 0 ? JSON.stringify(p.warnings) : null;
+      if (hasRuleNameCol) {
+        insertProposalStmt.run(
+          p.id,
+          ruleId ?? p.rule_id ?? null,
+          p.source_file_id,
+          p.source_path,
+          p.proposed_destination,
+          p.rule_name || 'Metadata Rule',
+          p.status,
+          warningJson
+        );
+      } else {
+        insertProposalStmt.run(
+          p.id,
+          ruleId ?? p.rule_id ?? null,
+          p.source_file_id,
+          p.source_path,
+          p.proposed_destination,
+          p.status,
+          warningJson
+        );
+      }
     }
   });
 
@@ -519,7 +585,8 @@ export function getStoredProposals(status = 'proposed', limit = 200): Organizati
     return rows.map((r) => {
       let warnings: string[] = [];
       try {
-        if (r.warning_flags) warnings = JSON.parse(r.warning_flags);
+        const rawWarnings = r.warning_flags || r.warnings_json;
+        if (rawWarnings) warnings = JSON.parse(rawWarnings);
       } catch {}
 
       return {

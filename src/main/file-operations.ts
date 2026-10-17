@@ -138,6 +138,15 @@ export async function copyFileWithVerification(
   dest: string,
   knownSourceHash?: string
 ): Promise<{ success: boolean; sourceHash: string; destHash: string; error?: string }> {
+  if (path.resolve(src) === path.resolve(dest)) {
+    return {
+      success: false,
+      sourceHash: '',
+      destHash: '',
+      error: `Cannot copy file onto itself: ${src}`,
+    };
+  }
+
   const destDir = path.dirname(dest);
   if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
@@ -267,6 +276,13 @@ export async function executeBatchCopyOperation(
       try {
         srcHash = await computeFileSha256(item.source);
       } catch {}
+
+      if (path.resolve(item.source) === path.resolve(item.dest)) {
+        updateItemStmt.run(null, null, 'failed', `Cannot copy file onto itself: ${item.source}`, item.id);
+        failedFiles++;
+        errors.push({ file: item.source, error: `Cannot copy file onto itself: ${item.source}` });
+        continue;
+      }
 
       const { finalPath, isIdenticalDuplicate } = await resolveSafeDestinationPath(item.dest, srcHash);
 

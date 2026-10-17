@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+### [0.9.3] — 2026-10-18
+
+**Fixed & Enhanced**
+- **Apply Organization Execution Path Repair**:
+  - **Destination Path Validation Fallback (`src/main/ipc-handlers.ts`, `src/preload/index.ts`)**:
+    - Fixed issue where clicking **Apply Organization** with an empty or unconfigured destination caused `validatePath('')` in the `organizer:execute` IPC handler to throw an uncaught exception (`Invalid path: must be a non-empty string`), causing the operation to fail silently without copying any files.
+    - Added safe fallback to `resolveDefaultManagedLibrary()` when `destinationRoot` is empty or undefined, matching `runAutoOrganizationPipeline`.
+  - **Proposal Status Persistence & Execution Tracking (`src/main/organizer.ts`)**:
+    - Repaired `executeOrganization` to update successfully organized proposals to `status = 'executed'` in `organization_proposals` SQLite table upon completion.
+    - Successfully organized proposals are cleared from the pending view on UI refresh without requiring manual user intervention.
+  - **Self-Copy Prevention & Destination Guard (`src/main/file-operations.ts`)**:
+    - Added checks in `executeBatchCopyOperation` and `copyFileWithVerification` to prevent copying a file onto itself when source and destination resolve to the identical canonical path.
+  - **UI Feedback & Error Reporting (`src/renderer/pages/OrganizePage.tsx`)**:
+    - Enhanced `handleExecuteOrganization` to pass `destinationRoot || undefined`, gracefully refresh data on partial or successful completions, and display actionable error toasts if any files fail.
+  - **Regression Tests**:
+    - Added unit and integration tests verifying proposal status updates, fallback destination resolution, and self-copy rejection in `tests/unit/organizer.test.ts`.
+
+---
+
+### [0.9.2] — 2026-10-18
+
+**Fixed & Enhanced**
+- **Database Schema & Organizer Pipeline Hotfix**:
+  - **Missing Column in `organization_proposals`**:
+    - Resolved `SqliteError: table organization_proposals has no column named warning_flags` triggered when clicking **Recalculate Proposals** (`organizer:run-auto-pipeline`).
+    - Added database migration `004_proposals_warning_flags.sql` which safely adds the `warning_flags TEXT` column to `organization_proposals` using an idempotent `ALTER TABLE` statement and bumps `schema_version` to 4.
+    - Updated `createSchemaInline` in `src/main/database.ts` to register both version 3 and version 4 for fresh database initializations.
+    - Hardened `runMigrationFiles` to catch and gracefully bypass `duplicate column name` errors, making migration execution safe to run repeatedly across existing and new environments.
+  - **Schema Variance Resilience (`src/main/organizer.ts`)**:
+    - Updated `saveProposalItemsToDb` to dynamically inspect `PRAGMA table_info(organization_proposals)`.
+    - Handles variations where `rule_name` is required vs omitted, preventing any SQLite `NOT NULL` constraint violations across legacy and inline schemas.
+    - Updated `getStoredProposals` to seamlessly fallback from `warning_flags` to `warnings_json` if needed.
+  - **Production & Development Database Migration**:
+    - Verified real user database at `%APPDATA%\nexora\nexora.db` was safely upgraded to schema version 4 with all existing proposal records and user data fully preserved.
+  - **Regression Testing & Verification**:
+    - Added Section 10 in `tests/unit/phase2b-organization-ai.test.ts` verifying proposal persistence, warning flag JSON serialization, and schema compatibility.
+    - All 16 test suites passing (127/127 tests), TypeScript checks passing, and production build succeeded.
+
+---
+
 ### [0.9.1] — 2026-10-18
 
 **Fixed & Enhanced**
