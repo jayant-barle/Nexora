@@ -38,7 +38,7 @@ class MockDatabase {
 
   close() {}
 
-  prepare(sql: string) {
+  prepare(sql: string): { run: (...args: any[]) => any; get: (...args: any[]) => any; all: (...args: any[]) => any[] } {
     // 1. Files & Deduplication Queries
     if (sql.includes('SELECT hash_sha256, COUNT(*) as file_count, SUM(size_bytes) as total_size')) {
       return {
@@ -411,14 +411,12 @@ describe('Nexora Phase 3A — Comprehensive Security & Reliability Hardening', (
   describe('Local AI Biometrics & Privacy Invariants', () => {
     it('ensures face clusters default to unreviewed review_status with generic non-inferred labels', () => {
       const personId = uuidv4();
-      mockDb.prepare('INSERT INTO people (id, name, representative_face_id, review_status) VALUES (?, ?, ?, ?)').run(
-        personId,
-        'Person 1',
-        'face-123',
-        'unreviewed'
-      );
+      const insertStmt = mockDb.prepare('INSERT INTO people (id, name, representative_face_id, review_status) VALUES (?, ?, ?, ?)');
+      insertStmt.run(personId, 'Person 1', 'face-123', 'unreviewed');
 
-      const person = mockDb.prepare('SELECT * FROM people WHERE id = ?').get(personId) as any;
+      const selectStmt = mockDb.prepare('SELECT * FROM people WHERE id = ?');
+      const person = selectStmt.get(personId) as any;
+      expect(person).toBeDefined();
       expect(person.review_status).toBe('unreviewed');
       expect(person.name).toBe('Person 1');
       // Never asserts real identity from filename or metadata
