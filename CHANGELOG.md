@@ -7,6 +7,187 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+### [0.9.1] — 2026-10-18
+
+**Fixed & Enhanced**
+- **Critical AI Feature Execution Fixes**:
+  - **Folder Scan AI Option Defaulting (`src/main/job-runner.ts`, `src/renderer/App.tsx`)**:
+    - Fixed folder scan options where `extractAi` defaulted to `false` unless explicitly set to `true`, causing indexing from the UI to suppress face detection, face clustering, and video analysis jobs.
+    - Updated `handleFolderScanJob` to default `extractAi` to `config.extractAi !== false`, ensuring local AI analysis runs automatically when background AI is enabled.
+    - Updated UI `handleExecuteScan` to explicitly dispatch `{ extractAi: true, generateThumbnails: true }`.
+  - **Automated Face Clustering Scheduling (`src/main/job-runner.ts`)**:
+    - Added automatic job creation for `face_clustering` at the completion of folder scans whenever unclustered face detections exist.
+    - Added automatic job creation for `face_clustering` upon completion of deferred `face_detect` worker tasks.
+  - **Interactive Face Clustering Controls (`src/renderer/pages/PeoplePage.tsx`)**:
+    - Added **⚡ Run Face Clustering** on-demand action button in both the page header and empty state, providing clear UI feedback with progress toasts and automatic identity list refreshing.
+  - **In-Place AI Vision & OCR Extraction Actions (`src/renderer/pages/ExplorerPage.tsx`)**:
+    - Added interactive **🏷 AI Vision Tag** (MobileNetV2) and **📄 Run OCR** (PP-OCRv3/CRNN) buttons in the right-hand **Nexora Intelligence** panel.
+    - Added **⚡ AI Vision Tag (MobileNetV2)** and **📄 AI Extract Text (OCR)** actions to the right-click file context menu.
+    - Implemented live visual displays for neural classification tags and extracted text with a "Copy Text" button and informative toast status notifications.
+- **Verification & Regression Testing**:
+  - Added unit and regression tests in `tests/unit/phase2b-organization-ai.test.ts` verifying `extractAi` defaults and clustering scheduling.
+  - All 16 test suites passing (126/126 tests). TypeScript typechecks and production build verified cleanly with 0 errors.
+
+---
+
+### [0.9.0] — 2026-10-17
+
+**Added & Released**
+- **Nexora Phase 3B — Windows EXE Installer, Installed-App Validation & Release Preparation**:
+  - **Real Production Windows Installer (`release/Nexora-Setup-0.9.0.exe`)**:
+    - Packaged using Electron Builder 25.1.8 with NSIS target for Windows 11 (x64).
+    - Verified installer binary size: **117,246,541 bytes** (approx 111.8 MB).
+    - Cryptographic SHA-256 Checksum: `9B674379C63B11D95B411ED968844CF7D9E4C1B177EB6CEBE9942BBAFA90A62F`.
+    - Bundled production assets: React 18 / Vite 6 distribution, custom branding (`assets/icon.ico`), SQLite migrations, AI worker Python engine, and verified local ONNX models.
+  - **Unpacked Application Build (`release/win-unpacked/Nexora.exe`)**:
+    - Packaged executable size: **188,795,904 bytes**.
+    - Pre-compiled native Node.js binary for Electron 33.4.11 (`better-sqlite3`).
+    - Dedicated immutable resources in `resources/` with clean separation from writable user data in `%APPDATA%\nexora`.
+  - **Installed-App Validation (Clean Sandbox & Silent Lifecycle Tests)**:
+    - Verified silent installation: `Nexora-Setup-0.9.0.exe /S /D=<path>` extracted successfully and installed all application binaries and resources cleanly.
+    - Verified silent uninstallation: `Uninstall Nexora.exe /S` cleanly removed application binaries and shortcuts without touching `%APPDATA%\nexora`.
+    - User data preservation guarantee: `deleteAppDataOnUninstall: false` ensures user database, roots, tags, and settings survive upgrades and normal uninstallation.
+  - **Bundled vs. External AI Model & Dependency Matrix**:
+    - All 5 local ONNX models (YuNet, SFace, MobileNetV2, PP-OCRv3, CRNN) verified and bundled in `resources/models/`.
+    - 100% offline startup and processing verified without internet connectivity.
+  - **Code Signing & Security Status**:
+    - Documented unsigned binary status; detailed instructions for Windows SmartScreen bypass ("More info" -> "Run anyway") provided in documentation.
+
+**Fixed & Hardened**
+- **Nexora Phase 3A — Comprehensive Debugging, Security & Reliability Hardening**:
+  - **Critical IPC Duplicate Handler Fix (`src/main/ipc-handlers.ts`)**:
+    - Eliminated duplicate `search:query` and `search:rebuild-index` IPC handler registrations that caused Electron runtime initialization errors.
+    - Standardized on the single canonical faceted search query handler supporting full-text FTS5, metadata facets, face count, and OCR text filters.
+  - **Data Integrity: Exact Deduplication Edge Cases (`src/main/indexer.ts`)**:
+    - Hardened the `recalculateDuplicates` query with `size_bytes > 0 AND is_missing = 0` to guarantee that zero-byte empty files (which share the empty string SHA-256 hash `e3b0c442...`) and deleted/missing files are never incorrectly grouped as exact duplicates.
+  - **Job Concurrency Race Condition Guard (`src/main/job-runner.ts`)**:
+    - Resolved concurrency slot leak during job cancellation by moving `activeJobs.delete(jobId)` exclusively into the `executeJob` `finally` block, ensuring background worker slots are never prematurely freed while asynchronous file I/O is still finishing.
+    - Updated catch handler in `executeJob` so that aborted/cancelled jobs preserve `'cancelled'` status and are never inadvertently requeued by the auto-retry policy.
+  - **Desktop WebContents Security Hardening (`src/main/index.ts`)**:
+    - Enforced untrusted `<webview>` tag blocking via `contents.on('will-attach-webview', (e) => e.preventDefault())`.
+    - Enforced device permission lockdown via `contents.session.setPermissionRequestHandler((_wc, _perm, callback) => callback(false))`.
+    - Maintained strict `contextIsolation: true`, `nodeIntegration: false`, `sandbox: false`, and outbound navigation denial.
+  - **Filesystem Drive Detection & WMIC Elimination (`src/main/filesystem.ts`)**:
+    - Replaced deprecated Windows WMIC commands with fast native Node.js `fs.statfsSync` across logical drives (`C:` through `Z:`).
+    - Hardened `getFreeDiskSpace` to rely exclusively on native `fs.statfsSync`, removing child process execution overhead and future-proofing against Windows 11 24H2 where WMIC is removed by default.
+  - **Path Traversal & Sanitization Hardening (`src/main/organizer.ts`)**:
+    - Hardened `sanitizePathSegment` to strip relative traversal tokens (`..`) and Windows reserved characters (`\ / : * ? " < > |`), while safely preserving legitimate underscores and spaces.
+  - **Linting & Code Quality Tooling (`eslint.config.mjs`, `package.json`, `src/main/hardware-monitor.ts`)**:
+    - Installed `typescript-eslint` and configured modern ESLint 9 flat configuration (`eslint.config.mjs`).
+    - Fixed lexical declaration in `hardware-monitor.ts` switch block.
+    - Updated `"lint": "eslint src"` script; `npm run lint` now passes cleanly with 0 errors and 0 warnings.
+  - **Comprehensive Verification & Regression Suite (`tests/unit/phase3a-security-hardening.test.ts`)**:
+    - Added 11 automated unit tests verifying path sanitization, traversal blocking, exact duplicate 0-byte exclusion, missing file exclusion, Unicode & emoji path handling, native drive probing, original file immutability, and biometric unreviewed default status.
+    - All 16 test suites passing (124/124 tests passing). Clean TypeScript typecheck (`tsc --noEmit`) and successful production build (`npm run build`).
+
+---
+
+**Added**
+- **Nexora Phase 2B — Safe Organization, Local AI, Face Recognition and UI Integration**:
+  - **Safe Hierarchical Organization Engine (`src/main/organizer.ts`, `src/main/file-operations.ts`)**:
+    - Copy-first architecture guaranteeing source original files remain immutable and untouched under all circumstances.
+    - Verified copies created beneath user-authorized destination roots with `.nexora-managed` scanner exclusion marker.
+    - Path segment sanitization (`sanitizePathSegment`) stripping forbidden Windows characters (`\ / : * ? " < > |`) and control characters, disallowing relative traversal sequences (`..`).
+    - Destination boundary verification ensuring generated paths cannot escape the authorized destination root.
+    - Automatic collision resolution (`file (1).ext`) preventing silent overwrites.
+    - Redundant copy avoidance: compares SHA-256 hashes against existing destination candidates and safely skips copying identical files (`skipped_identical`).
+    - Pre- and post-copy SHA-256 streaming verification (`copyFileWithVerification`) with atomic rename from `.nexora-tmp-*` temporary files.
+    - Complete journal persistence in `copy_operations` and `operation_items` mapping source to copy paths.
+    - Reversible rollback support (`revertBatchOperation`) with user modification protection.
+    - Interrupted copy recovery (`recoverInterruptedOperations`) marking abandoned operations as `interrupted` and purging orphan `.nexora-tmp-*` files.
+    - Complete exclusion of managed folders from scanner discovery via `.nexora-managed` marker and `Nexora Organized` directory matching.
+  - **Local AI & Biometric Face Clustering (`ai-worker/src/main.py`, `src/main/job-runner.ts`, `src/main/database.ts`)**:
+    - Zero-cloud, local-first face detection using verified OpenCV YuNet (`face_detection_yunet_2023mar.onnx`, MIT license).
+    - 128-dimensional biometric embedding vector extraction using quantized SFace (`face_recognition_sface_2021dec_int8.onnx`, Apache-2.0 license).
+    - Pairwise cosine distance vector clustering (`cluster_faces`) grouping faces into candidate identities.
+    - Gated identity organization: `{person}` token in organization rules strictly resolves for confirmed identities (`review_status IN ('confirmed', 'reviewed')`); unreviewed faces resolve to `Unassigned` with safety warning.
+    - Person and cluster operations: confirming identities, renaming, hiding, deleting, merging clusters (`mergePeople`), and separating individual face detections into new unreviewed entities (`separateFaceFromPerson`).
+    - Real-world identity is never inferred from filenames or unrelated metadata; zero network transmission or remote fallback.
+  - **UI Integration to Real Backend State (`src/renderer/pages/`)**:
+    - **OrganizePage**: Connected to real SQLite proposal engine, preview metrics, collision warnings, and safe copy execution.
+    - **SearchPage**: Connected to SQLite FTS5 search index with Camera, Author, Extensions, Size, Date, Faces, and OCR filters.
+    - **PeoplePage**: Connected to persistent face clusters, identity confirmation, renaming, hiding, and member deletion.
+    - **DuplicatesPage**: Connected to exact SHA-256 duplicate groups with canonical original indicators and disk space reclamation.
+    - **ExplorerPage**: Real Windows 11 Explorer interface with logical drives, directory tree, breadcrumb segments, view modes, and details drawer.
+    - **ActivityPage**: Persistent background job queue telemetry, stage tracking, retry, cancellation, and clear completed.
+    - **SettingsPage**: Real application settings, adaptive hardware metrics, queue pause/resume, and verified offline model manifest status.
+  - **Comprehensive Verification Suite (`tests/unit/phase2b-organization-ai.test.ts`)**:
+    - 15 passing test suites, 113 total unit & integration tests passing with 100% pass rate.
+    - Clean TypeScript checks (`tsc --noEmit`) and successful production build.
+
+---
+
+### [0.7.0] — 2026-10-17
+
+**Added**
+- **Nexora Phase 2A — Filesystem, Scanning, Metadata, Database and Exact Duplicates**:
+  - **Database Migration 003 (`database/migrations/003_scan_infrastructure.sql`)**:
+    - Added root scan telemetry columns: `last_scanned_at`, `scan_status` ('idle', 'scanning', 'completed', 'error'), `file_count`, `total_size_bytes`, and `last_error`.
+    - Added job lifecycle stage column: `stage` ('discovery', 'metadata', 'hashing', 'deduplication', 'reconciliation').
+    - Added file cache fingerprinting and color profile columns: `fingerprint` (`${size}:${mtimeMs}`), `color_profile`.
+    - Added composite indexes on `files(fingerprint)`, `files(size_bytes)`, `roots(scan_status)`, and `jobs(type, target_path, status)`.
+  - **Folder Authorization & Incremental Scanning (`src/main/indexer.ts`, `src/main/filesystem.ts`)**:
+    - Explicit user authorization before scanning any folder, with native folder selection integration.
+    - Path normalization and validation preventing null-byte traversal and validating directory existence.
+    - Canonical `realpath` cycle detection preventing infinite recursion on symlinks and Windows NTFS directory junctions.
+    - Strict exclude policy automatically omitting internal caches (`.thumbnails`, `thumbnails`, `.cache`), version control (`.git`, `node_modules`), system volume folders (`$RECYCLE.BIN`, `System Volume Information`), and Nexora-managed output folders (`Nexora_Organized`, `*_Nexora_Organized`, `.nexora-managed`).
+    - Discovered files are strictly read for metadata/hashing and never executed.
+    - Disabled continuous filesystem watching by default; opening or manually refreshing a registered folder triggers an incremental scan.
+  - **Persistent Scan Jobs & Crash Recovery (`src/main/job-runner.ts`, `src/main/database.ts`)**:
+    - Granular stage transitions: `'discovery'`, `'metadata'`, `'hashing'`, `'deduplication'`, and `'reconciliation'`.
+    - Real-time progress updates delivered via IPC (`job:progress`, `job:stage`).
+    - Duplicate concurrent scan prevention ensures multiple requests for the same folder return the active job instead of double-scanning.
+    - Application restart recovery: stranded `running` jobs are marked as `failed` with descriptive errors (`"Scan interrupted by application restart"`), and stranded `scanning` roots are reset to `error`, enabling immediate user retry.
+  - **Metadata-First Processing Pipeline (`src/main/indexer.ts`, `ai-worker/src/main.py`)**:
+    - Fast metadata extraction without executing scripts/macros, handling corrupt and encrypted files gracefully (`availability_status = 'corrupt' | 'encrypted'`).
+    - Images: EXIF capture time, camera make/model, lens, orientation, ISO, aperture, exposure time, GPS lat/lon/altitude, color profile (sRGB, Adobe RGB, ICC), and 256px thumbnails.
+    - Videos: FourCC codecs, frame rate, duration, resolution, and representative video thumbnails.
+    - Documents: PDF and Office properties, page count, word count, embedded preview text.
+    - Audio/Archives: Codecs, artist, album, title, archive entry counts.
+  - **Streaming SHA-256 Hashing (`src/main/filesystem.ts`)**:
+    - Memory-bounded streaming cryptographic hashing with 1MB chunked streams (`computeFileHashStream`), eliminating multi-gigabyte RAM overhead and Python worker bottlenecks.
+  - **Exact Duplicate Detection Engine (`src/main/indexer.ts`)**:
+    - Cryptographic duplicate grouping strictly based on identical SHA-256 hashes for files with `size_bytes > 0` and `is_missing = 0`.
+    - Filenames and file sizes alone are treated as insufficient proof of duplication.
+    - Canonical original designation (`is_original = 1`) assigned strictly to the earliest created/modified file in the group.
+    - Perceptual visual similarity candidates (dHash) kept isolated in separate `visual_similarity` groups.
+    - Strict local-first security: original files are never deleted or modified.
+  - **Comprehensive Test Suite (`tests/unit/phase2a-scanner-dedup.test.ts`)**:
+    - 17 unit and integration tests verifying path validation, recursive discovery, cycle prevention, managed folder exclusions, streaming SHA-256, cache reuse, file modifications, restart recovery, cancellation, exact duplicate grouping, and FTS5 search indexing.
+    - 100% test pass rate across all 14 test suites (99 tests total).
+
+
+**Added**
+- **Nexora Phase 1 — Windows 11 File Explorer-Inspired UI Redesign**:
+  - **Windows 11 Tab Navigation Strip (`src/renderer/App.tsx`, `src/renderer/store/index.ts`)**:
+    - Multi-tab folder and view navigation mimicking native Windows 11 File Explorer.
+    - Full tab lifecycle management: `addTab`, `closeTab`, `setActiveTab`, with Ctrl+T and Ctrl+W desktop shortcuts.
+    - Preserves independent browsing history (`history`, `historyIndex`) and active view location per tab.
+    - Subtle neon-lime active indicator bar and compact glass tab styling.
+  - **Left Navigation Pane Tree (`src/renderer/components/Sidebar.tsx`)**:
+    - **Quick Access / Pinned Folders**: Home, Desktop, Downloads, Documents, and Pictures wired to real OS user paths via `app.getPath()`.
+    - **This PC (Logical Drives)**: Real-time discovery of logical disk drives (`C:`, `D:`) with drive type indicators, click-to-browse navigation, and mini storage utilization meters.
+    - **Registered Folders**: Dynamic listing of authorized user roots with status badges and one-click "+ Authorize Folder" onboarding trigger.
+    - **Nexora Intelligence Section**: Distinct, accented sidebar group housing People (face clusters & verified identities), Duplicates (exact SHA-256 hashes & visual similarity), Organize & Sort (managed copies & rules), Activity (scan & job status pill), Timeline, and Storage.
+  - **Windows 11 Command Bar & File Management (`src/renderer/pages/ExplorerPage.tsx`)**:
+    - Contextual action bar: `+ New folder`, `✂ Cut` (Ctrl+X), `📄 Copy` (Ctrl+C), `📋 Paste` (Ctrl+V), `✏ Rename` (F2), `🔗 Copy path`, and `🗑 Delete` (Delete).
+    - Sort dropdown menu: Name, Date modified, Type, Size with ascending/descending toggle.
+    - View mode switcher: Details view (sortable column table), Large Grid view (preview tiles), and Compact List view.
+    - Integrated address bar with segmented clickable path breadcrumbs, direct click-to-edit path typing, and in-place folder search/filtering.
+  - **Column-Based Details Browsing & Multi-Selection**:
+    - Clean Windows 11 column headers: Name, Date modified, Type, Size with sort direction arrows (`▲`/`▼`).
+    - Range selection with Shift+Click, item toggle with Ctrl+Click, Select All with Ctrl+A, and keyboard navigation with Arrow Up/Down and Enter.
+  - **Right-Click Fluent Context Menu**:
+    - Windows 11 dark graphite context menu providing Open, Reveal in Explorer, Cut, Copy, Copy as path, Rename, Delete, and Properties.
+  - **Collapsible Details & Nexora Intelligence Pane (`src/renderer/pages/ExplorerPage.tsx`)**:
+    - Right-side drawer revealing file metadata, dimensions, timestamps, and read-only attributes.
+    - Deep local AI insights: SHA-256 content hash with one-click copy, camera make/model and EXIF capture info, detected face/people tags, and document word counts.
+  - **Filesystem Safety & Operating System Integrations (`src/main/ipc-handlers.ts`, `src/main/filesystem.ts`, `src/preload/index.ts`)**:
+    - `fs:create-folder`: Directory creation with character validation and existence checks.
+    - `fs:rename-entry`: Safe file/folder renaming.
+    - `fs:trash-item`: Safe deletion using Electron's `shell.trashItem` to move items to the Windows Recycle Bin without permanent data destruction.
+    - `fs:get-file-info`: Automatically enriches filesystem metadata with local SQLite intelligence records.
+
 ### [0.5.2] — 2026-10-17
 
 **Added**

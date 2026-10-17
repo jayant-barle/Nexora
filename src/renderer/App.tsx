@@ -4,7 +4,7 @@
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigationStore, useJobsStore, toast } from './store';
+import { useNavigationStore, useJobsStore, useExplorerStore, toast } from './store';
 import { api } from './services/api';
 
 // Components & Pages
@@ -27,16 +27,29 @@ import { SettingsPage } from './pages/SettingsPage';
 export const App: React.FC = () => {
   const { currentPage, setPage } = useNavigationStore();
   const { jobs, queueStats, fetchJobs, fetchQueueStats, initListeners } = useJobsStore();
+  const { tabs, activeTabId, setActiveTab, closeTab, addTab } = useExplorerStore();
   const [quickSearch, setQuickSearch] = useState('');
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [selectedScanFolder, setSelectedScanFolder] = useState<string | null>(null);
   const [isQueueingScan, setIsQueueingScan] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Global desktop keyboard shortcuts
+  // Global desktop keyboard shortcuts & custom events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+F / Ctrl+K: focus search or jump to search view
+      // Ctrl+T: new tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+        e.preventDefault();
+        addTab();
+      }
+      // Ctrl+W: close active tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        if (tabs.length > 1) {
+          closeTab(activeTabId);
+        }
+      }
+      // Ctrl+F / Ctrl+K: focus search
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'k')) {
         e.preventDefault();
         setPage('search');
@@ -58,9 +71,15 @@ export const App: React.FC = () => {
       }
     };
 
+    const handleOpenScan = () => setScanModalOpen(true);
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setPage]);
+    window.addEventListener('open-scan-modal', handleOpenScan);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('open-scan-modal', handleOpenScan);
+    };
+  }, [setPage, addTab, closeTab, tabs.length, activeTabId]);
 
   // Monitor jobs in background with real-time event listeners and stats
   useEffect(() => {
@@ -106,16 +125,10 @@ export const App: React.FC = () => {
       const folderName = selectedScanFolder.split(/[\\/]/).pop() || selectedScanFolder;
       // 1. Authorize root in database
       await api().roots.add(selectedScanFolder, folderName, 'indexed');
-      // 2. Attach incremental filesystem watcher
-      try {
-        await api().watcher.add(selectedScanFolder, folderName);
-      } catch (watcherErr) {
-        console.warn('Could not attach watcher to folder:', watcherErr);
-      }
-      // 3. Dispatch folder scan job (runs discovery, metadata, face recognition, and auto-organization)
-      await api().jobs.create('folder_scan', selectedScanFolder);
+      // 2. Dispatch persistent folder scan job (runs discovery, metadata extraction, hashing, deduplication, and AI)
+      await api().jobs.create('folder_scan', selectedScanFolder, undefined, { extractAi: true, generateThumbnails: true });
       toast.success(
-        `Authorized "${folderName}". Scan, metadata indexing & automatic organization started.`,
+        `Authorized "${folderName}". Scan, AI metadata indexing & duplicate detection started.`,
         'Workflow Initiated'
       );
       setScanModalOpen(false);
@@ -170,47 +183,151 @@ export const App: React.FC = () => {
 
       {/* Main Window Container */}
       <div className="main-content">
-        {/* Top Header */}
-        <header className="main-header">
-          {/* Breadcrumb / Section Label */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-accent)' }}>
-              Nexora
-            </span>
-            <span style={{ color: 'var(--color-border)' }}>/</span>
-            <h1 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, color: 'var(--color-text-primary)', textTransform: 'capitalize' }}>
-              {currentPage.replace(/-/g, ' ')}
-            </h1>
+        {/* Windows 11 Tab Strip & Top Header */}
+        <header className="main-header win11-tab-header" style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 var(--space-3)',
+          height: '42px',
+          background: 'var(--color-bg-secondary)',
+          borderBottom: '1px solid var(--color-border)',
+          gap: 'var(--space-2)',
+          userSelect: 'none',
+        }}>
+          {/* Windows 11 Tabs List */}
+          <div className="win11-tab-strip" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            flex: 1,
+            minWidth: 0,
+            overflowX: 'auto',
+            height: '100%',
+          }}>
+            {tabs.map((tab) => {
+              const isActive = tab.id === activeTabId;
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`win11-tab ${isActive ? 'active' : ''}`}
+                  title={tab.path || tab.title}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0 12px',
+                    height: '34px',
+                    borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
+                    background: isActive ? 'var(--color-bg-primary)' : 'transparent',
+                    border: isActive ? '1px solid var(--color-border)' : '1px solid transparent',
+                    borderBottom: isActive ? '1px solid var(--color-bg-primary)' : '1px solid transparent',
+                    color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                    fontSize: 'var(--font-size-xs)',
+                    fontWeight: isActive ? 600 : 400,
+                    cursor: 'pointer',
+                    maxWidth: '180px',
+                    minWidth: '110px',
+                    position: 'relative',
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                >
+                  {/* Subtle active neon-lime indicator */}
+                  {isActive && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: '8px',
+                      right: '8px',
+                      height: '2px',
+                      background: 'var(--color-accent)',
+                      borderRadius: '1px',
+                    }} />
+                  )}
+                  <span style={{ fontSize: '12px', flexShrink: 0 }}>{tab.icon || '📁'}</span>
+                  <span style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flex: 1,
+                  }}>
+                    {tab.title}
+                  </span>
+                  {tabs.length > 1 && (
+                    <button
+                      className="tab-close-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                      }}
+                      title="Close tab (Ctrl+W)"
+                      style={{
+                        padding: '1px 4px',
+                        borderRadius: '3px',
+                        fontSize: '10px',
+                        color: 'var(--color-text-tertiary)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Add Tab Button */}
+            <button
+              onClick={() => addTab()}
+              className="btn btn-ghost btn-sm"
+              title="New tab (Ctrl+T)"
+              style={{
+                width: '28px',
+                height: '28px',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--color-text-tertiary)',
+              }}
+            >
+              ➕
+            </button>
           </div>
 
-          {/* Quick Search & Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            {/* Quick Search Bar */}
+          {/* Quick Actions (Search, Index Folder, Processing Pill, Settings) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
+            {/* Quick Search */}
             <form onSubmit={handleQuickSearchSubmit} style={{ position: 'relative' }}>
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search files, people, tags... (Ctrl+F)"
+                placeholder="Search Nexora... (Ctrl+F)"
                 value={quickSearch}
                 onChange={e => setQuickSearch(e.target.value)}
                 style={{
-                  width: '280px',
-                  paddingLeft: 'var(--space-7)',
+                  width: '210px',
+                  paddingLeft: 'var(--space-6)',
                   fontSize: 'var(--font-size-xs)',
-                  height: '32px',
-                  borderRadius: 'var(--radius-full)',
+                  height: '28px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--color-bg-primary)',
+                  border: '1px solid var(--color-border)',
                 }}
               />
-              <span style={{ position: 'absolute', left: '10px', top: '7px', fontSize: '13px', color: 'var(--color-text-tertiary)', pointerEvents: 'none' }}>
+              <span style={{ position: 'absolute', left: '8px', top: '6px', fontSize: '11px', color: 'var(--color-text-tertiary)', pointerEvents: 'none' }}>
                 🔍
               </span>
             </form>
 
-            {/* Scan Folder Button */}
+            {/* Index Folder Button */}
             <button
               className="btn btn-sm btn-secondary"
               onClick={() => setScanModalOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', height: '28px', padding: '0 8px', fontSize: 'var(--font-size-xs)' }}
+              title="Index / Authorize Folder (Ctrl+I)"
             >
               <span>📁</span>
               <span>Index Folder</span>
@@ -227,7 +344,10 @@ export const App: React.FC = () => {
                   border: '1px solid var(--color-accent)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 'var(--space-2)',
+                  gap: '4px',
+                  height: '28px',
+                  padding: '0 8px',
+                  fontSize: 'var(--font-size-xs)',
                 }}
               >
                 <span className="animate-pulse">⚡</span>
@@ -238,6 +358,7 @@ export const App: React.FC = () => {
                 className="btn btn-sm btn-ghost"
                 onClick={() => setPage('activity')}
                 title="Activity Monitor"
+                style={{ height: '28px', padding: '0 6px', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}
               >
                 ⚡ Idle
               </button>
@@ -247,7 +368,8 @@ export const App: React.FC = () => {
             <button
               className="btn btn-sm btn-ghost"
               onClick={() => setPage('settings')}
-              title="Application Settings"
+              title="Settings (Ctrl+,)"
+              style={{ width: '28px', height: '28px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               ⚙
             </button>

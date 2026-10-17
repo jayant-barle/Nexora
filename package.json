@@ -1,6 +1,6 @@
 {
   "name": "nexora",
-  "version": "0.5.2",
+  "version": "0.9.1",
   "description": "Nexora — AI File Manager. Your files. Your intelligence. Your control.",
   "main": "dist/main/index.js",
   "author": "Nexora",
@@ -16,7 +16,7 @@
     "start": "electron .",
     "typecheck": "tsc --noEmit",
     "typecheck:main": "tsc -p tsconfig.main.json --noEmit",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "eslint src",
     "test": "vitest run",
     "test:watch": "vitest",
     "pack": "electron-builder --win --dir",
@@ -51,6 +51,7 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.0.2",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.71.2",
     "vite": "^6.0.3",
     "vitest": "^2.1.8",
     "zustand": "^5.0.2"

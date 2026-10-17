@@ -24,7 +24,6 @@ export const OrganizePage: React.FC = () => {
   const [destinationRoot, setDestinationRoot] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterQuery, setFilterQuery] = useState('');
-  const [removeSource, setRemoveSource] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -35,7 +34,7 @@ export const OrganizePage: React.FC = () => {
     try {
       const [storedRules, storedProposals, managedPath] = await Promise.all([
         api().organizer.getRules(),
-        api().organizer.getStoredProposals('pending', 300),
+        api().organizer.getStoredProposals('proposed', 300),
         api().settings.get('managedLibraryPath'),
       ]);
 
@@ -56,8 +55,9 @@ export const OrganizePage: React.FC = () => {
     try {
       toast.info('Analyzing files across Filenames, Metadata & Confirmed People...', 'Engine Active');
       const res = await api().organizer.runAutoPipeline(undefined, destinationRoot || undefined);
+      const generatedCount = res.proposalSummary?.totalFiles ?? res.proposalsGenerated ?? 0;
       toast.success(
-        `Generated ${res.proposalsGenerated} organization proposals.${res.executed ? ' Automatically executed safe copy.' : ''}`,
+        `Generated ${generatedCount} organization proposals.${res.executed ? ' Automatically executed safe copy.' : ''}`,
         'Analysis Complete'
       );
       await loadData();
@@ -89,9 +89,7 @@ export const OrganizePage: React.FC = () => {
     setExecuting(true);
     try {
       toast.info('Starting verified safe copy operation...', 'Organizing Files');
-      const result = await api().organizer.execute(proposals, destinationRoot || '', {
-        removeSourceOnSuccess: removeSource,
-      });
+      const result = await api().organizer.execute(proposals, destinationRoot || '');
 
       if (result.success) {
         toast.success(
@@ -199,14 +197,9 @@ export const OrganizePage: React.FC = () => {
             <button className="btn btn-sm btn-secondary" onClick={handleChooseDestination}>
               Change Destination Folder
             </button>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={removeSource}
-                onChange={(e) => setRemoveSource(e.target.checked)}
-              />
-              Move instead of copy (not recommended)
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--font-size-xs)', color: 'var(--color-accent)', fontWeight: 600 }}>
+              🛡️ Safe Copy Guarantee: Original files are never modified or deleted
+            </div>
           </div>
         </div>
       </div>

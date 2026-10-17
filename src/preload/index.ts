@@ -16,6 +16,9 @@ const electronAPI = {
     getFileInfo: (filePath: string) => ipcRenderer.invoke('fs:get-file-info', filePath),
     openFile: (filePath: string) => ipcRenderer.invoke('fs:open-file', filePath),
     revealInExplorer: (filePath: string) => ipcRenderer.invoke('fs:reveal-in-explorer', filePath),
+    createFolder: (parentDir: string, folderName: string) => ipcRenderer.invoke('fs:create-folder', parentDir, folderName),
+    renameEntry: (oldPath: string, newName: string) => ipcRenderer.invoke('fs:rename-entry', oldPath, newName),
+    trashItem: (targetPath: string) => ipcRenderer.invoke('fs:trash-item', targetPath),
   },
 
   // ── Database ────────────────────────────────────────────────────────────
@@ -60,6 +63,8 @@ const electronAPI = {
     delete: (personId: string) => ipcRenderer.invoke('people:delete', personId),
     merge: (targetPersonId: string, sourcePersonIds: string[]) =>
       ipcRenderer.invoke('people:merge', targetPersonId, sourcePersonIds),
+    separateFace: (personId: string, faceDetectionId: string, newPersonName?: string) =>
+      ipcRenderer.invoke('people:separate-face', personId, faceDetectionId, newPersonName),
   },
 
   // ── Roots ───────────────────────────────────────────────────────────────

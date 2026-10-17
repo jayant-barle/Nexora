@@ -7,11 +7,12 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { app } from 'electron';
-import { getDb, getSettings } from './database';
+import { getDb, getSettings, updateRootScanStatus } from './database';
 import { getAiWorkerClient } from './ai-worker-client';
 import { getHardwareMonitor } from './hardware-monitor';
-import { getMimeType, isImageFile, isVideoFile } from './filesystem';
-import { runAutoOrganizationPipeline } from './organizer';
+import { getMimeType, isImageFile, isVideoFile, computeFileHashStream, validateSafePath } from './filesystem';
+
+export type ScanStage = 'discovery' | 'metadata' | 'hashing' | 'deduplication' | 'reconciliation';
 
 export interface ScanOptions {
   recursive?: boolean;
@@ -19,6 +20,7 @@ export interface ScanOptions {
   generateThumbnails?: boolean;
   forceFullRescan?: boolean;
   videoSamplingInterval?: number;
+  onStageChange?: (stage: ScanStage) => void;
   onProgress?: (processed: number, total: number, currentFile: string) => void;
   isCancelled?: () => boolean;
 }
@@ -48,35 +50,80 @@ function getThumbnailCacheDir(): string {
 
 export function collectFilesRecursively(
   dirPath: string,
-  excludePatterns: string[] = ['.git', 'node_modules', '$RECYCLE.BIN', 'System Volume Information'],
-  isCancelled?: () => boolean
+  excludePatterns: string[] = ['.git', 'node_modules', '$RECYCLE.BIN', 'System Volume Information', '.thumbnails', 'thumbnails', '.cache', 'Nexora_Organized'],
+  isCancelled?: () => boolean,
+  visitedRealPaths: Set<string> = new Set<string>()
 ): string[] {
   const filePaths: string[] = [];
 
   function walk(currentDir: string) {
     if (isCancelled && isCancelled()) return;
 
+    // Detect and prevent symlink / junction recursion cycles via real canonical path
+    let realCurrentDir: string;
+    try {
+      realCurrentDir = fs.realpathSync(currentDir);
+    } catch {
+      return; // Skip broken or inaccessible path
+    }
+
+    if (visitedRealPaths.has(realCurrentDir)) {
+      return; // Cycle detected: skip to prevent infinite recursion loop
+    }
+    visitedRealPaths.add(realCurrentDir);
+
+    // Skip Nexora-managed output directories (explicit marker or naming pattern)
+    try {
+      if (fs.existsSync(path.join(currentDir, '.nexora-managed'))) {
+        return;
+      }
+    } catch {}
+
+    const curBaseLower = path.basename(currentDir).toLowerCase();
+    if (curBaseLower.startsWith('nexora_organized') || curBaseLower.endsWith('_nexora_organized') || curBaseLower.includes('nexora organized') || curBaseLower.includes('nexora_organized')) {
+      return;
+    }
+
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(currentDir, { withFileTypes: true });
     } catch {
-      return; // Skip inaccessible directories
+      return; // Skip inaccessible directories (e.g. EPERM, EACCES)
     }
 
     for (const entry of entries) {
       if (isCancelled && isCancelled()) return;
 
       const fullPath = path.join(currentDir, entry.name);
+      const lowerName = entry.name.toLowerCase();
 
       // Check exclude patterns
-      if (excludePatterns.some(p => entry.name.toLowerCase().includes(p.toLowerCase()))) {
+      if (excludePatterns.some(p => lowerName === p.toLowerCase() || lowerName.includes(p.toLowerCase()))) {
+        continue;
+      }
+      if (lowerName.startsWith('nexora_organized') || lowerName.endsWith('_nexora_organized') || lowerName.includes('nexora organized') || lowerName.includes('nexora_organized')) {
         continue;
       }
 
-      if (entry.isDirectory()) {
-        walk(fullPath);
-      } else if (entry.isFile()) {
-        filePaths.push(fullPath);
+      try {
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.isSymbolicLink()) {
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              walk(fullPath);
+            } else if (stat.isFile()) {
+              filePaths.push(fullPath);
+            }
+          } catch {
+            // Inaccessible symlink target
+          }
+        } else if (entry.isFile()) {
+          filePaths.push(fullPath);
+        }
+      } catch {
+        // Skip inaccessible entries
       }
     }
   }
@@ -98,20 +145,44 @@ export async function indexFolderIncremental(
 
   const normalizedRoot = path.normalize(targetFolder);
 
+  // Validate target path exists and is accessible
+  try {
+    const stat = fs.statSync(normalizedRoot);
+    if (!stat.isDirectory()) {
+      throw new Error(`Target path is not a directory: ${normalizedRoot}`);
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    try {
+      const existingRoot = db.prepare('SELECT id FROM roots WHERE path = ?').get(normalizedRoot) as any;
+      if (existingRoot) {
+        updateRootScanStatus(existingRoot.id, 'error', undefined, undefined, errMsg);
+      }
+    } catch {}
+    throw new Error(`Target directory is not accessible: ${normalizedRoot} (${errMsg})`);
+  }
+
   // 1. Ensure Root Record exists in database
   let root = db.prepare('SELECT * FROM roots WHERE path = ?').get(normalizedRoot) as any;
   if (!root) {
     const rootId = uuidv4();
     const label = path.basename(normalizedRoot) || normalizedRoot;
     db.prepare(`
-      INSERT INTO roots (id, path, label, type, active, created_at, updated_at)
-      VALUES (?, ?, ?, 'indexed', 1, datetime('now'), datetime('now'))
+      INSERT INTO roots (id, path, label, type, active, scan_status, file_count, total_size_bytes, created_at, updated_at)
+      VALUES (?, ?, ?, 'indexed', 1, 'scanning', 0, 0, datetime('now'), datetime('now'))
     `).run(rootId, normalizedRoot, label);
     root = { id: rootId, path: normalizedRoot, label };
+  } else {
+    try {
+      updateRootScanStatus(root.id, 'scanning');
+    } catch {}
   }
   const rootId = root.id;
 
   // 2. Discover all files
+  if (options.onStageChange) {
+    options.onStageChange('discovery');
+  }
   const filePaths = collectFilesRecursively(normalizedRoot, undefined, options.isCancelled);
   const totalFound = filePaths.length;
 
@@ -122,7 +193,7 @@ export async function indexFolderIncremental(
 
   // Pre-load existing indexed files for this root for O(1) in-memory comparison
   const existingRows = db.prepare(`
-    SELECT id, relative_path, size_bytes, file_modified_at, hash_sha256, thumbnail_path
+    SELECT id, relative_path, size_bytes, file_modified_at, hash_sha256, thumbnail_path, fingerprint
     FROM files WHERE root_id = ?
   `).all(rootId) as Array<{
     id: string;
@@ -131,6 +202,7 @@ export async function indexFolderIncremental(
     file_modified_at: string;
     hash_sha256: string | null;
     thumbnail_path: string | null;
+    fingerprint?: string | null;
   }>;
 
   const existingMap = new Map<string, typeof existingRows[0]>();
@@ -148,6 +220,7 @@ export async function indexFolderIncremental(
       codec, frame_rate, bitrate, page_count, word_count,
       doc_title, doc_author, doc_subject,
       audio_artist, audio_album, audio_title, archive_entries,
+      color_profile, fingerprint,
       is_missing, availability_status, extractor_version, extracted_at, last_scanned_at
     ) VALUES (
       @id, @root_id, @relative_path, @filename, @extension, @mime_type, @size_bytes, @hash_sha256,
@@ -157,6 +230,7 @@ export async function indexFolderIncremental(
       @codec, @frame_rate, @bitrate, @page_count, @word_count,
       @doc_title, @doc_author, @doc_subject,
       @audio_artist, @audio_album, @audio_title, @archive_entries,
+      @color_profile, @fingerprint,
       0, @availability_status, @extractor_version, datetime('now'), datetime('now')
     )
   `);
@@ -172,7 +246,8 @@ export async function indexFolderIncremental(
       codec = @codec, frame_rate = @frame_rate, bitrate = @bitrate, page_count = @page_count, word_count = @word_count,
       doc_title = @doc_title, doc_author = @doc_author, doc_subject = @doc_subject,
       audio_artist = @audio_artist, audio_album = @audio_album, audio_title = @audio_title,
-      archive_entries = @archive_entries, is_missing = 0, availability_status = @availability_status,
+      archive_entries = @archive_entries, color_profile = @color_profile, fingerprint = @fingerprint,
+      is_missing = 0, availability_status = @availability_status,
       extractor_version = @extractor_version, extracted_at = datetime('now'), last_scanned_at = datetime('now'),
       updated_at = datetime('now')
     WHERE id = @id
@@ -221,6 +296,10 @@ export async function indexFolderIncremental(
   }
 
   // 3. Process each file
+  if (options.onStageChange) {
+    options.onStageChange('metadata');
+  }
+
   for (let i = 0; i < filePaths.length; i++) {
     if (options.isCancelled && options.isCancelled()) {
       break;
@@ -240,12 +319,13 @@ export async function indexFolderIncremental(
       continue;
     }
 
+    const fingerprint = `${stat.size}:${stat.mtimeMs}`;
     const modifiedIso = stat.mtime.toISOString();
     const createdIso = stat.birthtime.toISOString();
     const existing = existingMap.get(relativePath);
 
     // ── Incremental Check: Reuse Cached Metadata if Unchanged (unless forced full rescan) ──
-    if (!options.forceFullRescan && existing && existing.size_bytes === stat.size && existing.file_modified_at === modifiedIso) {
+    if (!options.forceFullRescan && existing && (existing.fingerprint === fingerprint || (existing.size_bytes === stat.size && existing.file_modified_at === modifiedIso))) {
       pendingBatch.push(() => touchLastScannedStmt.run(existing.id));
       reusedCached++;
       if (options.onProgress) {
@@ -287,10 +367,21 @@ export async function indexFolderIncremental(
       let audioAlbum: string | null = null;
       let audioTitle: string | null = null;
       let archiveEntries: number | null = null;
+      let colorProfile: string | null = null;
       let availabilityStatus = 'available';
       let extractorVersion = '2.0.0';
       let metadataJson: string | null = null;
       let textContent = '';
+
+      // Compute cryptographic hash via native streaming I/O
+      try {
+        sha256 = await computeFileHashStream(fullPath);
+      } catch {
+        try {
+          const hashes = await aiClient.computeHashes(fullPath);
+          sha256 = hashes.sha256;
+        } catch {}
+      }
 
       // Extract rich metadata via AI Worker
       try {
@@ -324,6 +415,7 @@ export async function indexFolderIncremental(
         audioAlbum = meta.audio_album ?? null;
         audioTitle = meta.audio_title ?? null;
         archiveEntries = meta.archive_entries ?? null;
+        colorProfile = meta.color_profile ?? null;
         if (meta.status === 'corrupt') availabilityStatus = 'corrupt';
         else if (meta.status === 'encrypted') availabilityStatus = 'encrypted';
         else availabilityStatus = 'available';
@@ -338,12 +430,6 @@ export async function indexFolderIncremental(
       } catch {
         availabilityStatus = 'error';
       }
-
-      // Compute cryptographic hash
-      try {
-        const hashes = await aiClient.computeHashes(fullPath);
-        sha256 = hashes.sha256;
-      } catch {}
 
       // Generate thumbnail for media files
       const isMedia = isImageFile(ext) || isVideoFile(ext);
@@ -364,70 +450,60 @@ export async function indexFolderIncremental(
 
       const fileId = existing ? existing.id : uuidv4();
 
-      // Detect faces or queue background AI without ever skipping processing
+      // Phase 2A Scope: In Phase 2A, face recognition is deferred to Phase 2B.
       const facesToInsert: any[] = [];
-      const allowAi = options.extractAi !== false && executionParams.allowBackgroundAi && settings.enableBackgroundAi !== 'false';
+      const allowAi = options.extractAi === true && executionParams.allowBackgroundAi && settings.enableBackgroundAi !== 'false';
       let processingStatus: 'pending' | 'completed' = 'completed';
 
-      if (isImageFile(ext)) {
-        if (allowAi) {
-          if (!executionParams.deferHeavyAi) {
-            // Immediate in-line extraction when sufficient resources are available
-            try {
-              const detections = await aiClient.detectFaces(fullPath);
-              for (const d of detections) {
-                facesToInsert.push({
-                  id: uuidv4(),
-                  fileId,
-                  x: d.x,
-                  y: d.y,
-                  width: d.width,
-                  height: d.height,
-                  confidence: d.confidence,
-                  quality_score: d.quality_score,
-                  embedding: Buffer.from(new Float32Array(d.embedding).buffer),
-                });
-              }
-              processingStatus = 'completed';
-            } catch {
-              processingStatus = 'completed';
-            }
-          } else {
-            // Adaptive deferral: Queue face detection so analysis is NEVER lost or skipped
-            processingStatus = 'pending';
-            pendingBatch.push(() => {
-              enqueueJobStmt.run(
-                uuidv4(),
-                'face_detect',
-                'queued',
-                4, // Priority 4: Resource-intensive AI
-                0,
-                1,
-                fullPath,
+      if (allowAi && isImageFile(ext)) {
+        if (!executionParams.deferHeavyAi) {
+          try {
+            const detections = await aiClient.detectFaces(fullPath);
+            for (const d of detections) {
+              facesToInsert.push({
+                id: uuidv4(),
                 fileId,
-                JSON.stringify({ fileId, filePath: fullPath })
-              );
-            });
-          }
-        }
-      } else if (isVideoFile(ext)) {
-        if (allowAi) {
-          // Defer heavy video frame analysis to background Priority 4 queue
+                x: d.x,
+                y: d.y,
+                width: d.width,
+                height: d.height,
+                confidence: d.confidence,
+                quality_score: d.quality_score,
+                embedding: Buffer.from(new Float32Array(d.embedding).buffer),
+              });
+            }
+          } catch {}
+        } else {
           processingStatus = 'pending';
           pendingBatch.push(() => {
             enqueueJobStmt.run(
               uuidv4(),
-              'video_analyze',
+              'face_detect',
               'queued',
-              4, // Priority 4: Resource-intensive AI
+              4,
               0,
               1,
               fullPath,
               fileId,
-              JSON.stringify({ fileId, filePath: fullPath, intervalSeconds: executionParams.videoSamplingIntervalSeconds })
+              JSON.stringify({ fileId, filePath: fullPath })
             );
           });
         }
+      } else if (allowAi && isVideoFile(ext)) {
+        processingStatus = 'pending';
+        pendingBatch.push(() => {
+          enqueueJobStmt.run(
+            uuidv4(),
+            'video_analyze',
+            'queued',
+            4,
+            0,
+            1,
+            fullPath,
+            fileId,
+            JSON.stringify({ fileId, filePath: fullPath, intervalSeconds: executionParams.videoSamplingIntervalSeconds })
+          );
+        });
       }
 
       const fileParams = {
@@ -471,6 +547,8 @@ export async function indexFolderIncremental(
         audio_album: audioAlbum,
         audio_title: audioTitle,
         archive_entries: archiveEntries,
+        color_profile: colorProfile,
+        fingerprint,
         availability_status: availabilityStatus,
         extractor_version: extractorVersion,
       };
@@ -482,7 +560,7 @@ export async function indexFolderIncremental(
           // Update FTS
           deleteFtsStmt.run(fileId);
           insertFtsStmt.run(fileId, filename, fullPath, textContent);
-          // Insert faces
+          // Insert faces if any
           for (const f of facesToInsert) {
             insertFaceStmt.run(f.id, f.fileId, f.x, f.y, f.width, f.height, f.confidence, f.quality_score, f.embedding);
           }
@@ -493,7 +571,7 @@ export async function indexFolderIncremental(
           insertFileStmt.run(fileParams);
           // Insert FTS
           insertFtsStmt.run(fileId, filename, fullPath, textContent);
-          // Insert faces
+          // Insert faces if any
           for (const f of facesToInsert) {
             insertFaceStmt.run(f.id, f.fileId, f.x, f.y, f.width, f.height, f.confidence, f.quality_score, f.embedding);
           }
@@ -517,6 +595,10 @@ export async function indexFolderIncremental(
   commitBatch();
 
   // 4. Missing Files Reconciliation
+  if (options.onStageChange) {
+    options.onStageChange('reconciliation');
+  }
+
   // Files in database for this root that were not found on disk are flagged as is_missing = 1.
   // We NEVER delete records or original files!
   try {
@@ -544,20 +626,23 @@ export async function indexFolderIncremental(
     console.warn('[Indexer] Missing file reconciliation warning:', reconcileErr);
   }
 
-  // Run duplicate detection grouping on newly indexed library
+  // 5. Run duplicate detection grouping on newly indexed library
+  if (options.onStageChange) {
+    options.onStageChange('deduplication');
+  }
   try {
     recalculateDuplicates();
   } catch (err) {
     console.warn('[Indexer] Duplicate detection grouping error:', err);
   }
 
-  // Trigger automatic organization pipeline (generates proposals and runs auto-organize if enabled)
+  // Update root scan telemetry and status
   try {
-    const orgResult = await runAutoOrganizationPipeline(rootId);
-    console.log(`[Indexer] Auto-organization pipeline finished for root ${rootId}: ${orgResult.proposalSummary.totalFiles} proposals generated, executed: ${orgResult.executed}`);
-  } catch (orgErr) {
-    console.warn('[Indexer] Auto-organization pipeline error:', orgErr);
-  }
+    const sizeStmt = db.prepare('SELECT SUM(size_bytes) as total FROM files WHERE root_id = ? AND is_missing = 0');
+    const sizeRow = typeof sizeStmt?.get === 'function' ? (sizeStmt.get(rootId) as any) : null;
+    const totalSizeBytes = sizeRow?.total || 0;
+    updateRootScanStatus(rootId, 'completed', totalFound, totalSizeBytes, null);
+  } catch {}
 
   const durationMs = Date.now() - startTime;
   console.log(`[Indexer] Finished scanning ${normalizedRoot} in ${durationMs}ms. Found: ${totalFound}, New: ${indexedNew}, Updated: ${updatedExisting}, Reused: ${reusedCached}, Failed: ${failedCount}`);
@@ -588,11 +673,11 @@ function hammingDistance(hex1: string, hex2: string): number {
 export function recalculateDuplicates(): void {
   const db = getDb();
 
-  // 1. Find exact duplicate groups by identical SHA-256 hash
+  // 1. Find exact duplicate groups by identical SHA-256 hash (excluding 0-byte empty files and missing files)
   const duplicateHashRows = db.prepare(`
     SELECT hash_sha256, COUNT(*) as file_count, SUM(size_bytes) as total_size
     FROM files
-    WHERE hash_sha256 IS NOT NULL AND hash_sha256 != ''
+    WHERE hash_sha256 IS NOT NULL AND hash_sha256 != '' AND size_bytes > 0 AND is_missing = 0
     GROUP BY hash_sha256
     HAVING COUNT(*) > 1
   `).all() as Array<{ hash_sha256: string; file_count: number; total_size: number }>;
@@ -608,7 +693,7 @@ export function recalculateDuplicates(): void {
   `);
 
   const findFilesByHashStmt = db.prepare(`
-    SELECT id, file_created_at FROM files WHERE hash_sha256 = ? ORDER BY file_created_at ASC
+    SELECT id, file_created_at FROM files WHERE hash_sha256 = ? AND is_missing = 0 ORDER BY file_created_at ASC
   `);
 
   // Execute in single transaction

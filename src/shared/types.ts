@@ -12,6 +12,11 @@ export interface Root {
   active: boolean;
   created_at: string;
   updated_at: string;
+  last_scanned_at?: string | null;
+  scan_status?: 'idle' | 'scanning' | 'completed' | 'error';
+  file_count?: number;
+  total_size_bytes?: number;
+  last_error?: string | null;
 }
 
 export interface FileRecord {
@@ -63,6 +68,8 @@ export interface FileRecord {
   availability_status?: 'available' | 'missing' | 'corrupt' | 'encrypted';
   extractor_version?: string | null;
   extracted_at?: string | null;
+  color_profile?: string | null;
+  fingerprint?: string | null;
 }
 
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
@@ -234,6 +241,7 @@ export interface Job {
   error_message: string | null;
   retry_count: number;
   max_retries: number;
+  stage?: string | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;

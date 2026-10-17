@@ -2,8 +2,8 @@
 
 ## Product: Nexora — AI File Manager
 **Tagline:** *"Your files. Your intelligence. Your control."*  
-**Version:** 0.5.0  
-**Status:** Implemented (v0.5.0 Adaptive Performance Without Feature Loss Release)  
+**Version:** 0.9.0  
+**Status:** Implemented (v0.9.0 Security, Reliability & Performance Hardening Release)  
 **Platform:** Windows 11 (x64) desktop  
 **Visual Identity:** Cinematic, futuristic, minimal black/charcoal surfaces (`#0a0a0a`), neon-lime accents (`#b4ff32`), glassmorphism  
 

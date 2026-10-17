@@ -1208,3 +1208,112 @@ input::placeholder {
     transform: translateY(0) scale(1);
   }
 }
+
+/* ─── Windows 11 File Explorer Design System ──────────────────────────────── */
+
+.win11-tab-header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.win11-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.win11-tab {
+  user-select: none;
+}
+
+.win11-tab:hover {
+  background: var(--color-bg-hover) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.win11-tab.active:hover {
+  background: var(--color-bg-primary) !important;
+}
+
+.tab-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.tab-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.breadcrumb-pill:hover {
+  background: var(--color-bg-hover) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.win11-command-bar button {
+  transition: background 0.12s ease, color 0.12s ease;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
+.win11-command-bar button:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.win11-row {
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.win11-row:hover:not(.selected) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.win11-drive-card:hover {
+  border-color: rgba(180, 255, 50, 0.4);
+  background: var(--color-bg-hover);
+}
+
+/* ─── Windows 11 Fluent Context Menu ─────────────────────────────────────── */
+
+.win11-context-menu,
+.win11-menu {
+  background: #181818 !important;
+  border: 1px solid #2e2e2e !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(16px);
+}
+
+.win11-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 1px 4px;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.win11-menu-item:hover {
+  background: rgba(180, 255, 50, 0.12);
+  color: var(--color-accent);
+}
+
+.win11-menu-item .shortcut {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  margin-left: var(--space-4);
+  font-family: var(--font-mono);
+}
+
+.win11-menu-divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 4px 0;
+}
+

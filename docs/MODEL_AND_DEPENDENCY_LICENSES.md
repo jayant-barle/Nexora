@@ -1,7 +1,7 @@
 # Model & Dependency Licensing Compliance
 
 > **Nexora — AI File Manager**  
-> **Product Version:** `0.5.0`  
+> **Product Version:** `0.9.0`  
 > **Licensing Standard:** 100% Permissive Open Source (MIT, Apache 2.0, BSD, ISC)  
 
 ---

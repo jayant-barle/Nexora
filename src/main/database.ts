@@ -101,6 +101,11 @@ function createSchemaInline(database: Database.Database): void {
       id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, label TEXT NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('indexed','watched','managed')),
       active INTEGER NOT NULL DEFAULT 1,
+      last_scanned_at TEXT,
+      scan_status TEXT NOT NULL DEFAULT 'idle',
+      file_count INTEGER NOT NULL DEFAULT 0,
+      total_size_bytes INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -122,6 +127,8 @@ function createSchemaInline(database: Database.Database): void {
       doc_title TEXT, doc_author TEXT, doc_subject TEXT,
       audio_artist TEXT, audio_album TEXT, audio_title TEXT,
       archive_entries INTEGER,
+      color_profile TEXT,
+      fingerprint TEXT,
       is_missing INTEGER NOT NULL DEFAULT 0,
       availability_status TEXT NOT NULL DEFAULT 'available',
       extractor_version TEXT,
@@ -475,14 +482,14 @@ export function searchFiles(query: SearchQuery): SearchResult {
   const limit = Math.min(query.limit || 50, 200);
   const offset = query.offset || 0;
 
-  const countResult = database.prepare(`SELECT COUNT(*) as count FROM files f WHERE ${where}`).get(params) as { count: number };
+  const countResult = database.prepare(`SELECT COUNT(*) as count FROM files f WHERE ${where}`).get(params) as { count: number } | undefined;
   const files = database.prepare(
     `SELECT * FROM files f WHERE ${where} ORDER BY ${sortBy} ${sortOrder} LIMIT @limit OFFSET @offset`
   ).all({ ...params, limit, offset }) as FileRecord[];
 
   return {
     files,
-    totalCount: countResult.count,
+    totalCount: countResult?.count ?? files.length,
     query,
     executionTimeMs: Date.now() - startTime,
   };
@@ -610,12 +617,72 @@ export function getRoots(): Root[] {
   return getDb().prepare('SELECT * FROM roots ORDER BY label ASC').all() as Root[];
 }
 
+export function getRootById(id: string): Root | null {
+  return (getDb().prepare('SELECT * FROM roots WHERE id = ?').get(id) as Root) || null;
+}
+
 export function addRoot(pathStr: string, label: string, type: 'indexed' | 'watched' | 'managed'): Root {
   const database = getDb();
+  const normalized = path.normalize(pathStr);
+  const existing = database.prepare('SELECT * FROM roots WHERE path = ?').get(normalized) as Root | undefined;
+  if (existing) {
+    database.prepare("UPDATE roots SET active = 1, updated_at = datetime('now') WHERE id = ?").run(existing.id);
+    return database.prepare('SELECT * FROM roots WHERE id = ?').get(existing.id) as Root;
+  }
   const id = uuidv4();
   const now = new Date().toISOString();
-  database.prepare('INSERT INTO roots (id, path, label, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, pathStr, label, type, now, now);
+  database.prepare(`
+    INSERT INTO roots (id, path, label, type, active, scan_status, file_count, total_size_bytes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 1, 'idle', 0, 0, ?, ?)
+  `).run(id, normalized, label, type, now, now);
   return database.prepare('SELECT * FROM roots WHERE id = ?').get(id) as Root;
+}
+
+export function updateRootScanStatus(
+  rootId: string,
+  scanStatus: 'idle' | 'scanning' | 'completed' | 'error',
+  fileCount?: number,
+  totalSizeBytes?: number,
+  lastError?: string | null
+): void {
+  const database = getDb();
+  const updates: string[] = ["scan_status = ?", "updated_at = datetime('now')"];
+  const params: unknown[] = [scanStatus];
+
+  if (scanStatus === 'completed') {
+    updates.push("last_scanned_at = datetime('now')");
+  }
+  if (fileCount !== undefined) {
+    updates.push("file_count = ?");
+    params.push(fileCount);
+  }
+  if (totalSizeBytes !== undefined) {
+    updates.push("total_size_bytes = ?");
+    params.push(totalSizeBytes);
+  }
+  if (lastError !== undefined) {
+    updates.push("last_error = ?");
+    params.push(lastError);
+  }
+
+  params.push(rootId);
+  database.prepare(`UPDATE roots SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+}
+
+export function updateJobStage(id: string, stage: string, progress?: number, total?: number): void {
+  const database = getDb();
+  const updates: string[] = ["stage = ?", "updated_at = datetime('now')"];
+  const params: unknown[] = [stage];
+  if (progress !== undefined) {
+    updates.push("progress = ?");
+    params.push(progress);
+  }
+  if (total !== undefined) {
+    updates.push("total = ?");
+    params.push(total);
+  }
+  params.push(id);
+  database.prepare(`UPDATE jobs SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 }
 
 export function getWatchRoots(): WatchRoot[] {
@@ -678,6 +745,29 @@ export function resolveFileFullPath(relOrPartialPath: string): string | null {
   `).get(normalized, `%${normalized}`) as { full_path: string } | undefined;
   return row?.full_path ?? null;
 }
+
+export function getFileRecordByFullPath(fullPath: string): (FileRecord & { people?: string[] }) | null {
+  const database = getDb();
+  const normalized = path.normalize(fullPath);
+  const roots = database.prepare('SELECT id, path FROM roots').all() as Root[];
+  for (const root of roots) {
+    const rootNorm = path.normalize(root.path);
+    if (normalized.toLowerCase().startsWith(rootNorm.toLowerCase())) {
+      const rel = path.relative(rootNorm, normalized).replace(/\\/g, '/');
+      const file = database.prepare('SELECT * FROM files WHERE root_id = ? AND relative_path = ?').get(root.id, rel) as FileRecord | undefined;
+      if (file) {
+        const people = database.prepare(`
+          SELECT p.name FROM file_people fp
+          JOIN people p ON fp.person_id = p.id
+          WHERE fp.file_id = ?
+        `).all(file.id) as Array<{ name: string }>;
+        return { ...file, people: people.map(p => p.name || 'Unknown') };
+      }
+    }
+  }
+  return null;
+}
+
 
 export function checkDatabaseIntegrity(): { ok: boolean; message: string } {
   try {
@@ -802,6 +892,95 @@ export function mergePeople(targetPersonId: string, sourcePersonIds: string[]): 
 
   merge();
   return true;
+}
+
+
+
+export function separateFaceFromPerson(
+  personId: string,
+  faceDetectionId: string,
+  newPersonName?: string
+): { success: boolean; newPersonId?: string } {
+  const database = getDb();
+
+  const memberRow = database.prepare(`
+    SELECT cm.cluster_id, fd.file_id
+    FROM cluster_members cm
+    JOIN face_clusters fc ON cm.cluster_id = fc.id
+    JOIN face_detections fd ON cm.face_detection_id = fd.id
+    WHERE fc.person_id = ? AND cm.face_detection_id = ?
+  `).get(personId, faceDetectionId) as { cluster_id: string; file_id: string } | undefined;
+
+  if (!memberRow) {
+    const faceRow = database.prepare('SELECT file_id FROM face_detections WHERE id = ?').get(faceDetectionId) as { file_id: string } | undefined;
+    if (!faceRow) {
+      throw new Error(`Face detection ${faceDetectionId} not found`);
+    }
+    database.prepare('DELETE FROM file_people WHERE file_id = ? AND person_id = ?').run(faceRow.file_id, personId);
+    return { success: true };
+  }
+
+  const { cluster_id, file_id } = memberRow;
+
+  const separateTx = database.transaction(() => {
+    database.prepare('DELETE FROM cluster_members WHERE cluster_id = ? AND face_detection_id = ?').run(cluster_id, faceDetectionId);
+
+    database.prepare(`
+      UPDATE face_clusters
+      SET member_count = MAX(0, member_count - 1), updated_at = datetime('now')
+      WHERE id = ?
+    `).run(cluster_id);
+
+    const person = database.prepare('SELECT representative_face_id FROM people WHERE id = ?').get(personId) as any;
+    if (person && person.representative_face_id === faceDetectionId) {
+      const nextFace = database.prepare(`
+        SELECT face_detection_id FROM cluster_members WHERE cluster_id = ? LIMIT 1
+      `).get(cluster_id) as { face_detection_id: string } | undefined;
+      database.prepare("UPDATE people SET representative_face_id = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(nextFace?.face_detection_id || null, personId);
+    }
+
+    const otherFacesInFile = database.prepare(`
+      SELECT COUNT(*) as count
+      FROM face_detections fd
+      JOIN cluster_members cm ON fd.id = cm.face_detection_id
+      JOIN face_clusters fc ON cm.cluster_id = fc.id
+      WHERE fd.file_id = ? AND fc.person_id = ?
+    `).get(file_id, personId) as { count: number } | undefined;
+
+    if (!otherFacesInFile || otherFacesInFile.count === 0) {
+      database.prepare('DELETE FROM file_people WHERE file_id = ? AND person_id = ?').run(file_id, personId);
+    }
+
+    const newPersonId = uuidv4();
+    const newClusterId = uuidv4();
+    const label = newPersonName && newPersonName.trim() ? newPersonName.trim() : 'Unassigned Face';
+
+    database.prepare(`
+      INSERT INTO people (id, name, representative_face_id, review_status, created_at, updated_at)
+      VALUES (?, ?, ?, 'unreviewed', datetime('now'), datetime('now'))
+    `).run(newPersonId, label, faceDetectionId);
+
+    database.prepare(`
+      INSERT INTO face_clusters (id, person_id, member_count, avg_confidence, created_at, updated_at)
+      VALUES (?, ?, 1, 0.85, datetime('now'), datetime('now'))
+    `).run(newClusterId, newPersonId);
+
+    database.prepare(`
+      INSERT INTO cluster_members (cluster_id, face_detection_id, distance, added_at)
+      VALUES (?, ?, 0.0, datetime('now'))
+    `).run(newClusterId, faceDetectionId);
+
+    database.prepare(`
+      INSERT OR IGNORE INTO file_people (file_id, person_id, association_type)
+      VALUES (?, ?, 'auto')
+    `).run(file_id, newPersonId);
+
+    return newPersonId;
+  });
+
+  const createdPersonId = separateTx();
+  return { success: true, newPersonId: createdPersonId };
 }
 
 export function closeDatabase(): void {

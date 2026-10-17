@@ -66,6 +66,14 @@ export function validateDestinationRoot(destRoot: string, requiredBytes: number)
     }
     fs.accessSync(destRoot, fs.constants.W_OK);
 
+    // Place .nexora-managed marker file so scanners automatically exclude this folder
+    const markerFile = path.join(destRoot, '.nexora-managed');
+    if (!fs.existsSync(markerFile)) {
+      try {
+        fs.writeFileSync(markerFile, 'Nexora managed organization destination. Do not modify or scan.\n', 'utf8');
+      } catch {}
+    }
+
     const freeSpace = getFreeDiskSpace(destRoot);
     const safetyBuffer = 100 * 1024 * 1024; // 100 MB buffer
     if (freeSpace > 0 && freeSpace < requiredBytes + safetyBuffer) {
@@ -90,7 +98,7 @@ export async function resolveSafeDestinationPath(destPath: string, sourceHash?: 
   if (sourceHash) {
     try {
       const existingHash = await computeFileSha256(destPath);
-      if (existingHash === sourceHash) {
+      if (existingHash.toLowerCase() === sourceHash.toLowerCase()) {
         return { finalPath: destPath, isIdenticalDuplicate: true };
       }
     } catch {
@@ -98,7 +106,7 @@ export async function resolveSafeDestinationPath(destPath: string, sourceHash?: 
     }
   }
 
-  // Generate numbered collision suffix (e.g. "photo (1).jpg")
+  // Generate numbered collision suffix (e.g. "photo (1).jpg") without overwriting
   const dir = path.dirname(destPath);
   const ext = path.extname(destPath);
   const baseName = path.basename(destPath, ext);
@@ -109,6 +117,15 @@ export async function resolveSafeDestinationPath(destPath: string, sourceHash?: 
     const candidatePath = path.join(dir, candidateName);
     if (!fs.existsSync(candidatePath)) {
       return { finalPath: candidatePath, isIdenticalDuplicate: false };
+    }
+    // If collision candidate file already has the identical hash, return it as identical duplicate
+    if (sourceHash) {
+      try {
+        const candidateHash = await computeFileSha256(candidatePath);
+        if (candidateHash.toLowerCase() === sourceHash.toLowerCase()) {
+          return { finalPath: candidatePath, isIdenticalDuplicate: true };
+        }
+      } catch {}
     }
     counter++;
   }
@@ -246,13 +263,18 @@ export async function executeBatchCopyOperation(
   for (let i = 0; i < itemRecords.length; i++) {
     const item = itemRecords[i];
     try {
-      const { finalPath, isIdenticalDuplicate } = await resolveSafeDestinationPath(item.dest);
+      let srcHash = '';
+      try {
+        srcHash = await computeFileSha256(item.source);
+      } catch {}
+
+      const { finalPath, isIdenticalDuplicate } = await resolveSafeDestinationPath(item.dest, srcHash);
 
       if (isIdenticalDuplicate) {
-        updateItemStmt.run('', '', 'skipped_identical', null, item.id);
+        updateItemStmt.run(srcHash, srcHash, 'skipped_identical', null, item.id);
         completedFiles++;
       } else {
-        const copyRes = await copyFileWithVerification(item.source, finalPath);
+        const copyRes = await copyFileWithVerification(item.source, finalPath, srcHash);
         if (copyRes.success) {
           updateItemStmt.run(copyRes.sourceHash, copyRes.destHash, 'completed', null, item.id);
           completedFiles++;
@@ -375,3 +397,41 @@ export async function revertBatchOperation(operationId: string): Promise<RevertR
     errors,
   };
 }
+
+// ─── Interrupted Copy Recovery Engine ────────────────────────────────────────
+
+export async function recoverInterruptedOperations(): Promise<{ recoveredCount: number; cleanedTempFiles: number }> {
+  const db = getDb();
+  let recoveredCount = 0;
+  let cleanedTempFiles = 0;
+
+  try {
+    const interruptedOps = db.prepare("SELECT id, destination_root FROM copy_operations WHERE status = 'in_progress'").all() as Array<{ id: string; destination_root: string }>;
+
+    for (const op of interruptedOps) {
+      db.prepare("UPDATE copy_operations SET status = 'interrupted', completed_at = datetime('now') WHERE id = ?").run(op.id);
+      db.prepare("UPDATE operation_items SET status = 'interrupted' WHERE operation_id = ? AND status = 'pending'").run(op.id);
+      recoveredCount++;
+
+      // Clean up orphaned .nexora-tmp-* files in destination root
+      if (op.destination_root && fs.existsSync(op.destination_root)) {
+        try {
+          const files = fs.readdirSync(op.destination_root);
+          for (const f of files) {
+            if (f.includes('.nexora-tmp-')) {
+              try {
+                fs.unlinkSync(path.join(op.destination_root, f));
+                cleanedTempFiles++;
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('[FileOperations] Error during interrupted operations recovery:', err);
+  }
+
+  return { recoveredCount, cleanedTempFiles };
+}
+

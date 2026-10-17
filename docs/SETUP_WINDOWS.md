@@ -1,7 +1,7 @@
 # Windows 11 Setup & Environment Guide — Nexora
 
 ## Product: Nexora — AI File Manager
-**Version:** 0.5.0  
+**Version:** 0.9.0  
 **Target OS:** Windows 11 (64-bit, Build 22000+)  
 
 ---
@@ -81,7 +81,7 @@ Compiles production assets and generates a distributable Windows 11 `.exe` insta
 ```powershell
 npm run package
 ```
-*Installer Output:* `release/Nexora-Setup-0.5.0.exe`
+*Installer Output:* `release/Nexora-Setup-0.9.0.exe` (117,246,541 bytes, SHA-256: `9B674379C63B11D95B411ED968844CF7D9E4C1B177EB6CEBE9942BBAFA90A62F`)
 
 ### Build Unpacked Directory for Local Testing
 Generates unpacked application folder for immediate execution without installing:

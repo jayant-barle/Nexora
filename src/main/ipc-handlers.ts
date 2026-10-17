@@ -15,7 +15,7 @@ import { getAiWorkerClient } from './ai-worker-client';
 import { executeBatchCopyOperation, revertBatchOperation, CopyItem } from './file-operations';
 import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization, getStoredProposals, runAutoOrganizationPipeline } from './organizer';
 import { reconcileLibrary, indexFolderIncremental } from './indexer';
-import type { OrganizationRule, OrganizationProposalItem } from '../shared/types';
+import type { OrganizationRule, OrganizationProposalItem, SearchQuery } from '../shared/types';
 
 // ─── Input Validation ────────────────────────────────────────────────────────
 
@@ -62,7 +62,36 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('fs:get-file-info', async (_event, filePath: unknown) => {
     const validPath = validatePath(filePath);
-    return fsService.getFileInfo(validPath);
+    const info = fsService.getFileInfo(validPath);
+    if (!info) return null;
+    try {
+      const record = db.getFileRecordByFullPath(validPath);
+      return { ...info, indexed: record || null };
+    } catch {
+      return info;
+    }
+  });
+
+  ipcMain.handle('fs:create-folder', async (_event, parentDir: unknown, folderName: unknown) => {
+    const validDir = validatePath(parentDir);
+    const nameStr = validateString(folderName, 'folderName');
+    return fsService.createFolder(validDir, nameStr);
+  });
+
+  ipcMain.handle('fs:rename-entry', async (_event, oldPath: unknown, newName: unknown) => {
+    const validPath = validatePath(oldPath);
+    const nameStr = validateString(newName, 'newName');
+    return fsService.renameEntry(validPath, nameStr);
+  });
+
+  ipcMain.handle('fs:trash-item', async (_event, targetPath: unknown) => {
+    const validPath = validatePath(targetPath);
+    try {
+      await shell.trashItem(validPath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   ipcMain.handle('fs:open-file', async (_event, filePath: unknown) => {
@@ -98,18 +127,6 @@ export function registerIpcHandlers(): void {
     return db.vacuumDatabase();
   });
 
-  // ── Search ────────────────────────────────────────────────────────────────
-
-  ipcMain.handle('search:query', async (_event, query: unknown) => {
-    if (!query || typeof query !== 'object') {
-      throw new Error('Invalid search query');
-    }
-    return db.searchFiles(query as import('../shared/types').SearchQuery);
-  });
-
-  ipcMain.handle('search:rebuild-index', async () => {
-    return db.rebuildSearchIndex();
-  });
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
 
@@ -230,6 +247,13 @@ export function registerIpcHandlers(): void {
     return true;
   });
 
+  ipcMain.handle('people:separate-face', async (_event, personId: unknown, faceDetectionId: unknown, newPersonName?: unknown) => {
+    const pid = validateId(personId);
+    const fid = validateId(faceDetectionId);
+    const name = typeof newPersonName === 'string' ? newPersonName.trim() : undefined;
+    return db.separateFaceFromPerson(pid, fid, name);
+  });
+
   // ── Roots ─────────────────────────────────────────────────────────────────
 
   ipcMain.handle('roots:list', async () => {
@@ -292,6 +316,19 @@ export function registerIpcHandlers(): void {
       throw new Error(`Invalid action: ${act}`);
     }
     return db.resolveDuplicateGroup(gid, act);
+  });
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  ipcMain.handle('search:query', async (_event, searchQuery: unknown) => {
+    if (!searchQuery || typeof searchQuery !== 'object') {
+      return { files: [], totalCount: 0, query: {}, executionTimeMs: 0 };
+    }
+    return db.searchFiles(searchQuery as SearchQuery);
+  });
+
+  ipcMain.handle('search:rebuild-index', async () => {
+    return db.rebuildSearchIndex();
   });
 
   // ── Settings ──────────────────────────────────────────────────────────────
@@ -444,6 +481,9 @@ export function registerIpcHandlers(): void {
       temp: app.getPath('temp'),
       home: app.getPath('home'),
       documents: app.getPath('documents'),
+      desktop: app.getPath('desktop'),
+      downloads: app.getPath('downloads'),
+      pictures: app.getPath('pictures'),
     };
   });
 }

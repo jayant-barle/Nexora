@@ -5,72 +5,60 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import crypto from 'crypto';
 import type { DirectoryEntry, DirectoryListResult, DriveInfo } from '../shared/types';
 
 // ─── Drive Detection (Windows) ───────────────────────────────────────────────
 
 export function listDrives(): DriveInfo[] {
-  try {
-    const output = execSync(
-      'wmic logicaldisk get caption,description,freespace,size,volumename /format:csv',
-      { encoding: 'utf-8', timeout: 10000 }
-    );
+  // Fast native probe via fs.statfsSync across Windows drive letters (safe, zero shell injection, WMIC-independent)
+  const candidateLetters = ['C:', 'D:', 'E:', 'F:', 'G:', 'H:', 'I:', 'J:', 'K:', 'L:', 'M:', 'N:', 'O:', 'P:', 'Q:', 'R:', 'S:', 'T:', 'U:', 'V:', 'W:', 'X:', 'Y:', 'Z:'];
+  const drives: DriveInfo[] = [];
 
-    const lines = output.trim().split('\n').filter(l => l.trim().length > 0);
-    const drives: DriveInfo[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(',');
-      if (parts.length < 6) continue;
-
-      const letter = parts[1]?.trim();
-      const description = parts[2]?.trim() || '';
-      const freeSpace = parseInt(parts[3]?.trim() || '0', 10) || 0;
-      const totalSize = parseInt(parts[4]?.trim() || '0', 10) || 0;
-      const volumeName = parts[5]?.trim() || '';
-
-      if (!letter) continue;
+  for (const letter of candidateLetters) {
+    try {
+      const letterPath = letter + '\\';
+      fs.accessSync(letterPath, fs.constants.R_OK);
+      let totalSize = 0;
+      let freeSpace = 0;
+      try {
+        const stats = fs.statfsSync(letterPath);
+        totalSize = stats.blocks * stats.bsize;
+        freeSpace = stats.bavail * stats.bsize;
+      } catch {}
 
       drives.push({
         letter,
-        label: volumeName || letter,
-        type: description,
+        label: letter === 'C:' ? 'System Disk (C:)' : `Local Disk (${letter})`,
+        type: 'Local Disk',
         totalSize,
         freeSpace,
-        usedSpace: totalSize - freeSpace,
+        usedSpace: Math.max(0, totalSize - freeSpace),
       });
+    } catch {
+      // Drive letter not mounted or not accessible
     }
+  }
 
+  if (drives.length > 0) {
     return drives;
+  }
+
+  // POSIX / Non-Windows fallback
+  try {
+    const stats = fs.statfsSync('/');
+    const totalSize = stats.blocks * stats.bsize;
+    const freeSpace = stats.bavail * stats.bsize;
+    return [{
+      letter: '/',
+      label: 'Root',
+      type: 'Local Disk',
+      totalSize,
+      freeSpace,
+      usedSpace: Math.max(0, totalSize - freeSpace),
+    }];
   } catch {
-    // Fast native fallback: probe drive letters and compute capacity via fs.statfsSync
-    const drives: DriveInfo[] = [];
-    for (const letter of ['C:', 'D:', 'E:', 'F:', 'G:', 'H:', 'I:', 'J:']) {
-      try {
-        const letterPath = letter + '\\';
-        fs.accessSync(letterPath, fs.constants.R_OK);
-        let totalSize = 0;
-        let freeSpace = 0;
-        try {
-          const stats = fs.statfsSync(letterPath);
-          totalSize = stats.blocks * stats.bsize;
-          freeSpace = stats.bavail * stats.bsize;
-        } catch {}
-
-        drives.push({
-          letter,
-          label: letter,
-          type: 'Local Disk',
-          totalSize,
-          freeSpace,
-          usedSpace: totalSize - freeSpace,
-        });
-      } catch {
-        // Drive not accessible
-      }
-    }
-    return drives;
+    return [];
   }
 }
 
@@ -261,11 +249,86 @@ export function getFreeDiskSpace(targetPath: string): number {
       const stats = fs.statfsSync(root);
       return stats.bavail * stats.bsize;
     }
-    const drive = path.parse(targetPath).root;
-    const output = execSync(`wmic logicaldisk where "caption='${drive.replace('\\', '')}'" get freespace /value`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
-    const match = output.match(/FreeSpace=(\d+)/);
-    return match ? parseInt(match[1], 10) : 0;
   } catch {
-    return 0;
+    // Statfs failed or path inaccessible
+  }
+  return 0;
+}
+
+export function createFolder(parentDir: string, folderName: string): { success: boolean; path?: string; error?: string } {
+  try {
+    const cleanName = folderName.trim();
+    if (!cleanName || /[\\/:*?"<>|]/.test(cleanName)) {
+      return { success: false, error: 'Folder name contains invalid characters: \\ / : * ? " < > |' };
+    }
+    const targetPath = path.join(parentDir, cleanName);
+    if (fs.existsSync(targetPath)) {
+      return { success: false, error: `Folder "${cleanName}" already exists` };
+    }
+    fs.mkdirSync(targetPath, { recursive: true });
+    return { success: true, path: targetPath };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+export function renameEntry(oldPath: string, newName: string): { success: boolean; newPath?: string; error?: string } {
+  try {
+    const cleanName = newName.trim();
+    if (!cleanName || /[\\/:*?"<>|]/.test(cleanName)) {
+      return { success: false, error: 'Name contains invalid characters: \\ / : * ? " < > |' };
+    }
+    if (!fs.existsSync(oldPath)) {
+      return { success: false, error: 'Target item does not exist' };
+    }
+    const dir = path.dirname(oldPath);
+    const newPath = path.join(dir, cleanName);
+    if (fs.existsSync(newPath) && newPath.toLowerCase() !== oldPath.toLowerCase()) {
+      return { success: false, error: `An item named "${cleanName}" already exists` };
+    }
+    fs.renameSync(oldPath, newPath);
+    return { success: true, newPath };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export function validateSafePath(inputPath: unknown): { valid: boolean; normalized?: string; error?: string } {
+  if (typeof inputPath !== 'string' || inputPath.trim().length === 0) {
+    return { valid: false, error: 'Path must be a non-empty string' };
+  }
+  if (inputPath.includes('\0')) {
+    return { valid: false, error: 'Path contains invalid null bytes' };
+  }
+  try {
+    const normalized = path.normalize(inputPath.trim());
+    return { valid: true, normalized };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function computeFileHashStream(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      const hash = crypto.createHash('sha256');
+      const stream = fs.createReadStream(filePath, { highWaterMark: 1024 * 1024 });
+
+      stream.on('data', (chunk) => {
+        hash.update(chunk);
+      });
+
+      stream.on('end', () => {
+        resolve(hash.digest('hex'));
+      });
+
+      stream.on('error', (err) => {
+        reject(err);
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+

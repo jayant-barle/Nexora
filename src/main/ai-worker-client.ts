@@ -56,6 +56,7 @@ export interface MetadataResult {
   audio_album?: string | null;
   audio_title?: string | null;
   archive_entries?: number | null;
+  color_profile?: string | null;
   format_category?: 'image' | 'video' | 'document' | 'audio' | 'archive' | 'text' | 'other';
   status?: 'ok' | 'unsupported' | 'corrupt' | 'encrypted';
   error?: string | null;

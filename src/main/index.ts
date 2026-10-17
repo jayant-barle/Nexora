@@ -157,4 +157,14 @@ app.on('web-contents-created', (_event, contents) => {
     if (isDev && url.startsWith('http://localhost:')) return;
     event.preventDefault();
   });
+
+  // Prevent creation of untrusted webviews
+  contents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
+
+  // Reject all device/system permissions requests
+  contents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
 });

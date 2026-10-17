@@ -167,6 +167,9 @@ def parse_jpeg_exif(file_path: str) -> Dict[str, Any]:
                                 result["exposure_time"] = val
                         if 0xA434 in exif_ifd and isinstance(exif_ifd[0xA434], str):
                             result["lens_model"] = exif_ifd[0xA434].strip()
+                        if 0xA001 in exif_ifd and isinstance(exif_ifd[0xA001], int):
+                            cs = exif_ifd[0xA001]
+                            result["color_profile"] = "sRGB" if cs == 1 else ("Adobe RGB" if cs == 2 else "Uncalibrated")
 
                     # GPS IFD (tag 0x8825)
                     if 0x8825 in ifd0:
@@ -678,13 +681,14 @@ def extract_metadata(file_path: str) -> Dict[str, Any]:
         "audio_album": None,
         "audio_title": None,
         "archive_entries": None,
+        "color_profile": None,
     }
 
     # 1. Images
     if category == "image":
         exif = parse_jpeg_exif(file_path)
         for k in ("capture_time", "camera_make", "camera_model", "lens_model", "orientation",
-                  "iso", "focal_length", "aperture", "exposure_time", "has_gps", "latitude", "longitude", "altitude"):
+                  "iso", "focal_length", "aperture", "exposure_time", "has_gps", "latitude", "longitude", "altitude", "color_profile"):
             if exif.get(k) is not None:
                 metadata[k] = exif[k]
 

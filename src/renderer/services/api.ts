@@ -30,6 +30,9 @@ function createMockAPI(): ElectronAPI {
       getFileInfo: async () => null,
       openFile: async () => '',
       revealInExplorer: async () => true,
+      createFolder: async (_parentDir: string, _name: string) => ({ success: true }),
+      renameEntry: async (_oldPath: string, _name: string) => ({ success: true }),
+      trashItem: async (_targetPath: string) => ({ success: true }),
     },
     db: {
       getStats: async () => ({
@@ -73,6 +76,7 @@ function createMockAPI(): ElectronAPI {
       update: async () => true,
       delete: async () => true,
       merge: async () => true,
+      separateFace: async () => ({ success: true }),
     },
     roots: {
       list: async () => [],

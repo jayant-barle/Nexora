@@ -1,7 +1,6 @@
 # Troubleshooting & Diagnostic Guide — Nexora
 
-## Product: Nexora — AI File Manager
-**Version:** 0.4.0  
+**Version:** 0.9.0 (Phase 3A Hardening)  
 
 ---
 
@@ -70,3 +69,13 @@
   4. **Master Pause**: Click **⏸ Pause Background Work** in the Settings panel to immediately pause all active queue execution while keeping file browsing and search fully responsive.
   5. **Stranded Job Recovery**: If Nexora is closed unexpectedly during an active scan, the job runner automatically resets all stranded `running` jobs to `queued` on the next launch with zero duplicated database records.
 
+### 1.7 AI Feature Pipeline & In-Place Execution Diagnostics
+- **Symptom**:
+  Clicking AI features or indexing photos does not immediately cluster faces or display neural tags.
+- **Root Cause & Behavior**:
+  1. **Folder Scan AI Option**: In version 0.9.1, `extractAi` defaults to enabled (`true`) when background AI is enabled. If "Enable Background AI" is disabled in Settings, AI facial extraction and video analysis jobs are deferred or filtered.
+  2. **Face Clustering Trigger**: Face clustering automatically runs when unclustered faces are detected. Users can also manually click **⚡ Run Face Clustering** in the **People & Faces** page header or empty state.
+  3. **In-Place Image Vision & OCR**: Selected files in **Explorer** can be classified or OCR extracted directly from the right-hand **Nexora Intelligence** panel or via right-click context menu (**⚡ AI Vision Tag** and **📄 AI Extract Text (OCR)**).
+- **Diagnostics**:
+  - Verify worker status: `window.electronAPI.ai.getStatus()` returns `{ ok: true, capabilities: { cv2: true, numpy: true, offline_ready: true } }`.
+  - Check job queue status in **Activity & Queue** to view background AI job progress.

@@ -1,7 +1,7 @@
 # Privacy, Security & Data Sovereignty Specification — Nexora
 
 ## Product: Nexora — AI File Manager
-**Version:** 0.4.0  
+**Version:** 0.9.0 (Phase 3A Hardening)  
 **Core Guarantee:** 100% On-Device AI Processing with Zero Cloud Telemetry  
 
 ---
@@ -27,12 +27,13 @@ Nexora is designed from the ground up to respect complete user privacy and data 
    - Folder exclusions (`exclude_patterns`) allow users to omit sensitive directories from scanning.
 5. **Exact Duplicate Cryptographic Integrity & Source Path Preservation**:
    - Files are never classified as duplicates based on filename, size, or timestamp alone; byte-for-byte SHA-256 verification is mandatory.
+   - Empty files (0 bytes) and deleted/missing files (`is_missing = 1`) are strictly excluded from duplicate groupings.
    - Distinct source paths and database records are preserved even for identical files. Duplicate candidates are never automatically deleted or overwritten without explicit user review.
 6. **In-Flight Stream Modification Protection**:
    - Files undergoing cryptographic hashing or copy operations are guarded by pre/post stream stat comparisons. If a file is modified during hashing or copying, operations abort, temporary staging files are unlinked, and stale results are invalidated.
-7. **Non-Privileged Hardware Probing & Resource Telemetry Sovereignty**:
-   - Hardware detection (CPU cores/load, RAM pressure, GPU VRAM, storage type) operates entirely without administrator or elevated Windows privileges using unprivileged PowerShell CimInstance and WMI queries.
-   - Telemetry metrics are consumed strictly on-device to throttle background concurrency and prevent PC lockups. Hardware metrics, machine GUIDs, and serial numbers are never collected, logged to disk, or transmitted remotely.
+7. **Native Non-Privileged Resource Telemetry**:
+   - Hardware metrics and drive capacities are queried natively via Node.js `fs.statfsSync` and non-privileged standard APIs without relying on deprecated WMIC or elevated privileges.
+   - Machine GUIDs, serial numbers, and sensitive system telemetry are never collected, logged, or transmitted.
 
 ---
 
@@ -43,16 +44,22 @@ Nexora adheres strictly to the Electron Security Checklist and Windows applicati
 ### 2.1 Multi-Process Sandboxing & Context Isolation
 - **Context Isolation**: `contextIsolation: true` is strictly enforced on all `BrowserWindow` instances.
 - **Node Integration**: `nodeIntegration: false` is permanently disabled in the renderer. The UI shell executes in a sandboxed Chromium environment.
+- **Navigation Lockdown**: Window open requests (`setWindowOpenHandler`) return `{ action: 'deny' }`. Outbound navigations (`will-navigate`) are prevented.
+- **Webview Lockdown**: Untrusted `<webview>` tag attachment is strictly prevented via `will-attach-webview` event prevention.
+- **Device Permission Lockdown**: All web contents permission requests (geolocation, notifications, camera, microphone) are automatically denied via `setPermissionRequestHandler`.
 - **No Direct Remote Code Execution**: Dynamic scripts (`eval()`, inline event handlers) are blocked via strict Content Security Policy (`CSP`).
 
 ### 2.2 IPC Hardening & Input Sanitization
 - All IPC channels exposed via `electronAPI` validate caller arguments before executing OS actions:
-  - **Path Sanitization**: Paths are checked for null bytes (`\0`) and invalid path traversal sequences (`..`).
+  - **Path Sanitization**: Paths are checked for null bytes (`\0`) and invalid path traversal sequences (`..`). All relative traversal tokens and forbidden characters (`\ / : * ? " < > |`) are stripped.
   - **UUID / ID Validation**: Operation and Job IDs are validated using UUID regex format before executing SQL queries.
-  - **External Protocol Interception**: `shell.openExternal` is restricted to authorized safe protocols (`http`, `https`). `window.open` requests are intercepted and denied by `setWindowOpenHandler`.
+  - **No Duplicate Handlers**: All IPC handlers are uniquely registered to prevent Electron runtime exceptions.
+  - **Safe Process Spawning**: Background AI worker is spawned via `spawn(pythonPath, [scriptPath])` without shell interpolation (`shell: false`), completely mitigating command injection vulnerabilities.
 
 ### 2.3 Filesystem Operation Safety
 - **Copy-First Invariant**: Automatic organization tools never move or delete original media files. They always create verified copies.
+- **Destination Collision Handling**: If a non-identical file exists at the target path, Nexora automatically appends an incrementing counter (`${base} (1).${ext}`) to prevent silent overwrites.
+- **Redundant Copy Skipping**: Target file hashes are compared against source SHA-256 before copy; identical files are skipped without redundant disk I/O.
 - **Pre-Copy Space Validation**: `fs.statfsSync` checks destination free disk space to avoid filling up drives and causing system instability.
 - **Cryptographic Verification**: Every copy operation computes and verifies SHA-256 pre-copy and post-copy checksums.
 - **Modified-Copy Guard**: If a user modifies an organized file, the rollback engine refuses to delete it during undo operations, preventing catastrophic data loss.

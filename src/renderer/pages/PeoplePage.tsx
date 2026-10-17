@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePeopleStore, toast } from '../store';
+import { api } from '../services/api';
 
 export const PeoplePage: React.FC = () => {
   const { people, loading, fetchPeople, updatePerson, deletePerson } = usePeopleStore();
@@ -12,6 +13,7 @@ export const PeoplePage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isClustering, setIsClustering] = useState(false);
 
   useEffect(() => {
     fetchPeople();
@@ -52,6 +54,24 @@ export const PeoplePage: React.FC = () => {
     toast.info('Person removed. Original files remain untouched on disk.', 'Person Deleted');
   };
 
+  const handleRecluster = async () => {
+    setIsClustering(true);
+    try {
+      toast.info('Starting face clustering engine on all unclustered faces...', 'Clustering Faces');
+      await api().jobs.create('face_clustering');
+      toast.success('Face clustering job scheduled. Discovered identities will appear shortly.', 'Job Dispatched');
+      // Refresh people list after a brief delay for clustering execution
+      setTimeout(() => {
+        fetchPeople();
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to trigger face clustering:', err);
+      toast.error(err instanceof Error ? err.message : String(err), 'Clustering Failed');
+    } finally {
+      setIsClustering(false);
+    }
+  };
+
   return (
     <div className="page-content animate-fadeIn">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
@@ -60,6 +80,24 @@ export const PeoplePage: React.FC = () => {
           <p style={{ color: 'var(--color-text-secondary)' }}>
             {people.length} {people.length === 1 ? 'person' : 'people'} identified by 100% local face clustering
           </p>
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={fetchPeople}
+            disabled={loading}
+            title="Refresh people list"
+          >
+            ↻ Refresh
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleRecluster}
+            disabled={isClustering}
+            title="Run local face clustering on detected faces"
+          >
+            {isClustering ? 'Clustering...' : '⚡ Run Face Clustering'}
+          </button>
         </div>
       </div>
 
@@ -93,6 +131,17 @@ export const PeoplePage: React.FC = () => {
               ? 'Index folders containing photos to detect and cluster faces. All vector embeddings and clustering execute entirely on your PC.'
               : 'Try a different filter to view people.'}
           </div>
+          {people.length === 0 && (
+            <div style={{ marginTop: 'var(--space-4)' }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleRecluster}
+                disabled={isClustering}
+              >
+                {isClustering ? 'Clustering...' : '⚡ Run Face Clustering Now'}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-4)' }}>

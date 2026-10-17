@@ -18,6 +18,23 @@ export interface GenerateProposalsOptions {
   destinationRoot: string;
 }
 
+// ─── Path Segment Sanitization Helper ────────────────────────────────────────
+
+export function sanitizePathSegment(segment: string): string {
+  if (!segment) return 'Unknown';
+  // Strip relative traversal tokens '..'
+  let cleaned = segment.replace(/\.\.+/g, '');
+  // Replace Windows forbidden path characters and control chars with underscores
+  cleaned = cleaned.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim();
+  // Strip leading and trailing periods or spaces forbidden by Windows filenames
+  cleaned = cleaned.replace(/^\.+/, '').replace(/\.+$/, '').trim();
+  // Disallow dot sequences, empty strings, or purely underscore strings to prevent path traversal
+  if (!cleaned || cleaned === '..' || cleaned === '.' || /^_+$/.test(cleaned)) {
+    return 'Unknown';
+  }
+  return cleaned;
+}
+
 // ─── Format Category Helper ──────────────────────────────────────────────────
 
 export function getFileCategory(ext: string): string {
@@ -53,6 +70,12 @@ export function resolveOrganizationPath(
   locationName?: string | null
 ): { relativeFolder: string; warnings: string[] } {
   const warnings: string[] = [];
+
+  // Traversal pattern check
+  if (pattern.includes('..')) {
+    warnings.push('Path traversal attempt prevented; falling back to safe review category');
+    return { relativeFolder: 'Review_Unclassified', warnings };
+  }
 
   // 1. Date Resolution: Prefer EXIF capture_time, fallback to file_created_at / file_modified_at
   let year = 'Unknown Date';
@@ -153,30 +176,30 @@ export function resolveOrganizationPath(
   const suffix = parts.length > 1 ? parts[parts.length - 1] : baseName;
   const title = file.doc_title || file.audio_title || baseName;
 
-  // Replace tokens in pattern
+  // Replace tokens in pattern with sanitized path values
   let folder = pattern
-    .replace(/\{category\}/gi, category)
-    .replace(/\{YYYY\}/g, year)
-    .replace(/\{MM\}/g, month)
-    .replace(/\{DD\}/g, day)
-    .replace(/\{YYYY-MM\}/g, ymd)
-    .replace(/\{person\}/gi, person)
-    .replace(/\{camera\}/gi, camera)
-    .replace(/\{location\}/gi, loc)
-    .replace(/\{city\}/gi, file.city || loc)
-    .replace(/\{country\}/gi, file.country || loc)
-    .replace(/\{event\}/gi, ev)
-    .replace(/\{doc_author\}/gi, author)
-    .replace(/\{author\}/gi, author)
-    .replace(/\{doc_title\}/gi, title)
-    .replace(/\{title\}/gi, title)
-    .replace(/\{prefix\}/gi, prefix)
-    .replace(/\{suffix\}/gi, suffix)
-    .replace(/\{filename\}/gi, fullFilename)
-    .replace(/\{basename\}/gi, baseName)
-    .replace(/\{name\}/gi, baseName)
-    .replace(/\{extension\}/gi, extWithoutDot || 'Other')
-    .replace(/\{ext\}/gi, extWithoutDot || 'Other');
+    .replace(/\{category\}/gi, sanitizePathSegment(category))
+    .replace(/\{YYYY\}/g, sanitizePathSegment(year))
+    .replace(/\{MM\}/g, sanitizePathSegment(month))
+    .replace(/\{DD\}/g, sanitizePathSegment(day))
+    .replace(/\{YYYY-MM\}/g, `${sanitizePathSegment(year)}-${sanitizePathSegment(month)}`)
+    .replace(/\{person\}/gi, sanitizePathSegment(person))
+    .replace(/\{camera\}/gi, sanitizePathSegment(camera))
+    .replace(/\{location\}/gi, sanitizePathSegment(loc))
+    .replace(/\{city\}/gi, sanitizePathSegment(file.city || loc))
+    .replace(/\{country\}/gi, sanitizePathSegment(file.country || loc))
+    .replace(/\{event\}/gi, sanitizePathSegment(ev))
+    .replace(/\{doc_author\}/gi, sanitizePathSegment(author))
+    .replace(/\{author\}/gi, sanitizePathSegment(author))
+    .replace(/\{doc_title\}/gi, sanitizePathSegment(title))
+    .replace(/\{title\}/gi, sanitizePathSegment(title))
+    .replace(/\{prefix\}/gi, sanitizePathSegment(prefix))
+    .replace(/\{suffix\}/gi, sanitizePathSegment(suffix))
+    .replace(/\{filename\}/gi, sanitizePathSegment(baseName))
+    .replace(/\{basename\}/gi, sanitizePathSegment(baseName))
+    .replace(/\{name\}/gi, sanitizePathSegment(baseName))
+    .replace(/\{extension\}/gi, sanitizePathSegment(extWithoutDot || 'Other'))
+    .replace(/\{ext\}/gi, sanitizePathSegment(extWithoutDot || 'Other'));
 
   // Ambiguity & Unresolved Token Safety Fallback:
   // If pattern has unresolved or ambiguous tokens, apply safe fallback and warn
@@ -185,9 +208,15 @@ export function resolveOrganizationPath(
     folder = folder.replace(/\{[a-zA-Z0-9_-]+\}/g, 'General');
   }
 
-  // Normalize slashes
-  folder = folder.replace(/[\\/]+/g, path.sep);
-  return { relativeFolder: folder, warnings };
+  // Parse path segments and sanitize each segment to guarantee no traversal
+  const rawSegments = folder.split(/[\\/]+/).filter(Boolean);
+  const safeSegments = rawSegments.map(s => sanitizePathSegment(s));
+  let safeRelativeFolder = safeSegments.join(path.sep);
+  if (!safeRelativeFolder) {
+    safeRelativeFolder = 'General';
+  }
+
+  return { relativeFolder: safeRelativeFolder, warnings };
 }
 
 // ─── Generate Organization Proposals ─────────────────────────────────────────
@@ -282,8 +311,16 @@ export async function generateOrganizationProposals(
       null
     );
 
-    const proposedDestDir = path.join(destRoot, relativeFolder);
-    const initialDestPath = path.join(proposedDestDir, row.filename);
+    const normalizedDestRoot = path.resolve(destRoot);
+    const resolvedDestDir = path.resolve(destRoot, relativeFolder);
+    let safeDestDir = resolvedDestDir;
+    if (!resolvedDestDir.startsWith(normalizedDestRoot + path.sep) && resolvedDestDir !== normalizedDestRoot) {
+      warnings.push('Path traversal attempt prevented; falling back to safe review folder');
+      safeDestDir = path.join(normalizedDestRoot, 'Review_Unclassified');
+    }
+
+    const safeFilename = sanitizePathSegment(path.parse(row.filename || 'file').name) + (path.extname(row.filename || '') || row.extension || '');
+    const initialDestPath = path.join(safeDestDir, safeFilename);
 
     let finalDestPath = initialDestPath;
     let isIdenticalDuplicate = false;

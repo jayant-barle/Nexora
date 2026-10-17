@@ -6,7 +6,7 @@
 import { BrowserWindow } from 'electron';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb, updateJobStatus, getSettings, retryJob, clearCompletedJobs } from './database';
+import { getDb, updateJobStatus, updateJobStage, getSettings, retryJob, clearCompletedJobs, createJob } from './database';
 import { indexFolderIncremental, recalculateDuplicates } from './indexer';
 import { executeBatchCopyOperation, CopyItem } from './file-operations';
 import { getAiWorkerClient } from './ai-worker-client';
@@ -23,10 +23,22 @@ export class JobRunner {
   public recoverStrandedJobs(): void {
     try {
       const db = getDb();
+      // Mark any jobs stranded in 'running' as 'failed' with clear error details so user can retry
       db.prepare(`
         UPDATE jobs
-        SET status = 'queued', updated_at = datetime('now')
+        SET status = 'failed',
+            error_message = 'Scan interrupted by application restart',
+            updated_at = datetime('now'),
+            completed_at = datetime('now')
         WHERE status = 'running'
+      `).run();
+      // Reset any roots stranded in 'scanning'
+      db.prepare(`
+        UPDATE roots
+        SET scan_status = 'error',
+            last_error = 'Scan interrupted by application restart',
+            updated_at = datetime('now')
+        WHERE scan_status = 'scanning'
       `).run();
     } catch {}
   }
@@ -71,7 +83,7 @@ export class JobRunner {
   public cancel(jobId: string): void {
     this.cancelledJobs.add(jobId);
     updateJobStatus(jobId, 'cancelled');
-    this.activeJobs.delete(jobId);
+    // Note: Do not remove from activeJobs here; activeJobs is freed in executeJob's finally block to preserve concurrency bounds
     this.notifyRenderer('job:cancelled', { jobId });
     this.notifyRenderer('queue:status-changed', this.getQueueStats());
   }
@@ -239,8 +251,11 @@ export class JobRunner {
         `).run(uuidv4(), job.id, errorMsg);
       } catch {}
 
-      // Retry policy
-      if (job.retry_count < (job.max_retries || 3)) {
+      // If job was cancelled during execution, preserve cancelled status
+      if (this.cancelledJobs.has(job.id)) {
+        updateJobStatus(job.id, 'cancelled', job.progress, job.total, 'Job was cancelled by user');
+        this.notifyRenderer('job:progress', { jobId: job.id, status: 'cancelled' });
+      } else if (job.retry_count < (job.max_retries || 3)) {
         db.prepare(`
           UPDATE jobs SET status = 'queued', retry_count = retry_count + 1, error_message = ? WHERE id = ?
         `).run(errorMsg, job.id);
@@ -267,11 +282,17 @@ export class JobRunner {
 
     const config = job.config_json ? JSON.parse(job.config_json) : {};
 
+    updateJobStage(job.id, 'discovery');
+
     await indexFolderIncremental(targetFolder, {
-      extractAi: config.extractAi !== undefined ? config.extractAi : executionParams.allowBackgroundAi,
+      extractAi: config.extractAi !== false,
       generateThumbnails: config.generateThumbnails !== false,
       videoSamplingInterval: executionParams.videoSamplingIntervalSeconds,
       isCancelled: () => this.cancelledJobs.has(job.id),
+      onStageChange: (stage) => {
+        updateJobStage(job.id, stage);
+        this.notifyRenderer('job:stage', { jobId: job.id, stage });
+      },
       onProgress: (processed, total, currentFile) => {
         const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
         updateJobStatus(job.id, 'running', processed, total);
@@ -285,6 +306,29 @@ export class JobRunner {
         });
       },
     });
+
+    // If face detections exist without a cluster assignment, auto-enqueue a face_clustering job
+    try {
+      const db = getDb();
+      const unclusteredCountRow = db.prepare(`
+        SELECT COUNT(*) as count FROM face_detections fd
+        LEFT JOIN cluster_members cm ON fd.id = cm.face_detection_id
+        WHERE cm.cluster_id IS NULL
+      `).get() as { count: number } | undefined;
+
+      if (unclusteredCountRow && unclusteredCountRow.count > 0) {
+        // Enqueue face_clustering if not already queued
+        const existingQueuedClustering = db.prepare(`
+          SELECT id FROM jobs WHERE type = 'face_clustering' AND status IN ('queued', 'running')
+        `).get();
+        if (!existingQueuedClustering) {
+          createJob('face_clustering', targetFolder, undefined, undefined, 3);
+          this.notifyRenderer('queue:status-changed', this.getQueueStats());
+        }
+      }
+    } catch (clusterErr) {
+      console.warn('[JobRunner] Failed to check/enqueue face_clustering:', clusterErr);
+    }
   }
 
   private async handleBatchCopyJob(job: any): Promise<void> {
@@ -451,6 +495,18 @@ export class JobRunner {
     });
 
     insertFaceTx();
+
+    if (detections.length > 0) {
+      try {
+        const queuedClustering = db.prepare(`
+          SELECT id FROM jobs WHERE type = 'face_clustering' AND status IN ('queued', 'running')
+        `).get();
+        if (!queuedClustering) {
+          createJob('face_clustering', undefined, undefined, undefined, 3);
+          this.notifyRenderer('queue:status-changed', this.getQueueStats());
+        }
+      } catch {}
+    }
   }
 
   private async handleVideoAnalyzeJob(job: any): Promise<void> {

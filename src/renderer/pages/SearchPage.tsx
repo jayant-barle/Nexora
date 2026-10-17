@@ -27,10 +27,14 @@ export const SearchPage: React.FC = () => {
   const [filterDateTo, setFilterDateTo] = useState('');
   const [filterSizeMin, setFilterSizeMin] = useState('');
   const [filterSizeMax, setFilterSizeMax] = useState('');
+  const [filterCamera, setFilterCamera] = useState('');
+  const [filterAuthor, setFilterAuthor] = useState('');
+  const [filterHasFaces, setFilterHasFaces] = useState(false);
+  const [filterHasOcr, setFilterHasOcr] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const handleSearch = useCallback(async () => {
-    if (!searchText.trim() && !filterExt && !filterDateFrom) return;
+    if (!searchText.trim() && !filterExt && !filterDateFrom && !filterCamera && !filterAuthor && !filterHasFaces && !filterHasOcr) return;
 
     setLoading(true);
     setSearched(true);
@@ -42,6 +46,10 @@ export const SearchPage: React.FC = () => {
         dateTo: filterDateTo || undefined,
         sizeMin: filterSizeMin ? parseInt(filterSizeMin) * 1024 * 1024 : undefined,
         sizeMax: filterSizeMax ? parseInt(filterSizeMax) * 1024 * 1024 : undefined,
+        camera: filterCamera || undefined,
+        author: filterAuthor || undefined,
+        hasFaces: filterHasFaces || undefined,
+        hasOcr: filterHasOcr || undefined,
         limit: 100,
       };
       const result = await api().search.query(query);
@@ -53,13 +61,13 @@ export const SearchPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchText, filterExt, filterDateFrom, filterDateTo, filterSizeMin, filterSizeMax]);
+  }, [searchText, filterExt, filterDateFrom, filterDateTo, filterSizeMin, filterSizeMax, filterCamera, filterAuthor, filterHasFaces, filterHasOcr]);
 
   return (
     <div className="page-content">
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <h2 style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>Smart Search</h2>
-        <p style={{ color: 'var(--color-text-secondary)' }}>Search across your indexed media library</p>
+        <p style={{ color: 'var(--color-text-secondary)' }}>Search across your indexed media library using full-text search and rich metadata</p>
       </div>
 
       {/* Search Bar */}
@@ -68,13 +76,13 @@ export const SearchPage: React.FC = () => {
           <span className="search-icon">🔍</span>
           <input
             type="text"
-            placeholder="Search files, people, tags, OCR text..."
+            placeholder="Search filenames, camera models, authors, OCR text..."
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             style={{ fontSize: 'var(--font-size-md)', padding: 'var(--space-2) 0' }}
           />
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowFilters(!showFilters)}>
+          <button className={`btn ${showFilters ? 'btn-primary' : 'btn-ghost'} btn-sm`} onClick={() => setShowFilters(!showFilters)}>
             ⚙ Filters
           </button>
           <button className="btn btn-primary btn-sm" onClick={handleSearch}>Search</button>
@@ -85,7 +93,15 @@ export const SearchPage: React.FC = () => {
           <div className="card" style={{ marginTop: 'var(--space-2)', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
             <div>
               <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)', display: 'block' }}>File Extensions</label>
-              <input placeholder=".jpg, .png, .mp4" value={filterExt} onChange={e => setFilterExt(e.target.value)} />
+              <input placeholder=".jpg, .png, .mp4, .pdf" value={filterExt} onChange={e => setFilterExt(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)', display: 'block' }}>Camera / Device</label>
+              <input placeholder="Sony, Canon, iPhone" value={filterCamera} onChange={e => setFilterCamera(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)', display: 'block' }}>Document Author</label>
+              <input placeholder="Author name" value={filterAuthor} onChange={e => setFilterAuthor(e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)', display: 'block' }}>Date From</label>
@@ -96,12 +112,21 @@ export const SearchPage: React.FC = () => {
               <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
             </div>
             <div>
-              <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)', display: 'block' }}>Min Size (MB)</label>
-              <input type="number" placeholder="0" value={filterSizeMin} onChange={e => setFilterSizeMin(e.target.value)} />
+              <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)', display: 'block' }}>Size Limits (MB)</label>
+              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                <input type="number" placeholder="Min" value={filterSizeMin} onChange={e => setFilterSizeMin(e.target.value)} style={{ width: '50%' }} />
+                <input type="number" placeholder="Max" value={filterSizeMax} onChange={e => setFilterSizeMax(e.target.value)} style={{ width: '50%' }} />
+              </div>
             </div>
-            <div>
-              <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)', display: 'block' }}>Max Size (MB)</label>
-              <input type="number" placeholder="Any" value={filterSizeMax} onChange={e => setFilterSizeMax(e.target.value)} />
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'var(--space-2)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--font-size-xs)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={filterHasFaces} onChange={e => setFilterHasFaces(e.target.checked)} />
+                Only Photos with Detected Faces
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--font-size-xs)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={filterHasOcr} onChange={e => setFilterHasOcr(e.target.checked)} />
+                Only Files with OCR Text
+              </label>
             </div>
           </div>
         )}

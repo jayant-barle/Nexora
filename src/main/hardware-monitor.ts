@@ -268,7 +268,7 @@ export class HardwareMonitor {
           throttleReason: metrics.throttleReason || undefined,
         };
 
-      case 'performance':
+      case 'performance': {
         const cores = metrics.cpuCores;
         return {
           profile: 'performance',
@@ -280,6 +280,7 @@ export class HardwareMonitor {
           deferHeavyAi: false,
           isThrottled: false,
         };
+      }
 
       case 'balanced':
       default:
