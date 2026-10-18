@@ -28,7 +28,8 @@ except ImportError:
     HAS_NUMPY = False
 
 try:
-    from PIL import Image, ExifTags
+    # pyrefly: ignore[missing-import]
+    from PIL import Image
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False

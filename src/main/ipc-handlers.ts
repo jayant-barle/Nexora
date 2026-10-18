@@ -15,7 +15,8 @@ import { getAiWorkerClient } from './ai-worker-client';
 import { executeBatchCopyOperation, revertBatchOperation, CopyItem } from './file-operations';
 import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization, getStoredProposals, runAutoOrganizationPipeline, resolveDefaultManagedLibrary } from './organizer';
 import { reconcileLibrary, indexFolderIncremental } from './indexer';
-import type { OrganizationRule, OrganizationProposalItem, SearchQuery } from '../shared/types';
+import { getLocalLlmService } from './local-llm-service';
+import type { OrganizationRule, OrganizationProposalItem, SearchQuery, LlmClassificationRequest, LlmOrganizeProposalRequest } from '../shared/types';
 
 // ─── Input Validation ────────────────────────────────────────────────────────
 
@@ -377,6 +378,63 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ai:extract-ocr', async (_event, filePath: unknown) => {
     const validPath = validatePath(filePath);
     return getAiWorkerClient().extractOcr(validPath);
+  });
+
+  // ── Local LLM (Ollama) Handlers ──────────────────────────────────────────
+
+  ipcMain.handle('llm:get-status', async (_event, modelName?: unknown) => {
+    const model = typeof modelName === 'string' && modelName.trim() ? modelName.trim() : undefined;
+    const settings = db.getSettings();
+    const service = getLocalLlmService();
+    if (settings.ollamaBaseUrl) {
+      service.updateConfig({ baseUrl: settings.ollamaBaseUrl });
+    }
+    if (settings.ollamaModel) {
+      service.updateConfig({ defaultModel: settings.ollamaModel });
+    }
+    return service.getStatus(model);
+  });
+
+  ipcMain.handle('llm:classify', async (_event, req: unknown, modelOverride?: unknown) => {
+    if (!req || typeof req !== 'object') {
+      throw new Error('Invalid LLM classification payload');
+    }
+    const r = req as LlmClassificationRequest;
+    if (!r.filename) throw new Error('Filename is required for LLM classification');
+
+    const model = typeof modelOverride === 'string' && modelOverride.trim() ? modelOverride.trim() : undefined;
+    const settings = db.getSettings();
+    const service = getLocalLlmService();
+    if (settings.ollamaBaseUrl) service.updateConfig({ baseUrl: settings.ollamaBaseUrl });
+    if (settings.ollamaModel) service.updateConfig({ defaultModel: settings.ollamaModel });
+    if (settings.ollamaTimeoutMs) service.updateConfig({ timeoutMs: Number(settings.ollamaTimeoutMs) || 45000 });
+    if (settings.ollamaContextWindow) service.updateConfig({ contextWindow: Number(settings.ollamaContextWindow) || 8192 });
+    if (settings.ollamaTemperature !== undefined) service.updateConfig({ temperature: Number(settings.ollamaTemperature) || 0.1 });
+
+    return service.classifyFile(r, model);
+  });
+
+  ipcMain.handle('llm:recommend-organization', async (_event, req: unknown, modelOverride?: unknown) => {
+    if (!req || typeof req !== 'object') {
+      throw new Error('Invalid LLM organization proposal payload');
+    }
+    const r = req as LlmOrganizeProposalRequest;
+    if (!r.filename) throw new Error('Filename is required for LLM recommendation');
+
+    const model = typeof modelOverride === 'string' && modelOverride.trim() ? modelOverride.trim() : undefined;
+    const settings = db.getSettings();
+    const service = getLocalLlmService();
+    if (settings.ollamaBaseUrl) service.updateConfig({ baseUrl: settings.ollamaBaseUrl });
+    if (settings.ollamaModel) service.updateConfig({ defaultModel: settings.ollamaModel });
+    if (settings.ollamaTimeoutMs) service.updateConfig({ timeoutMs: Number(settings.ollamaTimeoutMs) || 45000 });
+    if (settings.ollamaContextWindow) service.updateConfig({ contextWindow: Number(settings.ollamaContextWindow) || 8192 });
+    if (settings.ollamaTemperature !== undefined) service.updateConfig({ temperature: Number(settings.ollamaTemperature) || 0.1 });
+
+    return service.recommendOrganization(r, model);
+  });
+
+  ipcMain.handle('llm:cancel', async () => {
+    return getLocalLlmService().cancelActiveRequest();
   });
 
   // ── Dialogs ───────────────────────────────────────────────────────────────

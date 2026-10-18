@@ -22,6 +22,7 @@ export const SettingsPage: React.FC = () => {
   const [queueStats, setQueueStats] = useState<JobQueueStats | null>(null);
   const [modelManifest, setModelManifest] = useState<any>(null);
   const [isTogglingQueue, setIsTogglingQueue] = useState(false);
+  const [llmStatus, setLlmStatus] = useState<import('@shared/types').LlmStatus | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -36,16 +37,18 @@ export const SettingsPage: React.FC = () => {
 
   async function loadSettings() {
     try {
-      const [stored, paths, version, manifest] = await Promise.all([
+      const [stored, paths, version, manifest, llmStat] = await Promise.all([
         api().settings.getAll() as Promise<Record<string, unknown>>,
         api().app.getPaths(),
         api().app.getVersion(),
         api().ai.getModelManifest().catch(() => null),
+        api().llm.getStatus().catch(() => null),
       ]);
 
       setAppPaths(paths || {});
       setAppVersion(version || '0.5.0');
       if (manifest) setModelManifest(manifest);
+      if (llmStat) setLlmStatus(llmStat);
 
       if (stored && Object.keys(stored).length > 0) {
         setSettings(prev => ({
@@ -647,6 +650,135 @@ export const SettingsPage: React.FC = () => {
                 Offline models catalog bundled in resources/models.
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Local LLM Engine (Ollama / Qwen3 4B) */}
+        <div className="card" style={{ padding: 'var(--space-5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+            <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600 }}>
+              Local Large Language Model (Ollama)
+            </h3>
+            {llmStatus && (
+              <span
+                style={{
+                  fontSize: 'var(--font-size-xs)',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: llmStatus.isModelReady
+                    ? 'rgba(57, 255, 20, 0.15)'
+                    : llmStatus.isAvailable
+                    ? 'rgba(255, 179, 0, 0.15)'
+                    : 'rgba(255, 59, 48, 0.15)',
+                  color: llmStatus.isModelReady
+                    ? '#39ff14'
+                    : llmStatus.isAvailable
+                    ? '#ffb300'
+                    : '#ff453a',
+                  border: `1px solid ${
+                    llmStatus.isModelReady
+                      ? 'rgba(57, 255, 20, 0.3)'
+                      : llmStatus.isAvailable
+                      ? 'rgba(255, 179, 0, 0.3)'
+                      : 'rgba(255, 59, 48, 0.3)'
+                  }`,
+                }}
+              >
+                {llmStatus.state === 'completed'
+                  ? 'Ready (On-Device)'
+                  : llmStatus.state === 'model_missing'
+                  ? 'Model Missing'
+                  : llmStatus.state === 'unavailable'
+                  ? 'Ollama Offline'
+                  : llmStatus.state}
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
+            Nexora communicates strictly with local Ollama at <code style={{ color: 'var(--color-accent)' }}>{settings.ollamaBaseUrl || 'http://127.0.0.1:11434'}</code>. Zero cloud fallback, zero telemetry, and zero remote API keys.
+          </p>
+
+          {llmStatus?.errorMessage && (
+            <div
+              style={{
+                background: 'rgba(255, 59, 48, 0.1)',
+                border: '1px solid rgba(255, 59, 48, 0.25)',
+                borderRadius: 'var(--radius-sm)',
+                padding: 'var(--space-3)',
+                marginBottom: 'var(--space-4)',
+                fontSize: 'var(--font-size-xs)',
+                color: '#ff453a',
+              }}
+            >
+              ⚠️ <strong>LLM Status Notice:</strong> {llmStatus.errorMessage}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', fontWeight: 500, marginBottom: 'var(--space-2)' }}>
+                Target Ollama Model
+              </label>
+              <input
+                type="text"
+                value={settings.ollamaModel || 'qwen3:4b'}
+                onChange={(e) => setSettings({ ...settings, ollamaModel: e.target.value.trim() })}
+                placeholder="e.g. qwen3:4b or llama3.2:1b"
+                style={{ width: '100%' }}
+              />
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px', display: 'block' }}>
+                Default: <code>qwen3:4b</code>. Installed in Ollama: {llmStatus?.availableModels?.map((m) => m.name).join(', ') || 'None detected'}
+              </span>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', fontWeight: 500, marginBottom: 'var(--space-2)' }}>
+                Ollama Local API Endpoint
+              </label>
+              <input
+                type="text"
+                value={settings.ollamaBaseUrl || 'http://127.0.0.1:11434'}
+                onChange={(e) => setSettings({ ...settings, ollamaBaseUrl: e.target.value.trim() })}
+                style={{ width: '100%' }}
+              />
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px', display: 'block' }}>
+                Loopback address only. Cloud URLs are strictly prohibited.
+              </span>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', fontWeight: 500, marginBottom: 'var(--space-2)' }}>
+                Context Window (tokens): {settings.ollamaContextWindow || 8192}
+              </label>
+              <input
+                type="number"
+                min="2048"
+                max="32768"
+                step="1024"
+                value={settings.ollamaContextWindow || 8192}
+                onChange={(e) => setSettings({ ...settings, ollamaContextWindow: parseInt(e.target.value) || 8192 })}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--font-size-sm)', fontWeight: 500, marginBottom: 'var(--space-2)' }}>
+                Temperature: {settings.ollamaTemperature ?? 0.1}
+              </label>
+              <input
+                type="number"
+                min="0.0"
+                max="0.8"
+                step="0.05"
+                value={settings.ollamaTemperature ?? 0.1}
+                onChange={(e) => setSettings({ ...settings, ollamaTemperature: parseFloat(e.target.value) || 0.1 })}
+                style={{ width: '100%' }}
+              />
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px', display: 'block' }}>
+                Recommended: 0.0 - 0.2 for deterministic categorization.
+              </span>
+            </div>
           </div>
         </div>
 

@@ -127,6 +127,19 @@ export const ExplorerPage: React.FC = () => {
     status?: string;
   } | null>(null);
 
+  // Local LLM (Qwen3 4B / Ollama) Feature states
+  const [isLlmAnalyzing, setIsLlmAnalyzing] = useState(false);
+  const [llmResult, setLlmResult] = useState<{
+    filePath: string;
+    category: string;
+    tags: string[];
+    summary: string;
+    suggestedFolder: string;
+    confidence: number;
+    modelUsed: string;
+    latencyMs: number;
+  } | null>(null);
+
   useEffect(() => {
     loadDrives();
   }, [loadDrives]);
@@ -481,6 +494,51 @@ export const ExplorerPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : String(err), 'AI OCR Failed');
     } finally {
       setIsExtractingOcr(false);
+    }
+  };
+
+  // Run local LLM intelligence analysis (Qwen3 4B via local Ollama)
+  const handleRunLlmAnalysis = async (targetFilePath?: string) => {
+    const filePath = targetFilePath || activeFileDetails?.path;
+    if (!filePath || !activeFileDetails) return;
+
+    setIsLlmAnalyzing(true);
+    try {
+      toast.info('Consulting local LLM via Ollama...', 'Local LLM Reasoning');
+      const filename = activeFileDetails.name;
+      const extension = activeFileDetails.extension;
+      const sizeBytes = activeFileDetails.size;
+      const metadata = activeFileDetails.indexed ? (activeFileDetails.indexed as any) : {};
+      const textExcerpt = ocrResult?.text || activeFileDetails.indexed?.text_preview || undefined;
+
+      const res = await api().llm.classify({
+        filename,
+        extension,
+        sizeBytes,
+        metadata,
+        textExcerpt,
+      });
+
+      setLlmResult({
+        filePath,
+        category: res.category,
+        tags: res.tags,
+        summary: res.summary,
+        suggestedFolder: res.suggestedFolder,
+        confidence: res.confidence,
+        modelUsed: res.modelUsed,
+        latencyMs: res.latencyMs,
+      });
+
+      toast.success(
+        `Classified as '${res.category}' (${res.latencyMs}ms, ${res.modelUsed})`,
+        'LLM Analysis Complete'
+      );
+    } catch (err) {
+      console.error('LLM analysis error:', err);
+      toast.error(err instanceof Error ? err.message : String(err), 'Local LLM Inference Failed');
+    } finally {
+      setIsLlmAnalyzing(false);
     }
   };
 
@@ -1467,6 +1525,59 @@ export const ExplorerPage: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Local LLM (Qwen3 4B) Semantic Classification & Summary */}
+                  {llmResult && llmResult.filePath === activeFileDetails.path && (
+                    <div style={{ marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px dashed rgba(180, 255, 50, 0.2)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--color-accent)', fontSize: '10px', fontWeight: 600 }}>
+                          🤖 Local LLM Intelligence ({llmResult.modelUsed}):
+                        </span>
+                        <span style={{ fontSize: '9px', color: 'var(--color-text-tertiary)' }}>
+                          {llmResult.latencyMs}ms
+                        </span>
+                      </div>
+                      <div style={{ marginBottom: '4px', fontSize: '10px', color: 'var(--color-text-primary)' }}>
+                        <strong>Category:</strong> <span className="badge badge-accent" style={{ fontSize: '9px', padding: '1px 4px' }}>{llmResult.category}</span>
+                        {llmResult.suggestedFolder && (
+                          <span style={{ marginLeft: '6px' }}>
+                            <strong>Folder:</strong> {llmResult.suggestedFolder}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          background: 'rgba(0,0,0,0.25)',
+                          padding: '6px',
+                          borderRadius: '4px',
+                          fontSize: '10px',
+                          color: 'var(--color-text-secondary)',
+                          marginBottom: '4px',
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {llmResult.summary}
+                      </div>
+                      {llmResult.tags && llmResult.tags.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                          {llmResult.tags.map((t, i) => (
+                            <span
+                              key={i}
+                              style={{
+                                padding: '1px 5px',
+                                borderRadius: '3px',
+                                background: 'rgba(180, 255, 50, 0.12)',
+                                color: 'var(--color-accent)',
+                                fontSize: '9px',
+                              }}
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Local AI Interactive Action Triggers */}
                   <div style={{ display: 'flex', gap: '4px', marginTop: 'var(--space-3)' }}>
                     <button
@@ -1476,7 +1587,7 @@ export const ExplorerPage: React.FC = () => {
                       onClick={() => handleRunClassification(activeFileDetails.path)}
                       title="Run MobileNetV2 image classification to generate semantic tags"
                     >
-                      {isClassifying ? 'Analyzing...' : '🏷 AI Vision Tag'}
+                      {isClassifying ? 'Analyzing...' : '🏷 Vision'}
                     </button>
                     <button
                       className="btn btn-secondary btn-sm"
@@ -1485,7 +1596,16 @@ export const ExplorerPage: React.FC = () => {
                       onClick={() => handleRunOcr(activeFileDetails.path)}
                       title="Extract printed text via neural optical character recognition"
                     >
-                      {isExtractingOcr ? 'Extracting...' : '📄 Run OCR'}
+                      {isExtractingOcr ? 'Extracting...' : '📄 OCR'}
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ flex: 1.2, fontSize: '10px', padding: '4px 6px' }}
+                      disabled={isLlmAnalyzing}
+                      onClick={() => handleRunLlmAnalysis(activeFileDetails.path)}
+                      title="Reason with local Qwen3 4B on Ollama for semantic classification and summaries"
+                    >
+                      {isLlmAnalyzing ? 'Reasoning...' : '🤖 Ask LLM'}
                     </button>
                   </div>
                 </div>

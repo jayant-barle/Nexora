@@ -129,3 +129,44 @@ To verify or refresh model artifacts during development:
 ```powershell
 python scripts/download-models.py
 ```
+
+---
+
+## 6. Local LLM Setup — Qwen3 4B via Local Ollama
+
+Nexora integrates local Large Language Model reasoning via **Ollama** for intelligent semantic classification and folder hierarchy advisory.
+
+### Hardware Target
+- **Recommended GPU:** NVIDIA GeForce RTX 4060 (8 GB VRAM) with CUDA acceleration.
+- **System Memory:** 16 GB RAM minimum.
+- **OS:** Windows 11 64-bit.
+
+### Installation & Model Setup
+1. **Install Ollama for Windows**:
+   Download and install from [ollama.com](https://ollama.com). Verify installation:
+   ```powershell
+   ollama --version
+   ```
+
+2. **Pull the Qwen3 4B Model**:
+   Nexora defaults to `qwen3:4b` (approx. 2.5 GB). Run once in PowerShell:
+   ```powershell
+   ollama pull qwen3:4b
+   ```
+   *Note: Nexora strictly prohibits silent model downloads during normal application runtime. The model must be pulled explicitly via Ollama CLI.*
+
+3. **Verify Local Service**:
+   Ensure Ollama is listening locally on loopback `http://127.0.0.1:11434`:
+   ```powershell
+   curl http://127.0.0.1:11434/api/tags
+   ```
+
+### Enforcing 100% Offline / Local-Only Operation
+To guarantee that Ollama never connects to external networks or proxies in air-gapped environments:
+```powershell
+[System.Environment]::SetEnvironmentVariable('OLLAMA_HOST', '127.0.0.1:11434', 'Machine')
+[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', 'app://*,http://localhost*,http://127.0.0.1*', 'Machine')
+```
+- Remote AI endpoints and cloud fallback tags are permanently disabled in Nexora.
+- Document text, file paths, and extracted metadata are never transmitted outside your PC.
+

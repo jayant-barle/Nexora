@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+### [0.9.4] — 2026-10-19
+
+**Added & Enhanced**
+- **Local LLM Integration (Qwen3 4B via Local Ollama)**:
+  - **Local LLM Client Service (`src/main/local-llm-service.ts`)**:
+    - Created robust local LLM client interfacing with Ollama's local JSON API at `http://127.0.0.1:11434/api/chat`.
+    - Set `qwen3:4b` as the configurable default model with strict 1-concurrent request bounding, configurable timeouts (default 45s), 8,192 token context window, and temperature 0.0–0.2 for deterministic classification.
+    - Added comprehensive health and model availability checks before dispatching inference requests.
+    - Strictly prohibited silent background model downloads during normal application runtime.
+    - Implemented cancellation via `AbortController` and `llm:cancel` IPC channel.
+  - **Strict Schema Validation & Untrusted Data Sanitization**:
+    - Built rigid JSON schema validators (`parseAndValidateClassificationJson`, `parseAndValidateProposalJson`) treating all model outputs and document texts as untrusted data.
+    - Stripped path traversal tokens (`..`), leading slashes, drive letters, and Windows forbidden characters, falling back safely to `Review_Unclassified` on invalid paths.
+    - Standardized and mapped extracted categories strictly to valid enums (`document`, `image`, `video`, `audio`, `archive`, `code`, `other`).
+  - **IPC Bridge & Type Contracts (`src/shared/types.ts`, `src/preload/index.ts`, `src/main/ipc-handlers.ts`, `src/renderer/services/api.ts`)**:
+    - Added `llm:get-status`, `llm:classify`, `llm:recommend-organization`, and `llm:cancel` IPC channels.
+    - Exposed `api().llm` in the renderer context bridge with complete mock fallback.
+  - **Explorer Page In-Place LLM Reasoning (`src/renderer/pages/ExplorerPage.tsx`)**:
+    - Added **🤖 Ask LLM** interactive trigger to the right-hand details drawer.
+    - Displays genuine inference latency, model name, semantic summary, category badges, and normalized tags.
+  - **Organize Page Smart Taxonomy Recommendation (`src/renderer/pages/OrganizePage.tsx`)**:
+    - Added **🤖 LLM Smart Taxonomy** action button in the Organize header.
+    - Uses local LLM reasoning to propose intelligent hierarchical folders while strictly preserving the copy-first verified filesystem service for execution.
+  - **Settings Page Local LLM Configuration Card (`src/renderer/pages/SettingsPage.tsx`)**:
+    - Added dedicated Local LLM configuration card displaying real-time Ollama daemon health, active model state, context window, temperature, and actionable guidance when models are missing.
+  - **Quality Assurance & Verification (`tests/unit/local-llm-service.test.ts`, `tests/integration/local-llm-live.test.ts`)**:
+    - Added unit test suite covering schema validation, path traversal neutralization, missing model detection, timeouts, and cancellation.
+    - Added live integration test verifying real inference against local Ollama models.
+    - All 18 test suites passing (142/142 tests).
+
+---
+
 ### [0.9.3] — 2026-10-18
 
 **Fixed & Enhanced**

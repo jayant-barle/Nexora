@@ -24,6 +24,7 @@ export const OrganizePage: React.FC = () => {
   const [destinationRoot, setDestinationRoot] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterQuery, setFilterQuery] = useState('');
+  const [isGeneratingLlmProposals, setIsGeneratingLlmProposals] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -47,6 +48,64 @@ export const OrganizePage: React.FC = () => {
       console.error('Failed to load organization proposals:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGenerateLlmProposals() {
+    if (proposals.length === 0) {
+      toast.info('No pending proposals to enhance. Run Recalculate Proposals first.', 'Notice');
+      return;
+    }
+    setIsGeneratingLlmProposals(true);
+    try {
+      toast.info('Consulting local LLM (Qwen3 4B via Ollama) for smart folder hierarchies...', 'LLM Advisor');
+      const targetItems = proposals.slice(0, 5); // Limit batch to 5 for responsive interactive feedback
+      let enhancedCount = 0;
+
+      const updatedProposals = [...proposals];
+      for (let i = 0; i < targetItems.length; i++) {
+        const item = targetItems[i];
+        const filename = item.source_path.split(/[\\/]/).pop() || 'file';
+        const ext = '.' + (filename.split('.').pop() || '');
+
+        try {
+          const rec = await api().llm.recommendOrganization({
+            filename,
+            extension: ext,
+            metadataSnapshot: item.metadata_snapshot,
+            availableRules: rules.map((r) => r.name),
+          });
+
+          // Validate trusted destination prefix
+          if (rec.relativeFolder && !rec.relativeFolder.includes('..')) {
+            const destRoot = destinationRoot || 'C:\\Nexora Organized';
+            const safeProposedDest = `${destRoot}\\${rec.relativeFolder.replace(/\//g, '\\')}\\${filename}`;
+            const targetIdx = updatedProposals.findIndex((p) => p.id === item.id);
+            if (targetIdx !== -1) {
+              updatedProposals[targetIdx] = {
+                ...updatedProposals[targetIdx],
+                proposed_destination: safeProposedDest,
+                rule_name: `🤖 ${rec.ruleName}`,
+                warnings: [...(updatedProposals[targetIdx].warnings || []), ...rec.warnings],
+              };
+              enhancedCount++;
+            }
+          }
+        } catch (itemErr: any) {
+          console.warn(`LLM failed for item ${filename}:`, itemErr.message);
+        }
+      }
+
+      setProposals(updatedProposals);
+      toast.success(
+        `Enhanced ${enhancedCount} proposal destinations via local LLM reasoning.`,
+        'LLM Organization Proposals'
+      );
+    } catch (err) {
+      console.error('LLM organization failed:', err);
+      toast.error(err instanceof Error ? err.message : String(err), 'LLM Proposal Failed');
+    } finally {
+      setIsGeneratingLlmProposals(false);
     }
   }
 
@@ -156,16 +215,26 @@ export const OrganizePage: React.FC = () => {
           <button
             className="btn btn-secondary"
             onClick={handleRunScanPipeline}
-            disabled={runningPipeline || executing}
+            disabled={runningPipeline || executing || isGeneratingLlmProposals}
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             {runningPipeline ? <span className="spinner-border spinner-border-sm" /> : '⚡'}
             <span>{runningPipeline ? 'Analyzing Folders...' : 'Recalculate Proposals'}</span>
           </button>
           <button
+            className="btn btn-secondary"
+            onClick={handleGenerateLlmProposals}
+            disabled={runningPipeline || executing || isGeneratingLlmProposals || proposals.length === 0}
+            title="Reason with local Qwen3 4B on Ollama to optimize folder taxonomy and hierarchies"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', borderColor: 'rgba(180, 255, 50, 0.4)', color: 'var(--color-accent)' }}
+          >
+            {isGeneratingLlmProposals ? <span className="spinner-border spinner-border-sm" /> : '🤖'}
+            <span>{isGeneratingLlmProposals ? 'LLM Reasoning...' : 'LLM Smart Taxonomy'}</span>
+          </button>
+          <button
             className="btn btn-primary"
             onClick={handleExecuteOrganization}
-            disabled={executing || runningPipeline || proposals.length === 0}
+            disabled={executing || runningPipeline || isGeneratingLlmProposals || proposals.length === 0}
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             {executing ? <span className="spinner-border spinner-border-sm" /> : '✓'}

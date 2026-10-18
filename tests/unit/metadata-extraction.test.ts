@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { AiWorkerClient } from '../../src/main/ai-worker-client';
+import archiver from 'archiver';
 
 describe('Metadata Intelligence Extraction Pipeline', () => {
   let client: AiWorkerClient;
@@ -76,9 +77,8 @@ trailer
 
     // Create a mock DOCX zip structure using built-in archiver or minimal zip header
     // Create ZIP using Python or standard zip structure
-    const archiver = await import('archiver');
     const output = fs.createWriteStream(docxFile);
-    const archive = archiver.default('zip');
+    const archive = archiver('zip');
 
     const coreXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
@@ -162,9 +162,8 @@ trailer
 
   it('inspects ZIP archive entry count safely without executing files', async () => {
     const zipFile = path.join(tempDir, 'backup.zip');
-    const archiver = await import('archiver');
     const output = fs.createWriteStream(zipFile);
-    const archive = archiver.default('zip');
+    const archive = archiver('zip');
 
     await new Promise<void>((resolve, reject) => {
       output.on('close', resolve);

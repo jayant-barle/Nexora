@@ -98,6 +98,16 @@ const electronAPI = {
     extractOcr: (filePath: string) => ipcRenderer.invoke('ai:extract-ocr', filePath),
   },
 
+  // ── Local LLM (Ollama) ──────────────────────────────────────────────────
+  llm: {
+    getStatus: (modelName?: string) => ipcRenderer.invoke('llm:get-status', modelName),
+    classify: (req: import('../shared/types').LlmClassificationRequest, modelOverride?: string) =>
+      ipcRenderer.invoke('llm:classify', req, modelOverride),
+    recommendOrganization: (req: import('../shared/types').LlmOrganizeProposalRequest, modelOverride?: string) =>
+      ipcRenderer.invoke('llm:recommend-organization', req, modelOverride),
+    cancel: () => ipcRenderer.invoke('llm:cancel'),
+  },
+
   // ── Settings ────────────────────────────────────────────────────────────
   settings: {
     getAll: () => ipcRenderer.invoke('settings:get-all'),

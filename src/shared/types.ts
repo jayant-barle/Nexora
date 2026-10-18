@@ -361,7 +361,11 @@ export type IpcChannel =
   | 'system:get-hardware-metrics'
   | 'system:get-queue-stats'
   | 'system:pause-all-jobs'
-  | 'system:resume-all-jobs';
+  | 'system:resume-all-jobs'
+  | 'llm:get-status'
+  | 'llm:classify'
+  | 'llm:recommend-organization'
+  | 'llm:cancel';
 
 // ─── API Request/Response Types ──────────────────────────────────────────────
 
@@ -585,6 +589,12 @@ export interface AppSettings {
   maxCpuWorkers: number;
   maxDiskWorkers: number;
   maxAiWorkers: number;
+  // Local LLM (Ollama)
+  ollamaBaseUrl: string;
+  ollamaModel: string;
+  ollamaContextWindow: number;
+  ollamaTemperature: number;
+  ollamaTimeoutMs: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -609,4 +619,73 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxCpuWorkers: 2,
   maxDiskWorkers: 1,
   maxAiWorkers: 1,
+  ollamaBaseUrl: 'http://127.0.0.1:11434',
+  ollamaModel: 'qwen3:4b',
+  ollamaContextWindow: 8192,
+  ollamaTemperature: 0.1,
+  ollamaTimeoutMs: 45000,
 };
+
+// ─── Local LLM Definitions ───────────────────────────────────────────────────
+
+export type LlmState =
+  | 'unavailable'
+  | 'model_missing'
+  | 'initializing'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+export interface LlmModelInfo {
+  name: string;
+  sizeBytes?: number;
+  modifiedAt?: string;
+  parameterSize?: string;
+  quantization?: string;
+}
+
+export interface LlmStatus {
+  state: LlmState;
+  isAvailable: boolean;
+  modelName: string;
+  isModelReady: boolean;
+  baseUrl: string;
+  availableModels?: LlmModelInfo[];
+  errorMessage?: string;
+}
+
+export interface LlmClassificationRequest {
+  filename: string;
+  extension: string;
+  sizeBytes: number;
+  metadata?: Record<string, unknown>;
+  textExcerpt?: string;
+}
+
+export interface LlmClassificationResult {
+  category: 'document' | 'image' | 'video' | 'audio' | 'archive' | 'code' | 'other';
+  tags: string[];
+  summary: string;
+  suggestedFolder: string;
+  confidence: number;
+  modelUsed: string;
+  latencyMs: number;
+}
+
+export interface LlmOrganizeProposalRequest {
+  filename: string;
+  extension: string;
+  metadataSnapshot?: Record<string, unknown>;
+  confirmedPerson?: string | null;
+  availableRules?: string[];
+}
+
+export interface LlmOrganizeProposalResult {
+  relativeFolder: string;
+  reasoning: string;
+  ruleName: string;
+  warnings: string[];
+  modelUsed: string;
+  latencyMs: number;
+}
+

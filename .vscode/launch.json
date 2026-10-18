@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: AI Worker (main.py)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/ai-worker/src/main.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/ai-worker",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/ai-worker/src"
+      }
+    },
+    {
+      "name": "Python: Attach to Debugpy (5678)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      }
+    },
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    }
+  ]
+}
