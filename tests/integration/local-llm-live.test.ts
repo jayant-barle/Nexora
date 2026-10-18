@@ -9,7 +9,7 @@ import { LocalLlmService } from '../../src/main/local-llm-service';
 describe('Local Ollama Real Inference Integration Suite', () => {
   const service = new LocalLlmService({
     baseUrl: 'http://127.0.0.1:11434',
-    timeoutMs: 30000,
+    timeoutMs: 90000,
   });
 
   it('queries live local Ollama status without crashing or remote requests', async () => {
@@ -48,7 +48,8 @@ describe('Local Ollama Real Inference Integration Suite', () => {
     expect(result.summary.length).toBeGreaterThan(10);
     expect(result.latencyMs).toBeGreaterThan(0);
     expect(result.modelUsed).toBe('llama3.2:1b');
-  });
+  }, 40000);
+
 
   it('recommends safe organization plan using real local model without executing file changes', async () => {
     const status = await service.getStatus('llama3.2:1b');
@@ -73,5 +74,5 @@ describe('Local Ollama Real Inference Integration Suite', () => {
     expect(proposal.relativeFolder).not.toContain('..');
     expect(proposal.relativeFolder).not.toMatch(/^[a-zA-Z]:/);
     expect(proposal.reasoning.length).toBeGreaterThan(5);
-  });
+  }, 40000);
 });

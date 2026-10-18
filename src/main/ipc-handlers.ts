@@ -13,7 +13,7 @@ import { getHardwareMonitor } from './hardware-monitor';
 import { getWatcherService } from './watcher';
 import { getAiWorkerClient } from './ai-worker-client';
 import { executeBatchCopyOperation, revertBatchOperation, CopyItem } from './file-operations';
-import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization, getStoredProposals, runAutoOrganizationPipeline, resolveDefaultManagedLibrary } from './organizer';
+import { getOrganizationRules, saveOrganizationRule, generateOrganizationProposals, executeOrganization, getStoredProposals, runAutoOrganizationPipeline, resolveDefaultManagedLibrary, updateProposalStatus, saveProposalItemsToDb } from './organizer';
 import { reconcileLibrary, indexFolderIncremental } from './indexer';
 import { getLocalLlmService } from './local-llm-service';
 import type { OrganizationRule, OrganizationProposalItem, SearchQuery, LlmClassificationRequest, LlmOrganizeProposalRequest } from '../shared/types';
@@ -433,6 +433,17 @@ export function registerIpcHandlers(): void {
     return service.recommendOrganization(r, model);
   });
 
+  ipcMain.handle('llm:translate-query', async (_event, query: unknown, modelOverride?: unknown) => {
+    const q = typeof query === 'string' ? query : '';
+    const model = typeof modelOverride === 'string' && modelOverride.trim() ? modelOverride.trim() : undefined;
+    const settings = db.getSettings();
+    const service = getLocalLlmService();
+    if (settings.ollamaBaseUrl) service.updateConfig({ baseUrl: settings.ollamaBaseUrl });
+    if (settings.ollamaModel) service.updateConfig({ defaultModel: settings.ollamaModel });
+    if (settings.ollamaTimeoutMs) service.updateConfig({ timeoutMs: Number(settings.ollamaTimeoutMs) || 45000 });
+    return service.translateNaturalLanguageQuery(q, model);
+  });
+
   ipcMain.handle('llm:cancel', async () => {
     return getLocalLlmService().cancelActiveRequest();
   });
@@ -490,6 +501,19 @@ export function registerIpcHandlers(): void {
     const s = typeof status === 'string' ? status : undefined;
     const l = typeof limit === 'number' ? limit : 200;
     return getStoredProposals(s, l);
+  });
+
+  ipcMain.handle('organizer:save-proposals', async (_event, proposals: unknown, ruleId?: unknown) => {
+    if (!Array.isArray(proposals)) throw new Error('proposals must be an array');
+    const rId = typeof ruleId === 'string' ? ruleId : null;
+    saveProposalItemsToDb(proposals as OrganizationProposalItem[], rId);
+    return true;
+  });
+
+  ipcMain.handle('organizer:update-proposal-status', async (_event, proposalId: unknown, newStatus: unknown) => {
+    const id = validateString(proposalId, 'proposalId');
+    const status = validateString(newStatus, 'status') as 'proposed' | 'confirmed' | 'rejected' | 'executed';
+    return updateProposalStatus(id, status);
   });
 
   ipcMain.handle('organizer:run-auto-pipeline', async (_event, rootIdOrPath?: unknown, destinationRootOverride?: unknown) => {

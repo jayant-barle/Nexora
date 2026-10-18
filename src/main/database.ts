@@ -16,6 +16,13 @@ export function getDb(): Database.Database {
   return db;
 }
 
+export function resolveAppDatabasePath(userDataPath: string): string {
+  const legacyDb = path.join(userDataPath, 'ai-file-manager.db');
+  return fs.existsSync(legacyDb)
+    ? legacyDb
+    : path.join(userDataPath, 'nexora.db');
+}
+
 export function initDatabase(dbPath: string): Database.Database {
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) {
@@ -31,7 +38,7 @@ export function initDatabase(dbPath: string): Database.Database {
   return db;
 }
 
-function runMigrations(database: Database.Database): void {
+export function runMigrations(database: Database.Database): void {
   // Check current schema version
   const hasVersionTable = database.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -63,15 +70,59 @@ function runMigrations(database: Database.Database): void {
       if (migrationFiles.length > 0) {
         const fullPaths = migrationFiles.map(f => path.join(p, f));
         runMigrationFiles(database, fullPaths, currentVersion);
+        ensureSchemaIntegrity(database);
         return;
       }
     }
   }
 
-  // If no migration files found, run inline schema
+  // If no migration files found, run inline schema for fresh db
   if (currentVersion === 0) {
     console.log('No migration files found, creating schema inline...');
     createSchemaInline(database);
+  } else {
+    // When migration files are absent in packaged builds or custom environments,
+    // ensure existing databases (v1-v4) receive essential schema updates idempotently.
+    ensureSchemaIntegrity(database);
+  }
+}
+
+function ensureSchemaIntegrity(database: Database.Database): void {
+  try {
+    const tableExists = database.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='organization_proposals'"
+    ).get();
+
+    if (tableExists) {
+      const cols = database.prepare("PRAGMA table_info(organization_proposals)").all() as Array<{ name: string }>;
+      const hasWarningFlags = cols.some(c => c.name === 'warning_flags');
+      if (!hasWarningFlags) {
+        console.log('[Migrations] Adding missing warning_flags column to organization_proposals...');
+        database.exec("ALTER TABLE organization_proposals ADD COLUMN warning_flags TEXT;");
+        database.exec(`
+          INSERT OR REPLACE INTO schema_version (version, description)
+          VALUES (4, 'Add warning_flags column to organization_proposals (inline integrity upgrade)');
+        `);
+      }
+
+      const hasMetadataSnapshot = cols.some(c => c.name === 'metadata_snapshot_json');
+      if (!hasMetadataSnapshot) {
+        console.log('[Migrations] Adding missing metadata_snapshot_json column to organization_proposals...');
+        database.exec("ALTER TABLE organization_proposals ADD COLUMN metadata_snapshot_json TEXT NOT NULL DEFAULT '{}';");
+        database.exec(`
+          INSERT OR REPLACE INTO schema_version (version, description)
+          VALUES (5, 'Add metadata_snapshot_json column to organization_proposals (inline integrity upgrade)');
+        `);
+      }
+
+      const hasRuleName = cols.some(c => c.name === 'rule_name');
+      if (!hasRuleName) {
+        console.log('[Migrations] Adding missing rule_name column to organization_proposals...');
+        database.exec("ALTER TABLE organization_proposals ADD COLUMN rule_name TEXT;");
+      }
+    }
+  } catch (err) {
+    console.warn('[Migrations] Schema integrity verification warning:', err);
   }
 }
 
@@ -328,8 +379,10 @@ function createSchemaInline(database: Database.Database): void {
       source_file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
       source_path TEXT NOT NULL,
       proposed_destination TEXT NOT NULL,
+      rule_name TEXT,
       status TEXT NOT NULL DEFAULT 'proposed',
       warning_flags TEXT,
+      metadata_snapshot_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS app_settings (
@@ -346,6 +399,7 @@ function createSchemaInline(database: Database.Database): void {
     INSERT OR IGNORE INTO schema_version (version, description) VALUES (2, 'Metadata Intelligence Engine');
     INSERT OR IGNORE INTO schema_version (version, description) VALUES (3, 'Scan infrastructure, roots telemetry, and exact duplicate indexing');
     INSERT OR IGNORE INTO schema_version (version, description) VALUES (4, 'Add warning_flags column to organization_proposals');
+    INSERT OR IGNORE INTO schema_version (version, description) VALUES (5, 'Add metadata_snapshot_json column to organization_proposals');
 
     INSERT OR IGNORE INTO organization_rules (id, name, pattern, description, is_default)
     VALUES

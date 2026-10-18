@@ -243,4 +243,82 @@ describe('LocalLlmService — Schema Validation, Security & Guardrails', () => {
       global.fetch = originalFetch;
     }
   });
+
+  // ── Result Caching & Reuse ────────────────────────────────────────────────
+
+  it('reuses cached classification result for identical file fingerprint', async () => {
+    const originalFetch = global.fetch;
+    let callCount = 0;
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/tags')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ models: [{ name: 'qwen3-vl:8b' }] }),
+        });
+      }
+      callCount++;
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          message: {
+            content: JSON.stringify({
+              category: 'document',
+              tags: ['invoice', 'financial'],
+              summary: 'Invoice #1042',
+              suggested_folder: 'Invoices',
+              confidence: 0.98,
+            }),
+          },
+        }),
+      });
+    });
+
+    try {
+      const req = {
+        filename: 'Invoice_1042.pdf',
+        extension: '.pdf',
+        sizeBytes: 45000,
+        textExcerpt: 'Invoice total: $450.00',
+      };
+
+      const res1 = await service.classifyFile(req, 'qwen3-vl:8b');
+      expect(res1.category).toBe('document');
+      expect(callCount).toBe(1);
+
+      // Second identical request should be served from memory cache without fetch
+      const res2 = await service.classifyFile(req, 'qwen3-vl:8b');
+      expect(res2.category).toBe('document');
+      expect(res2.latencyMs).toBe(0);
+      expect(callCount).toBe(1); // Still 1! Cache hit!
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  // ── Natural Language Search Query Translation ─────────────────────────────
+
+  it('translates natural language search query into structured search filters', () => {
+    const rawOutput = JSON.stringify({
+      text: 'Sony vacation',
+      category: 'image',
+      camera: 'Sony A7IV',
+      dateFrom: '2024-01-01',
+      dateTo: '2024-12-31',
+      explanation: 'Extracted Sony camera and 2024 image parameters.',
+    });
+
+    const translated = service.parseAndValidateSearchQueryJson(rawOutput, 'photos taken with Sony in 2024');
+    expect(translated.searchQuery.category).toBe('image');
+    expect(translated.searchQuery.camera).toBe('Sony A7IV');
+    expect(translated.searchQuery.dateFrom).toBe('2024-01-01');
+    expect(translated.searchQuery.dateTo).toBe('2024-12-31');
+    expect(translated.explanation).toContain('Sony');
+  });
+
+  it('gracefully falls back to original text search when LLM output is malformed', () => {
+    const malformed = 'I cannot understand your query.';
+    const translated = service.parseAndValidateSearchQueryJson(malformed, 'taxes 2023');
+    expect(translated.searchQuery.text).toBe('taxes 2023');
+    expect(translated.explanation).toContain('defaulted to text search');
+  });
 });

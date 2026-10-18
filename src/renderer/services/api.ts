@@ -125,6 +125,12 @@ function createMockAPI(): ElectronAPI {
         modelUsed: 'mock',
         latencyMs: 50,
       }),
+      translateQuery: async (q: string) => ({
+        searchQuery: { text: q },
+        explanation: 'Mock natural language query translation',
+        modelUsed: 'mock',
+        latencyMs: 10,
+      }),
       cancel: async () => true,
     },
     settings: {
@@ -159,6 +165,8 @@ function createMockAPI(): ElectronAPI {
         errors: [],
       }),
       getStoredProposals: async () => [],
+      saveProposals: async () => true,
+      updateProposalStatus: async () => true,
       runAutoPipeline: async () => ({
         proposalsGenerated: 0,
         executed: false,

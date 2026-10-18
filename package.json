@@ -1,6 +1,6 @@
 {
   "name": "nexora",
-  "version": "0.9.3",
+  "version": "0.9.8",
   "description": "Nexora — AI File Manager. Your files. Your intelligence. Your control.",
   "main": "dist/main/index.js",
   "author": "Nexora",
@@ -95,7 +95,12 @@
     "extraResources": [
       {
         "from": "ai-worker",
-        "to": "ai-worker"
+        "to": "ai-worker",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
       },
       {
         "from": "database/migrations",

@@ -493,6 +493,10 @@ export interface OrganizationProposalItem {
   file_size: number;
   is_identical_duplicate?: boolean;
   has_collision?: boolean;
+  category?: string;
+  explanation?: string;
+  confidence?: number;
+  source_fingerprint?: string;
 }
 
 export interface OrganizationPreviewSummary {
@@ -620,10 +624,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxDiskWorkers: 1,
   maxAiWorkers: 1,
   ollamaBaseUrl: 'http://127.0.0.1:11434',
-  ollamaModel: 'qwen3:4b',
-  ollamaContextWindow: 8192,
+  ollamaModel: 'qwen3-vl:8b',
+  ollamaContextWindow: 4096,
   ollamaTemperature: 0.1,
-  ollamaTimeoutMs: 45000,
+  ollamaTimeoutMs: 90000,
 };
 
 // ─── Local LLM Definitions ───────────────────────────────────────────────────
@@ -685,6 +689,15 @@ export interface LlmOrganizeProposalResult {
   reasoning: string;
   ruleName: string;
   warnings: string[];
+  modelUsed: string;
+  latencyMs: number;
+  category?: 'document' | 'image' | 'video' | 'audio' | 'archive' | 'code' | 'other';
+  confidence?: number;
+}
+
+export interface LlmQueryTranslationResult {
+  searchQuery: SearchQuery;
+  explanation: string;
   modelUsed: string;
   latencyMs: number;
 }

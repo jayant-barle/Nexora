@@ -699,19 +699,44 @@ export const SettingsPage: React.FC = () => {
             Nexora communicates strictly with local Ollama at <code style={{ color: 'var(--color-accent)' }}>{settings.ollamaBaseUrl || 'http://127.0.0.1:11434'}</code>. Zero cloud fallback, zero telemetry, and zero remote API keys.
           </p>
 
-          {llmStatus?.errorMessage && (
+          {llmStatus && !llmStatus.isModelReady && (
             <div
               style={{
-                background: 'rgba(255, 59, 48, 0.1)',
-                border: '1px solid rgba(255, 59, 48, 0.25)',
+                background: 'rgba(255, 179, 0, 0.08)',
+                border: '1px solid rgba(255, 179, 0, 0.3)',
                 borderRadius: 'var(--radius-sm)',
                 padding: 'var(--space-3)',
                 marginBottom: 'var(--space-4)',
                 fontSize: 'var(--font-size-xs)',
-                color: '#ff453a',
+                color: '#e6a100',
               }}
             >
-              ⚠️ <strong>LLM Status Notice:</strong> {llmStatus.errorMessage}
+              <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                ℹ️ Local AI Model Setup Instructions
+              </div>
+              <div style={{ color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                {llmStatus.state === 'unavailable' ? (
+                  <>
+                    Ollama is not running at <code>{settings.ollamaBaseUrl || 'http://127.0.0.1:11434'}</code>.
+                    To use LLM-assisted organization, install Ollama from{' '}
+                    <a href="https://ollama.com" target="_blank" rel="noreferrer" style={{ color: 'var(--color-accent)' }}>
+                      ollama.com
+                    </a>{' '}
+                    and start it via terminal (<code>ollama serve</code>). Standard scanning, deduplication, and rule-based organization remain fully functional without Ollama.
+                  </>
+                ) : llmStatus.state === 'model_missing' ? (
+                  <>
+                    Target model <code>{settings.ollamaModel || 'qwen3-vl:8b'}</code> is not installed in Ollama.
+                    Open Windows Terminal and run:
+                    <div style={{ background: '#111', padding: '6px 10px', borderRadius: '4px', margin: '6px 0', fontFamily: 'var(--font-mono)' }}>
+                      ollama pull {settings.ollamaModel || 'qwen3-vl:8b'}
+                    </div>
+                    Nexora never automatically downloads models over the internet to preserve your privacy and bandwidth.
+                  </>
+                ) : (
+                  llmStatus.errorMessage || 'Local LLM is currently initializing or unavailable.'
+                )}
+              </div>
             </div>
           )}
 
@@ -722,13 +747,13 @@ export const SettingsPage: React.FC = () => {
               </label>
               <input
                 type="text"
-                value={settings.ollamaModel || 'qwen3:4b'}
+                value={settings.ollamaModel || 'qwen3-vl:8b'}
                 onChange={(e) => setSettings({ ...settings, ollamaModel: e.target.value.trim() })}
-                placeholder="e.g. qwen3:4b or llama3.2:1b"
+                placeholder="e.g. qwen3-vl:8b or llama3.2:1b"
                 style={{ width: '100%' }}
               />
               <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px', display: 'block' }}>
-                Default: <code>qwen3:4b</code>. Installed in Ollama: {llmStatus?.availableModels?.map((m) => m.name).join(', ') || 'None detected'}
+                Default: <code>qwen3-vl:8b</code>. Installed in Ollama: {llmStatus?.availableModels?.map((m) => m.name).join(', ') || 'None detected'}
               </span>
             </div>
 

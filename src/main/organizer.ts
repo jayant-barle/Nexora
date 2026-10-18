@@ -511,13 +511,27 @@ export function saveProposalItemsToDb(proposals: OrganizationProposalItem[], rul
   
   // Inspect table columns to maintain full compatibility across schema variants
   let hasRuleNameCol = false;
+  let hasMetadataCol = false;
   try {
     const cols = db.prepare('PRAGMA table_info(organization_proposals)').all() as Array<{ name: string }>;
     hasRuleNameCol = cols.some((c) => c.name === 'rule_name');
+    hasMetadataCol = cols.some((c) => c.name === 'metadata_snapshot_json');
   } catch {}
 
-  const insertProposalSql = hasRuleNameCol
-    ? `
+  let insertProposalSql = '';
+  if (hasRuleNameCol && hasMetadataCol) {
+    insertProposalSql = `
+      INSERT INTO organization_proposals (id, rule_id, source_file_id, source_path, proposed_destination, rule_name, status, warning_flags, metadata_snapshot_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        proposed_destination = excluded.proposed_destination,
+        rule_name = excluded.rule_name,
+        status = excluded.status,
+        warning_flags = excluded.warning_flags,
+        metadata_snapshot_json = excluded.metadata_snapshot_json
+    `;
+  } else if (hasRuleNameCol) {
+    insertProposalSql = `
       INSERT INTO organization_proposals (id, rule_id, source_file_id, source_path, proposed_destination, rule_name, status, warning_flags, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO UPDATE SET
@@ -525,8 +539,9 @@ export function saveProposalItemsToDb(proposals: OrganizationProposalItem[], rul
         rule_name = excluded.rule_name,
         status = excluded.status,
         warning_flags = excluded.warning_flags
-    `
-    : `
+    `;
+  } else {
+    insertProposalSql = `
       INSERT INTO organization_proposals (id, rule_id, source_file_id, source_path, proposed_destination, status, warning_flags, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO UPDATE SET
@@ -534,13 +549,35 @@ export function saveProposalItemsToDb(proposals: OrganizationProposalItem[], rul
         status = excluded.status,
         warning_flags = excluded.warning_flags
     `;
+  }
 
   const insertProposalStmt = db.prepare(insertProposalSql);
 
   const tx = db.transaction((items: OrganizationProposalItem[]) => {
     for (const p of items) {
       const warningJson = p.warnings && p.warnings.length > 0 ? JSON.stringify(p.warnings) : null;
-      if (hasRuleNameCol) {
+      const snapshot: Record<string, unknown> = {
+        ...(p.metadata_snapshot || {}),
+        category: p.category || (p.metadata_snapshot as any)?.category,
+        explanation: p.explanation || (p.metadata_snapshot as any)?.explanation,
+        confidence: p.confidence !== undefined ? p.confidence : (p.metadata_snapshot as any)?.confidence,
+        source_fingerprint: p.source_fingerprint || (p.metadata_snapshot as any)?.source_fingerprint,
+      };
+      const metadataJson = JSON.stringify(snapshot);
+
+      if (hasRuleNameCol && hasMetadataCol) {
+        insertProposalStmt.run(
+          p.id,
+          ruleId ?? p.rule_id ?? null,
+          p.source_file_id,
+          p.source_path,
+          p.proposed_destination,
+          p.rule_name || 'Metadata Rule',
+          p.status,
+          warningJson,
+          metadataJson
+        );
+      } else if (hasRuleNameCol) {
         insertProposalStmt.run(
           p.id,
           ruleId ?? p.rule_id ?? null,
@@ -573,6 +610,7 @@ export function getStoredProposals(status = 'proposed', limit = 200): Organizati
   try {
     const rows = db.prepare(`
       SELECT op.*, f.filename, f.extension, f.size_bytes, f.capture_time, f.camera_make, f.camera_model, f.doc_author, f.hash_sha256,
+             f.file_modified_at,
              COALESCE(r.name, 'Metadata Rule') as rule_name
       FROM organization_proposals op
       JOIN files f ON op.source_file_id = f.id
@@ -589,6 +627,18 @@ export function getStoredProposals(status = 'proposed', limit = 200): Organizati
         if (rawWarnings) warnings = JSON.parse(rawWarnings);
       } catch {}
 
+      let parsedSnapshot: Record<string, unknown> = {};
+      try {
+        if (r.metadata_snapshot_json) {
+          parsedSnapshot = JSON.parse(r.metadata_snapshot_json);
+        }
+      } catch {}
+
+      const category = (parsedSnapshot.category as string) || getFileCategory(r.extension || '');
+      const explanation = (parsedSnapshot.explanation as string) || undefined;
+      const confidence = typeof parsedSnapshot.confidence === 'number' ? parsedSnapshot.confidence : undefined;
+      const sourceFingerprint = (parsedSnapshot.source_fingerprint as string) || r.hash_sha256 || undefined;
+
       return {
         id: r.id,
         rule_id: r.rule_id,
@@ -598,19 +648,42 @@ export function getStoredProposals(status = 'proposed', limit = 200): Organizati
         rule_name: r.rule_name,
         status: r.status,
         warnings,
+        category,
+        explanation,
+        confidence,
+        source_fingerprint: sourceFingerprint,
         metadata_snapshot: {
-          category: getFileCategory(r.extension || ''),
+          category,
+          explanation,
+          confidence,
+          source_fingerprint: sourceFingerprint,
           capture_time: r.capture_time,
           camera_make: r.camera_make,
           camera_model: r.camera_model,
           doc_author: r.doc_author,
           hash_sha256: r.hash_sha256,
+          file_modified_at: r.file_modified_at,
+          ...parsedSnapshot,
         },
         file_size: r.size_bytes || 0,
       };
     });
   } catch {
     return [];
+  }
+}
+
+export function updateProposalStatus(
+  proposalId: string,
+  newStatus: 'proposed' | 'confirmed' | 'rejected' | 'executed'
+): boolean {
+  const db = getDb();
+  try {
+    const result = db.prepare('UPDATE organization_proposals SET status = ? WHERE id = ?').run(newStatus, proposalId);
+    return result.changes > 0;
+  } catch (err) {
+    console.error(`Failed to update proposal ${proposalId} status:`, err);
+    return false;
   }
 }
 

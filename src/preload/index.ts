@@ -105,6 +105,8 @@ const electronAPI = {
       ipcRenderer.invoke('llm:classify', req, modelOverride),
     recommendOrganization: (req: import('../shared/types').LlmOrganizeProposalRequest, modelOverride?: string) =>
       ipcRenderer.invoke('llm:recommend-organization', req, modelOverride),
+    translateQuery: (query: string, modelOverride?: string) =>
+      ipcRenderer.invoke('llm:translate-query', query, modelOverride),
     cancel: () => ipcRenderer.invoke('llm:cancel'),
   },
 
@@ -133,6 +135,10 @@ const electronAPI = {
       ipcRenderer.invoke('organizer:execute', proposals, destinationRoot, options),
     getStoredProposals: (status?: string, limit?: number) =>
       ipcRenderer.invoke('organizer:get-stored-proposals', status, limit),
+    saveProposals: (proposals: import('../shared/types').OrganizationProposalItem[], ruleId?: string) =>
+      ipcRenderer.invoke('organizer:save-proposals', proposals, ruleId),
+    updateProposalStatus: (proposalId: string, newStatus: 'proposed' | 'confirmed' | 'rejected' | 'executed') =>
+      ipcRenderer.invoke('organizer:update-proposal-status', proposalId, newStatus),
     runAutoPipeline: (rootIdOrPath?: string, destinationRootOverride?: string) =>
       ipcRenderer.invoke('organizer:run-auto-pipeline', rootIdOrPath, destinationRootOverride),
   },

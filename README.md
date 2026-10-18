@@ -2,7 +2,7 @@
 
 > **"Your files. Your intelligence. Your control."**
 
-[![Version](https://img.shields.io/badge/Version-0.9.0-b4ff32.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.9.8-b4ff32.svg)](VERSION)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![Electron Version](https://img.shields.io/badge/Electron-33.2.1-blue)](https://www.electronjs.org/)
 [![React Version](https://img.shields.io/badge/React-18.3.1-61dafb)](https://react.dev/)

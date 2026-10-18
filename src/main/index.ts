@@ -6,7 +6,7 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { initDatabase, closeDatabase } from './database';
+import { initDatabase, closeDatabase, resolveAppDatabasePath } from './database';
 import { registerIpcHandlers } from './ipc-handlers';
 import { getAiWorkerClient } from './ai-worker-client';
 import { getJobRunner } from './job-runner';
@@ -71,10 +71,7 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   // 1. Initialize SQLite database
-  const legacyDb = path.join(app.getPath('userData'), 'ai-file-manager.db');
-  const dbPath = fs.existsSync(legacyDb)
-    ? legacyDb
-    : path.join(app.getPath('userData'), 'nexora.db');
+  const dbPath = resolveAppDatabasePath(app.getPath('userData'));
   console.log(`Database path: ${dbPath}`);
   initDatabase(dbPath);
 

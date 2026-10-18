@@ -24,11 +24,21 @@ export const OrganizePage: React.FC = () => {
   const [destinationRoot, setDestinationRoot] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterQuery, setFilterQuery] = useState('');
-  const [isGeneratingLlmProposals, setIsGeneratingLlmProposals] = useState(false);
+  const [llmStatus, setLlmStatus] = useState<{ isAvailable: boolean; modelName: string; isModelReady: boolean; errorMessage?: string } | null>(null);
 
   useEffect(() => {
     loadData();
+    checkLlmStatus();
   }, []);
+
+  async function checkLlmStatus() {
+    try {
+      const status = await api().llm.getStatus();
+      setLlmStatus(status);
+    } catch {
+      setLlmStatus({ isAvailable: false, modelName: 'qwen3-vl:8b', isModelReady: false, errorMessage: 'Local Ollama not reachable' });
+    }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -58,7 +68,8 @@ export const OrganizePage: React.FC = () => {
     }
     setIsGeneratingLlmProposals(true);
     try {
-      toast.info('Consulting local LLM (Qwen3 4B via Ollama) for smart folder hierarchies...', 'LLM Advisor');
+      const modelLabel = llmStatus?.modelName || 'Qwen3 8B';
+      toast.info(`Consulting local ${modelLabel} via Ollama for smart categorization...`, 'Local LLM Reasoning');
       const targetItems = proposals.slice(0, 5); // Limit batch to 5 for responsive interactive feedback
       let enhancedCount = 0;
 
@@ -86,7 +97,16 @@ export const OrganizePage: React.FC = () => {
                 ...updatedProposals[targetIdx],
                 proposed_destination: safeProposedDest,
                 rule_name: `🤖 ${rec.ruleName}`,
+                category: rec.category,
+                explanation: rec.reasoning,
+                confidence: rec.confidence,
                 warnings: [...(updatedProposals[targetIdx].warnings || []), ...rec.warnings],
+                metadata_snapshot: {
+                  ...updatedProposals[targetIdx].metadata_snapshot,
+                  category: rec.category,
+                  explanation: rec.reasoning,
+                  confidence: rec.confidence,
+                },
               };
               enhancedCount++;
             }
@@ -97,15 +117,28 @@ export const OrganizePage: React.FC = () => {
       }
 
       setProposals(updatedProposals);
+      // Persist enhanced proposals to SQLite
+      await api().organizer.saveProposals(updatedProposals);
+
       toast.success(
-        `Enhanced ${enhancedCount} proposal destinations via local LLM reasoning.`,
-        'LLM Organization Proposals'
+        `Enhanced & saved ${enhancedCount} proposal destinations via local ${modelLabel}.`,
+        'LLM Categorization Complete'
       );
     } catch (err) {
       console.error('LLM organization failed:', err);
       toast.error(err instanceof Error ? err.message : String(err), 'LLM Proposal Failed');
     } finally {
       setIsGeneratingLlmProposals(false);
+    }
+  }
+
+  async function handleSkipProposal(proposalId: string) {
+    try {
+      await api().organizer.updateProposalStatus(proposalId, 'rejected');
+      setProposals(proposals.filter((p) => p.id !== proposalId));
+      toast.info('Proposal skipped and removed from active list.', 'Skipped');
+    } catch (err) {
+      toast.error('Failed to update proposal status');
     }
   }
 
@@ -212,6 +245,25 @@ export const OrganizePage: React.FC = () => {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+          {llmStatus && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '11px',
+                background: llmStatus.isModelReady ? 'rgba(0, 230, 153, 0.1)' : 'rgba(255, 77, 77, 0.1)',
+                border: `1px solid ${llmStatus.isModelReady ? 'rgba(0, 230, 153, 0.3)' : 'rgba(255, 77, 77, 0.3)'}`,
+                color: llmStatus.isModelReady ? 'var(--color-accent)' : '#ff6b6b',
+              }}
+              title={llmStatus.isModelReady ? `Local LLM ready: ${llmStatus.modelName}` : (llmStatus.errorMessage || 'Ollama offline')}
+            >
+              <span style={{ fontSize: '8px' }}>●</span>
+              <span>{llmStatus.isModelReady ? llmStatus.modelName : 'Ollama Offline'}</span>
+            </div>
+          )}
           <button
             className="btn btn-secondary"
             onClick={handleRunScanPipeline}
@@ -224,12 +276,12 @@ export const OrganizePage: React.FC = () => {
           <button
             className="btn btn-secondary"
             onClick={handleGenerateLlmProposals}
-            disabled={runningPipeline || executing || isGeneratingLlmProposals || proposals.length === 0}
-            title="Reason with local Qwen3 4B on Ollama to optimize folder taxonomy and hierarchies"
+            disabled={runningPipeline || executing || isGeneratingLlmProposals || proposals.length === 0 || !llmStatus?.isModelReady}
+            title={llmStatus?.isModelReady ? "Reason with local Qwen3 on Ollama to optimize folder taxonomy and hierarchies" : "Local Ollama/model is unavailable"}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', borderColor: 'rgba(180, 255, 50, 0.4)', color: 'var(--color-accent)' }}
           >
             {isGeneratingLlmProposals ? <span className="spinner-border spinner-border-sm" /> : '🤖'}
-            <span>{isGeneratingLlmProposals ? 'LLM Reasoning...' : 'LLM Smart Taxonomy'}</span>
+            <span>{isGeneratingLlmProposals ? 'LLM Reasoning...' : 'Qwen3 AI Categorize'}</span>
           </button>
           <button
             className="btn btn-primary"
@@ -353,7 +405,7 @@ export const OrganizePage: React.FC = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1.2fr 1.6fr 120px 100px 90px',
+            gridTemplateColumns: '1.2fr 1.6fr 130px 90px 90px 60px',
             padding: 'var(--space-3) var(--space-4)',
             background: 'rgba(255, 255, 255, 0.02)',
             borderBottom: '1px solid var(--color-border)',
@@ -365,10 +417,11 @@ export const OrganizePage: React.FC = () => {
           }}
         >
           <div>Original Source File</div>
-          <div>Proposed Destination</div>
-          <div>Classification Rule</div>
+          <div>Proposed Destination & Evidence</div>
+          <div>Rule / Category</div>
           <div>Size</div>
           <div>Status</div>
+          <div style={{ textAlign: 'right' }}>Skip</div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -390,7 +443,7 @@ export const OrganizePage: React.FC = () => {
                 key={item.id || idx}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1.2fr 1.6fr 120px 100px 90px',
+                  gridTemplateColumns: '1.2fr 1.6fr 130px 90px 90px 60px',
                   padding: 'var(--space-3) var(--space-4)',
                   borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
                   fontSize: 'var(--font-size-xs)',
@@ -404,14 +457,24 @@ export const OrganizePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 'var(--space-2)' }} title={item.proposed_destination}>
-                  <span style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: 'var(--space-2)' }}>
+                  <div style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.proposed_destination}>
                     {item.proposed_destination}
-                  </span>
+                  </div>
+                  {(item.explanation || (item.metadata_snapshot as any)?.explanation) && (
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.explanation || (item.metadata_snapshot as any)?.explanation}>
+                      💬 {item.explanation || (item.metadata_snapshot as any)?.explanation}
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.rule_name || 'Standard Rule'}
+                <div style={{ color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div>{item.rule_name || 'Standard Rule'}</div>
+                  {item.confidence !== undefined && (
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                      Confidence: {Math.round(item.confidence * 100)}%
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ color: 'var(--color-text-secondary)' }}>
@@ -432,6 +495,17 @@ export const OrganizePage: React.FC = () => {
                   >
                     {item.warnings && item.warnings.length > 0 ? 'Collision' : 'Ready'}
                   </span>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleSkipProposal(item.id)}
+                    title="Skip proposal without organizing"
+                    style={{ padding: '2px 8px', fontSize: '11px', lineHeight: 1 }}
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
             ))
