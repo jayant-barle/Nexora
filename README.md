@@ -10,3 +10,4 @@ Start here:
 - docs/ARCHITECTURE.md: planned structure
 - docs/TEST_PLAN.md: stage acceptance
 - docs/DECISIONS.md: decisions log
+

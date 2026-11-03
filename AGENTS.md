@@ -26,3 +26,4 @@
 7. Commits. One commit per logical change. Commit messages start with the stage name, for example "Stage 1: name rule". Do not push unless the owner says so.
 
 8. Versions. At the end of each stage, bump VERSION and add an entry to CHANGELOG.md.
+

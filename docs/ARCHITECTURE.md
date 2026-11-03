@@ -21,3 +21,4 @@ Other:
 - models/: face model files (ONNX). Not committed. See the download notes in README.md.
 - tests/: pytest tests, one file per module.
 - VERSION and CHANGELOG.md: versioning.
+

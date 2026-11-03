@@ -11,3 +11,4 @@
 - 2026-11-04: Folder names are lowercase (default, to confirm).
 - 2026-11-04: Date folders are YYYY/YYYY-MM (default, to confirm).
 - 2026-11-04: Python 3.11 or newer (default, to confirm).
+
