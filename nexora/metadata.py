@@ -7,6 +7,12 @@ from pathlib import Path
 
 from PIL import Image
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except Exception:
+    pass
+
 from nexora.names import IMAGE_EXTENSIONS
 
 EXIF_DATETIME_ORIGINAL_TAG = 36867

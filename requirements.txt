@@ -1,4 +1,4 @@
 opencv-python>=4.10
 pillow>=10.4
+pillow-heif>=0.18
 pytest>=8.3
-

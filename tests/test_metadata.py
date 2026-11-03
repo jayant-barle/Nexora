@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 from PIL import Image
+import pytest
 
 from nexora.metadata import capture_date
 
@@ -52,3 +53,24 @@ def test_modified_time_does_not_change_result(tmp_path: Path) -> None:
     # capture_date must strictly read EXIF DateTimeOriginal, ignoring filesystem timestamps
     dt = capture_date(img_path)
     assert dt == datetime(2019, 7, 14, 12, 0, 0)
+
+
+def test_heic_image_with_datetime_original(tmp_path: Path) -> None:
+    try:
+        from pillow_heif import register_heif_opener
+        register_heif_opener()
+    except Exception as e:
+        pytest.skip(f"pillow_heif not available: {e}")
+
+    heic_path = tmp_path / "iphone_photo.heic"
+    img = Image.new("RGB", (20, 20), color="yellow")
+    exif = img.getexif()
+    exif[36867] = "2023:05:20 14:30:00"
+
+    try:
+        img.save(heic_path, format="HEIF", exif=exif)
+    except Exception as e:
+        pytest.skip(f"pillow_heif cannot write HEIC on this machine: {e}")
+
+    dt = capture_date(heic_path)
+    assert dt == datetime(2023, 5, 20, 14, 30, 0)
