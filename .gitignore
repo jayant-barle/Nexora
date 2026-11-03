@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Logs and run state
+*.log
+runs/
+
+# Models (downloaded, not committed)
+models/
+
+# Owner's photos and test data (never commit)
+test_photos/
+sample_media/
+
+# OS
+Thumbs.db
+desktop.ini
