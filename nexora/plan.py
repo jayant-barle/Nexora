@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from nexora.names import extract_name, is_image_or_video
+from nexora.names import extract_name, is_image_or_video, IMAGE_EXTENSIONS
+from nexora.metadata import capture_date
 
 
 @dataclass
@@ -105,13 +106,27 @@ def build_plan(source: Path, dest: Path) -> list[PlannedMove]:
 
         name = extract_name(file_path.name)
         if name:
+            folder_rel = Path(name)
             folder_name = name
             matched_by = f"Name: {name}"
         else:
-            folder_name = "Unsorted"
-            matched_by = "Unsorted"
+            # Check capture date for images only
+            date_val = None
+            if file_path.suffix.lower() in IMAGE_EXTENSIONS:
+                date_val = capture_date(file_path)
 
-        target_dir = dest / folder_name
+            if date_val is not None:
+                year_str = f"{date_val.year:04d}"
+                month_str = f"{date_val.year:04d}-{date_val.month:02d}"
+                folder_rel = Path(year_str) / month_str
+                folder_name = f"{year_str}/{month_str}"
+                matched_by = f"Date: {month_str}"
+            else:
+                folder_rel = Path("Unsorted")
+                folder_name = "Unsorted"
+                matched_by = "Unsorted"
+
+        target_dir = dest / folder_rel
         target_path = resolve_collision(target_dir, file_path.name, reserved_targets)
 
         if not is_same_drive(file_path, target_path):

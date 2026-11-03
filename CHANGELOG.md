@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 (2026-11-04)
+- Stage 2: Dates from image metadata.
+  - Added capture date extraction reading EXIF DateTimeOriginal tag via Pillow.
+  - Updated plan builder to place unnamed images into YYYY/YYYY-MM folders by capture date.
+  - Added tests for EXIF extraction, missing EXIF, non-images, and filesystem timestamp independence.
+
 ## 0.2.1 (2026-11-04)
 - Ignore generic words (photo, pic, copy, new, final, untitled, download, video, clip, film) and filler words such as of, the, and, a, to when choosing a name.
 

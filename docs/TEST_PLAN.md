@@ -9,8 +9,8 @@
 - [ ] Owner test: run preview, Start and Undo on the test folder. Expected results are in the table below.
 
 ## Stage 2: metadata dates for photos
-- [ ] Photo with EXIF date goes to YYYY/YYYY-MM.
-- [ ] Photo without EXIF date does not use file dates.
+- [x] Photo with EXIF date goes to YYYY/YYYY-MM.
+- [x] Photo without EXIF date does not use file dates.
 - [ ] Owner test on the test folder.
 
 ## Stage 3: face recognition for photos

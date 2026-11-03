@@ -1,9 +1,21 @@
 """Unit tests for nexora.plan build_plan."""
 
 from pathlib import Path
+from PIL import Image
 import pytest
 
 from nexora.plan import build_plan
+
+
+def _create_image_with_date(path: Path, date_str: str | None = None) -> Path:
+    img = Image.new("RGB", (20, 20), color="green")
+    if date_str:
+        exif = img.getexif()
+        exif[36867] = date_str
+        img.save(path, format="JPEG", exif=exif)
+    else:
+        img.save(path, format="JPEG")
+    return path
 
 
 def test_targets_under_dest_folder(tmp_path: Path) -> None:
@@ -137,3 +149,73 @@ def test_unknown_extensions_skipped(tmp_path: Path) -> None:
 
     jpg_move = next(m for m in plan if m.source.name == "photo.jpg")
     assert jpg_move.status == "ready"
+
+
+def test_dated_image_no_name_goes_to_date_folder(tmp_path: Path) -> None:
+    src = tmp_path / "source"
+    dst = tmp_path / "dest"
+    src.mkdir()
+    dst.mkdir()
+
+    img_path = _create_image_with_date(src / "IMG_2034.jpg", "2019:07:14 12:00:00")
+    plan = build_plan(src, dst)
+
+    assert len(plan) == 1
+    move = plan[0]
+    assert move.folder == "2019/2019-07"
+    assert move.matched_by == "Date: 2019-07"
+    assert move.target == dst / "2019" / "2019-07" / "IMG_2034.jpg"
+    assert move.status == "ready"
+
+
+def test_named_image_with_date_goes_to_name_folder(tmp_path: Path) -> None:
+    src = tmp_path / "source"
+    dst = tmp_path / "dest"
+    src.mkdir()
+    dst.mkdir()
+
+    # Even though it has a capture date, the name rule takes precedence
+    img_path = _create_image_with_date(src / "nyc_sunset.jpg", "2019:07:14 12:00:00")
+    plan = build_plan(src, dst)
+
+    assert len(plan) == 1
+    move = plan[0]
+    assert move.folder == "nyc"
+    assert move.matched_by == "Name: nyc"
+    assert move.target == dst / "nyc" / "nyc_sunset.jpg"
+    assert move.status == "ready"
+
+
+def test_undated_unnamed_image_goes_to_unsorted(tmp_path: Path) -> None:
+    src = tmp_path / "source"
+    dst = tmp_path / "dest"
+    src.mkdir()
+    dst.mkdir()
+
+    _create_image_with_date(src / "IMG_9999.jpg", date_str=None)
+    plan = build_plan(src, dst)
+
+    assert len(plan) == 1
+    move = plan[0]
+    assert move.folder == "Unsorted"
+    assert move.matched_by == "Unsorted"
+    assert move.target == dst / "Unsorted" / "IMG_9999.jpg"
+    assert move.status == "ready"
+
+
+def test_video_with_no_name_goes_to_unsorted(tmp_path: Path) -> None:
+    src = tmp_path / "source"
+    dst = tmp_path / "dest"
+    src.mkdir()
+    dst.mkdir()
+
+    vid_path = src / "VID_1234.mp4"
+    vid_path.write_bytes(b"dummy video content")
+    plan = build_plan(src, dst)
+
+    assert len(plan) == 1
+    move = plan[0]
+    assert move.folder == "Unsorted"
+    assert move.matched_by == "Unsorted"
+    assert move.target == dst / "Unsorted" / "VID_1234.mp4"
+    assert move.status == "ready"
