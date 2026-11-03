@@ -18,6 +18,15 @@ CAMERA_TOKENS = {
     "img", "dsc", "vid", "mov", "screenshot", "whatsapp", "image"
 }
 
+GENERIC_TOKENS = {
+    "photo", "photos", "pic", "pics", "picture", "copy", "new", "final",
+    "untitled", "download", "downloads", "video", "clip", "film",
+}
+
+FILLER_TOKENS = {
+    "of", "the", "and", "a", "an", "to", "in", "on", "at", "for", "with", "from",
+}
+
 WINDOWS_RESERVED_NAMES = {
     "con", "prn", "aux", "nul",
     "com", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
@@ -55,6 +64,9 @@ def extract_name(filename: str) -> str | None:
 
     # Drop camera tokens anywhere in the list
     tokens = [t for t in tokens if t not in CAMERA_TOKENS]
+
+    # Drop generic and filler tokens anywhere in the list
+    tokens = [t for t in tokens if t not in GENERIC_TOKENS and t not in FILLER_TOKENS]
 
     if not tokens:
         return None

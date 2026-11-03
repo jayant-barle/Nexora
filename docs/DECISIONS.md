@@ -16,3 +16,5 @@
 - 2026-11-04: Unknown file types are skipped, never moved.
 - 2026-11-04: Destination inside source is refused.
 - 2026-11-04: Terminology: "image" is used for photos in all code, docs and UI.
+- 2026-11-04: Generic words are ignored when choosing a name. (default, owner chose yes)
+- 2026-11-04: Common filler words (of, the, and, a, an, to, in, on, at, for, with, from) are ignored when choosing a name. (default, owner to confirm)

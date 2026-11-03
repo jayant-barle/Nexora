@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.1 (2026-11-04)
+- Ignore generic words (photo, pic, copy, new, final, untitled, download, video, clip, film) and filler words such as of, the, and, a, to when choosing a name.
+
 ## 0.2.0 (2026-11-04)
 - Stage 1: Name rule, preview, verified move, and undo.
   - Added name extraction rule with camera token stripping and Windows reserved name safety.

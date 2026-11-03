@@ -33,6 +33,19 @@ from nexora.names import extract_name, is_image_or_video
         ("MOV_4321.MOV", None),
         ("image 99.webp", None),
         ("tokyo-trip-2025.heic", "tokyo"),
+        # Generic tokens
+        ("photo_01.jpg", None),
+        ("photo_nyc.jpg", "nyc"),
+        ("pic_2024_ali.jpg", "ali"),
+        ("copy_of_nyc.jpg", "nyc"),
+        ("final_paris_trip.mp4", "paris"),
+        ("new.png", None),
+        ("untitled.jpg", None),
+        ("download_2.jpg", None),
+        # Filler tokens
+        ("the_beach.jpg", "beach"),
+        ("nyc_and_ali.jpg", "nyc"),
+        ("a_trip.jpg", "trip"),
     ],
 )
 def test_extract_name_rule(filename: str, expected: str | None) -> None:
