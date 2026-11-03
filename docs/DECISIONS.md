@@ -11,4 +11,8 @@
 - 2026-11-04: Folder names are lowercase (default, to confirm).
 - 2026-11-04: Date folders are YYYY/YYYY-MM (default, to confirm).
 - 2026-11-04: Python 3.11 or newer (default, to confirm).
-
+- 2026-11-04: Top-level scan only (default, to confirm).
+- 2026-11-04: Windows reserved names are not names.
+- 2026-11-04: Unknown file types are skipped, never moved.
+- 2026-11-04: Destination inside source is refused.
+- 2026-11-04: Terminology: "image" is used for photos in all code, docs and UI.
