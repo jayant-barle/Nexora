@@ -67,10 +67,7 @@ def test_heic_image_with_datetime_original(tmp_path: Path) -> None:
     exif = img.getexif()
     exif[36867] = "2023:05:20 14:30:00"
 
-    try:
-        img.save(heic_path, format="HEIF", exif=exif)
-    except Exception as e:
-        pytest.skip(f"pillow_heif cannot write HEIC on this machine: {e}")
+    img.save(heic_path, format="HEIF", exif=exif)
 
     dt = capture_date(heic_path)
     assert dt == datetime(2023, 5, 20, 14, 30, 0)

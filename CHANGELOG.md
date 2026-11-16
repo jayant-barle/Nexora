@@ -7,6 +7,7 @@
 - Stage 2: Dates from image metadata.
   - Added capture date extraction reading EXIF DateTimeOriginal tag via Pillow.
   - HEIC dates via pillow-heif.
+  - HEIC test now fails on real errors instead of skipping.
   - Updated plan builder to place unnamed images into YYYY/YYYY-MM folders by capture date.
   - Added tests for EXIF extraction, missing EXIF, non-images, and filesystem timestamp independence.
 
