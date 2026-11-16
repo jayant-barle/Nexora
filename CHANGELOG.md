@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1 (2026-11-17)
+- Windows test build (single .exe), self-test flag.
+
 ## 0.3.0 (2026-11-04)
 - Stage 2: Dates from image metadata.
   - Added capture date extraction reading EXIF DateTimeOriginal tag via Pillow.

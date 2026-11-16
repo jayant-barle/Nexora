@@ -20,3 +20,4 @@
 - 2026-11-04: Common filler words (of, the, and, a, an, to, in, on, at, for, with, from) are ignored when choosing a name. (default, owner to confirm)
 - 2026-11-04: Stage 2: images without a name use DateTimeOriginal (EXIF) only. File dates are never used. Date folders are YYYY/YYYY-MM (default, owner to confirm).
 - 2026-11-04: HEIC images: dates read via pillow-heif. Owner has iPhone photos.
+- 2026-11-17: Test distribution: single-file Windows exe built with PyInstaller. Not code-signed.

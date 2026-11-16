@@ -5,6 +5,13 @@ __pycache__/
 .venv/
 venv/
 
+# PyInstaller / Build
+dist/
+*.spec
+release/
+build/*
+!build/build_exe.bat
+
 # Logs and run state
 *.log
 runs/
