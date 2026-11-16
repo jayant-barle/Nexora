@@ -27,3 +27,5 @@
 
 8. Versions. At the end of each stage, bump VERSION and add an entry to CHANGELOG.md.
 
+9. Scope of files. Work only inside this repo. Do not open, search or copy files from any other folder, and do not read prior conversations, transcripts, logs or brain folders, unless the owner names that exact file in the request.
+
