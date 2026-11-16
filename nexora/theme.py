@@ -1,0 +1,41 @@
+"""Theme definitions and color constants for Nexora UI."""
+
+# Fonts
+FONT_FAMILY = "Segoe UI"
+FONT_TITLE = ("Segoe UI", 16, "bold")
+FONT_SECTION = ("Segoe UI", 12, "bold")
+FONT_BODY = ("Segoe UI", 10)
+FONT_BODY_BOLD = ("Segoe UI", 10, "bold")
+FONT_FOOTER = ("Segoe UI", 9, "italic")
+FONT_KPI_NUM = ("Segoe UI", 18, "bold")
+FONT_KPI_LABEL = ("Segoe UI", 9)
+
+# Colors
+COLOR_BG = "#F5F6F8"
+COLOR_CARD_BG = "#FFFFFF"
+COLOR_CARD_BORDER = "#E5E7EB"
+
+# Action button colors
+COLOR_PRIMARY = "#2563EB"
+COLOR_PRIMARY_TEXT = "#FFFFFF"
+COLOR_PRIMARY_HOVER = "#1D4ED8"
+COLOR_PRIMARY_DISABLED = "#93C5FD"
+
+COLOR_SECONDARY_BG = "#FFFFFF"
+COLOR_SECONDARY_BORDER = "#D1D5DB"
+COLOR_SECONDARY_TEXT = "#111827"
+COLOR_SECONDARY_HOVER = "#F3F4F6"
+COLOR_SECONDARY_DISABLED_TEXT = "#9CA3AF"
+
+# Text colors
+COLOR_TEXT = "#111827"
+COLOR_MUTED = "#6B7280"
+
+# KPI metric counts
+COLOR_GOOD = "#15803D"
+COLOR_SKIPPED = "#B45309"
+COLOR_REFUSED = "#B91C1C"
+
+# Table row alternating colors
+COLOR_ROW_EVEN = "#FFFFFF"
+COLOR_ROW_ODD = "#F9FAFB"

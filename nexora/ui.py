@@ -12,16 +12,19 @@ from tkinter import filedialog, messagebox, ttk
 from nexora.plan import PlannedMove, build_plan
 from nexora.mover import run_plan
 from nexora.undo import undo_run
+from nexora import theme
 
 
 def format_size(size_bytes: int) -> str:
-    """Format file size in human-readable units."""
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    elif size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    else:
-        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    """Format file size as KB, MB or GB with one decimal place."""
+    kb = size_bytes / 1024.0
+    if kb < 1024.0:
+        return f"{kb:.1f} KB"
+    mb = kb / 1024.0
+    if mb < 1024.0:
+        return f"{mb:.1f} MB"
+    gb = mb / 1024.0
+    return f"{gb:.1f} GB"
 
 
 def get_runs_dir() -> Path:
@@ -48,124 +51,424 @@ class NexoraApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Nexora")
-        self.root.geometry("960x640")
-        self.root.minsize(750, 480)
+        self.root.geometry("980x660")
+        self.root.minsize(800, 500)
+        self.root.configure(bg=theme.COLOR_BG)
 
         self.source_dir = tk.StringVar()
         self.dest_dir = tk.StringVar()
         self.count_var = tk.StringVar(value="Select folders and click Preview to begin.")
         self.status_var = tk.StringVar(value="Ready")
 
+        self.ready_count_var = tk.StringVar(value="0")
+        self.skipped_count_var = tk.StringVar(value="0")
+        self.refused_count_var = tk.StringVar(value="0")
+
         self.current_plan: list[PlannedMove] = []
         self.is_running = False
 
+        self._init_theme()
         self._build_ui()
         self.update_undo_button_state()
 
-    def _build_ui(self) -> None:
-        # Style configuration
-        style = ttk.Style(self.root)
+    def _init_theme(self) -> None:
+        """Initialize ttk theme once at startup."""
+        self.style = ttk.Style(self.root)
+        available = self.style.theme_names()
+        if "vista" in available:
+            try:
+                self.style.theme_use("vista")
+            except Exception:
+                pass
+        elif "clam" in available:
+            try:
+                self.style.theme_use("clam")
+            except Exception:
+                pass
+
+        # Configure generic styles
         try:
-            style.theme_use("clam")
+            self.style.configure(".", font=theme.FONT_BODY)
+            self.style.configure("Treeview.Heading", font=theme.FONT_BODY_BOLD)
+            self.style.configure("Treeview", font=theme.FONT_BODY, rowheight=24)
+            self.style.configure("TButton", padding=(12, 6))
         except Exception:
             pass
 
-        main_frame = ttk.Frame(self.root, padding=12)
+    def _build_ui(self) -> None:
+        main_frame = tk.Frame(self.root, bg=theme.COLOR_BG, padx=16, pady=14)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Folder Selection Frame
-        folder_frame = ttk.LabelFrame(main_frame, text="Folders", padding=10)
-        folder_frame.pack(fill=tk.X, pady=(0, 8))
+        # 1. Top Header
+        header_frame = tk.Frame(main_frame, bg=theme.COLOR_BG)
+        header_frame.pack(fill=tk.X, pady=(0, 10))
 
-        # Source picker
-        ttk.Label(folder_frame, text="Source:").grid(row=0, column=0, sticky=tk.W, padx=4, pady=4)
-        ttk.Entry(folder_frame, textvariable=self.source_dir, width=60).grid(row=0, column=1, sticky=tk.EW, padx=4, pady=4)
-        ttk.Button(folder_frame, text="Browse...", command=self._browse_source).grid(row=0, column=2, padx=4, pady=4)
+        title_label = tk.Label(
+            header_frame,
+            text="Nexora",
+            font=theme.FONT_TITLE,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_BG,
+        )
+        title_label.pack(anchor=tk.W)
 
-        # Destination picker
-        ttk.Label(folder_frame, text="Destination:").grid(row=1, column=0, sticky=tk.W, padx=4, pady=4)
-        ttk.Entry(folder_frame, textvariable=self.dest_dir, width=60).grid(row=1, column=1, sticky=tk.EW, padx=4, pady=4)
-        ttk.Button(folder_frame, text="Browse...", command=self._browse_dest).grid(row=1, column=2, padx=4, pady=4)
+        subtitle_label = tk.Label(
+            header_frame,
+            text="Sort images and videos into folders. Nothing is deleted.",
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_MUTED,
+            bg=theme.COLOR_BG,
+        )
+        subtitle_label.pack(anchor=tk.W, pady=(2, 0))
 
-        folder_frame.columnconfigure(1, weight=1)
+        # 2. Folders Card
+        folder_card = tk.Frame(
+            main_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=14,
+            pady=12,
+        )
+        folder_card.pack(fill=tk.X, pady=(0, 10))
 
-        # Controls & Action Buttons Frame
-        action_frame = ttk.Frame(main_frame)
-        action_frame.pack(fill=tk.X, pady=(0, 8))
+        card_title = tk.Label(
+            folder_card,
+            text="Folders",
+            font=theme.FONT_SECTION,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_CARD_BG,
+        )
+        card_title.grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 8))
 
-        self.preview_btn = ttk.Button(action_frame, text="Preview", command=self._on_preview_click)
-        self.preview_btn.pack(side=tk.LEFT, padx=(0, 6))
+        # Source picker row
+        tk.Label(
+            folder_card,
+            text="Source:",
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_CARD_BG,
+        ).grid(row=1, column=0, sticky=tk.W, padx=(0, 10), pady=4)
 
-        self.start_btn = ttk.Button(action_frame, text="Start", command=self._on_start_click, state=tk.DISABLED)
-        self.start_btn.pack(side=tk.LEFT, padx=6)
+        source_entry = ttk.Entry(folder_card, textvariable=self.source_dir)
+        source_entry.grid(row=1, column=1, sticky=tk.EW, padx=(0, 10), pady=4)
 
-        self.undo_btn = ttk.Button(action_frame, text="Undo", command=self._on_undo_click, state=tk.DISABLED)
-        self.undo_btn.pack(side=tk.LEFT, padx=6)
+        browse_src_btn = tk.Button(
+            folder_card,
+            text="Browse...",
+            command=self._browse_source,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            activebackground=theme.COLOR_SECONDARY_HOVER,
+            relief=tk.SOLID,
+            bd=1,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+        )
+        browse_src_btn.grid(row=1, column=2, pady=4)
 
-        self.progress_bar = ttk.Progressbar(action_frame, mode="determinate")
-        self.progress_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(12, 0))
+        # Destination picker row
+        tk.Label(
+            folder_card,
+            text="Destination:",
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_CARD_BG,
+        ).grid(row=2, column=0, sticky=tk.W, padx=(0, 10), pady=4)
 
-        # Count line label
-        count_label = ttk.Label(main_frame, textvariable=self.count_var, font=("Segoe UI", 9, "bold"))
-        count_label.pack(anchor=tk.W, pady=(4, 4))
+        dest_entry = ttk.Entry(folder_card, textvariable=self.dest_dir)
+        dest_entry.grid(row=2, column=1, sticky=tk.EW, padx=(0, 10), pady=4)
 
-        # Preview Treeview Table
-        table_frame = ttk.Frame(main_frame)
-        table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+        browse_dst_btn = tk.Button(
+            folder_card,
+            text="Browse...",
+            command=self._browse_dest,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            activebackground=theme.COLOR_SECONDARY_HOVER,
+            relief=tk.SOLID,
+            bd=1,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+        )
+        browse_dst_btn.grid(row=2, column=2, pady=4)
+
+        folder_card.columnconfigure(1, weight=1)
+
+        # 3. Action Buttons & Progress Bar Row
+        self.action_frame = tk.Frame(main_frame, bg=theme.COLOR_BG)
+        self.action_frame.pack(fill=tk.X, pady=(0, 10))
+
+        self.preview_btn = tk.Button(
+            self.action_frame,
+            text="Preview",
+            command=self._on_preview_click,
+            font=theme.FONT_BODY_BOLD,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            activebackground=theme.COLOR_SECONDARY_HOVER,
+            relief=tk.SOLID,
+            bd=1,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+        )
+        self.preview_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.start_btn = tk.Button(
+            self.action_frame,
+            text="Start",
+            command=self._on_start_click,
+            font=theme.FONT_BODY_BOLD,
+            bg=theme.COLOR_PRIMARY_DISABLED,
+            fg=theme.COLOR_PRIMARY_TEXT,
+            activebackground=theme.COLOR_PRIMARY_HOVER,
+            activeforeground=theme.COLOR_PRIMARY_TEXT,
+            relief=tk.FLAT,
+            bd=0,
+            padx=16,
+            pady=6,
+            state=tk.DISABLED,
+        )
+        self.start_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.undo_btn = tk.Button(
+            self.action_frame,
+            text="Undo",
+            command=self._on_undo_click,
+            font=theme.FONT_BODY,
+            bg="#F3F4F6",
+            fg=theme.COLOR_SECONDARY_DISABLED_TEXT,
+            activebackground=theme.COLOR_SECONDARY_HOVER,
+            relief=tk.SOLID,
+            bd=1,
+            padx=14,
+            pady=6,
+            state=tk.DISABLED,
+        )
+        self.undo_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.progress_bar = ttk.Progressbar(self.action_frame, mode="determinate")
+        # Hidden by default when idle; packed dynamically during start/undo
+
+        # 4. Summary KPI Cards
+        summary_frame = tk.Frame(main_frame, bg=theme.COLOR_BG)
+        summary_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # Ready Card
+        ready_card = tk.Frame(
+            summary_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=12,
+            pady=8,
+        )
+        ready_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
+
+        tk.Label(
+            ready_card,
+            text="Ready",
+            font=theme.FONT_KPI_LABEL,
+            fg=theme.COLOR_MUTED,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.CENTER)
+
+        tk.Label(
+            ready_card,
+            textvariable=self.ready_count_var,
+            font=theme.FONT_KPI_NUM,
+            fg=theme.COLOR_GOOD,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.CENTER)
+
+        # Skipped Card
+        skipped_card = tk.Frame(
+            summary_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=12,
+            pady=8,
+        )
+        skipped_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=3)
+
+        tk.Label(
+            skipped_card,
+            text="Skipped",
+            font=theme.FONT_KPI_LABEL,
+            fg=theme.COLOR_MUTED,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.CENTER)
+
+        tk.Label(
+            skipped_card,
+            textvariable=self.skipped_count_var,
+            font=theme.FONT_KPI_NUM,
+            fg=theme.COLOR_SKIPPED,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.CENTER)
+
+        # Refused Card
+        refused_card = tk.Frame(
+            summary_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=12,
+            pady=8,
+        )
+        refused_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(6, 0))
+
+        tk.Label(
+            refused_card,
+            text="Refused",
+            font=theme.FONT_KPI_LABEL,
+            fg=theme.COLOR_MUTED,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.CENTER)
+
+        tk.Label(
+            refused_card,
+            textvariable=self.refused_count_var,
+            font=theme.FONT_KPI_NUM,
+            fg=theme.COLOR_REFUSED,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.CENTER)
+
+        # 5. Preview Table in Card
+        table_card = tk.Frame(
+            main_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=1,
+            pady=1,
+        )
+        table_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
         columns = ("source", "dest", "matched_by", "size")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
+        self.tree = ttk.Treeview(table_card, columns=columns, show="headings", selectmode="browse")
         self.tree.heading("source", text="Source")
         self.tree.heading("dest", text="Destination")
         self.tree.heading("matched_by", text="Matched by")
         self.tree.heading("size", text="Size")
 
-        self.tree.column("source", width=280)
-        self.tree.column("dest", width=340)
-        self.tree.column("matched_by", width=180)
+        self.tree.column("source", width=320)
+        self.tree.column("dest", width=380)
+        self.tree.column("matched_by", width=140)
         self.tree.column("size", width=90, anchor=tk.E)
 
-        y_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
-        x_scroll = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=self.tree.xview)
+        # Alternating row tag colors
+        self.tree.tag_configure("even", background=theme.COLOR_ROW_EVEN)
+        self.tree.tag_configure("odd", background=theme.COLOR_ROW_ODD)
+
+        y_scroll = ttk.Scrollbar(table_card, orient=tk.VERTICAL, command=self.tree.yview)
+        x_scroll = ttk.Scrollbar(table_card, orient=tk.HORIZONTAL, command=self.tree.xview)
         self.tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
 
         self.tree.grid(row=0, column=0, sticky=tk.NSEW)
         y_scroll.grid(row=0, column=1, sticky=tk.NS)
         x_scroll.grid(row=1, column=0, sticky=tk.EW)
 
-        table_frame.rowconfigure(0, weight=1)
-        table_frame.columnconfigure(0, weight=1)
+        table_card.rowconfigure(0, weight=1)
+        table_card.columnconfigure(0, weight=1)
 
-        # Status and Footer
-        bottom_frame = ttk.Frame(main_frame)
+        def _on_table_resize(event: tk.Event) -> None:
+            width = event.width - 24
+            if width > 300:
+                self.tree.column("source", width=int(width * 0.35))
+                self.tree.column("dest", width=int(width * 0.40))
+                self.tree.column("matched_by", width=int(width * 0.15))
+                self.tree.column("size", width=int(width * 0.10), anchor=tk.E)
+
+        table_card.bind("<Configure>", _on_table_resize)
+
+        # 6. Status and Footer
+        bottom_frame = tk.Frame(main_frame, bg=theme.COLOR_BG)
         bottom_frame.pack(fill=tk.X)
 
-        self.status_label = ttk.Label(bottom_frame, textvariable=self.status_var, relief=tk.SUNKEN, padding=(4, 2))
-        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+        self.status_label = tk.Label(
+            bottom_frame,
+            textvariable=self.status_var,
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_BG,
+            anchor=tk.W,
+        )
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
 
-        footer_label = ttk.Label(
+        self.footer_label = tk.Label(
             bottom_frame,
             text="Files are moved, not copied. Nothing is deleted.",
-            font=("Segoe UI", 9, "italic"),
+            font=theme.FONT_FOOTER,
+            fg=theme.COLOR_MUTED,
+            bg=theme.COLOR_BG,
         )
-        footer_label.pack(side=tk.RIGHT)
+        self.footer_label.pack(side=tk.RIGHT)
 
     def _browse_source(self) -> None:
         folder = filedialog.askdirectory(title="Select Source Folder")
         if folder:
-            self.source_dir.set(folder)
+            self.source_dir.set(os.path.normpath(folder))
 
     def _browse_dest(self) -> None:
         folder = filedialog.askdirectory(title="Select Destination Folder")
         if folder:
-            self.dest_dir.set(folder)
+            self.dest_dir.set(os.path.normpath(folder))
 
     def update_undo_button_state(self) -> None:
         latest = find_latest_active_run_log()
         if latest is not None and not self.is_running:
-            self.undo_btn.config(state=tk.NORMAL)
+            self.undo_btn.config(
+                state=tk.NORMAL,
+                bg=theme.COLOR_SECONDARY_BG,
+                fg=theme.COLOR_SECONDARY_TEXT,
+                cursor="hand2",
+            )
         else:
-            self.undo_btn.config(state=tk.DISABLED)
+            self.undo_btn.config(
+                state=tk.DISABLED,
+                bg="#F3F4F6",
+                fg=theme.COLOR_SECONDARY_DISABLED_TEXT,
+                cursor="arrow",
+            )
+
+    def _set_start_button_state(self, enabled: bool) -> None:
+        if enabled:
+            self.start_btn.config(
+                state=tk.NORMAL,
+                bg=theme.COLOR_PRIMARY,
+                fg=theme.COLOR_PRIMARY_TEXT,
+                cursor="hand2",
+            )
+        else:
+            self.start_btn.config(
+                state=tk.DISABLED,
+                bg=theme.COLOR_PRIMARY_DISABLED,
+                fg=theme.COLOR_PRIMARY_TEXT,
+                cursor="arrow",
+            )
+
+    def _set_preview_button_state(self, enabled: bool) -> None:
+        if enabled:
+            self.preview_btn.config(
+                state=tk.NORMAL,
+                bg=theme.COLOR_SECONDARY_BG,
+                fg=theme.COLOR_SECONDARY_TEXT,
+                cursor="hand2",
+            )
+        else:
+            self.preview_btn.config(
+                state=tk.DISABLED,
+                bg="#F3F4F6",
+                fg=theme.COLOR_SECONDARY_DISABLED_TEXT,
+                cursor="arrow",
+            )
 
     def _on_preview_click(self) -> None:
         src = self.source_dir.get().strip()
@@ -178,8 +481,8 @@ class NexoraApp:
         src_path = Path(src)
         dst_path = Path(dst)
 
-        self.preview_btn.config(state=tk.DISABLED)
-        self.start_btn.config(state=tk.DISABLED)
+        self._set_preview_button_state(False)
+        self._set_start_button_state(False)
         self.status_var.set("Scanning source folder and generating preview...")
 
         def worker() -> None:
@@ -199,31 +502,33 @@ class NexoraApp:
         skipped_count = sum(1 for m in plan if m.status == "skipped")
         refused_count = sum(1 for m in plan if m.status == "refused")
 
-        for m in plan:
-            target_display = str(m.target) if m.status != "skipped" else "-"
+        for idx, m in enumerate(plan):
+            target_display = os.path.normpath(str(m.target)) if m.status != "skipped" else "-"
+            tag = "odd" if idx % 2 == 1 else "even"
             self.tree.insert(
                 "",
                 tk.END,
                 values=(
-                    m.source.name,
+                    os.path.normpath(m.source.name),
                     target_display,
                     m.matched_by,
                     format_size(m.size),
                 ),
+                tags=(tag,),
             )
+
+        self.ready_count_var.set(str(ready_count))
+        self.skipped_count_var.set(str(skipped_count))
+        self.refused_count_var.set(str(refused_count))
 
         self.count_var.set(f"{ready_count} files ready, {skipped_count} skipped, {refused_count} refused")
         self.status_var.set(f"Preview complete: {ready_count} files ready to move.")
-        self.preview_btn.config(state=tk.NORMAL)
-
-        if ready_count > 0:
-            self.start_btn.config(state=tk.NORMAL)
-        else:
-            self.start_btn.config(state=tk.DISABLED)
+        self._set_preview_button_state(True)
+        self._set_start_button_state(ready_count > 0)
 
     def _preview_error(self, err_msg: str) -> None:
-        self.preview_btn.config(state=tk.NORMAL)
-        self.start_btn.config(state=tk.DISABLED)
+        self._set_preview_button_state(True)
+        self._set_start_button_state(False)
         self.status_var.set("Preview error")
         messagebox.showerror("Error Building Plan", err_msg)
 
@@ -244,10 +549,12 @@ class NexoraApp:
             return
 
         self.is_running = True
-        self.preview_btn.config(state=tk.DISABLED)
-        self.start_btn.config(state=tk.DISABLED)
-        self.undo_btn.config(state=tk.DISABLED)
+        self._set_preview_button_state(False)
+        self._set_start_button_state(False)
+        self.undo_btn.config(state=tk.DISABLED, bg="#F3F4F6", fg=theme.COLOR_SECONDARY_DISABLED_TEXT, cursor="arrow")
 
+        # Show progress bar during execution
+        self.progress_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(16, 0))
         self.progress_bar["maximum"] = len(ready_moves)
         self.progress_bar["value"] = 0
         self.status_var.set("Moving files...")
@@ -265,8 +572,9 @@ class NexoraApp:
 
     def _move_finished(self, summary: dict, log_path: Path) -> None:
         self.is_running = False
-        self.preview_btn.config(state=tk.NORMAL)
-        self.progress_bar["value"] = summary.get("moved", 0)
+        # Hide progress bar when idle
+        self.progress_bar.pack_forget()
+        self._set_preview_button_state(True)
 
         if summary.get("stopped"):
             self.status_var.set(f"Stopped: {summary.get('reason')}")
@@ -276,7 +584,7 @@ class NexoraApp:
             messagebox.showinfo("Complete", f"Successfully moved {summary.get('moved')} files.")
 
         self.current_plan = []
-        self.start_btn.config(state=tk.DISABLED)
+        self._set_start_button_state(False)
         self.update_undo_button_state()
 
     def _on_undo_click(self) -> None:
@@ -293,9 +601,14 @@ class NexoraApp:
             return
 
         self.is_running = True
-        self.preview_btn.config(state=tk.DISABLED)
-        self.start_btn.config(state=tk.DISABLED)
-        self.undo_btn.config(state=tk.DISABLED)
+        self._set_preview_button_state(False)
+        self._set_start_button_state(False)
+        self.undo_btn.config(state=tk.DISABLED, bg="#F3F4F6", fg=theme.COLOR_SECONDARY_DISABLED_TEXT, cursor="arrow")
+
+        # Show progress bar during undo
+        self.progress_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(16, 0))
+        self.progress_bar["mode"] = "indeterminate"
+        self.progress_bar.start(10)
         self.status_var.set("Reversing previous run...")
 
         def worker() -> None:
@@ -309,14 +622,20 @@ class NexoraApp:
 
     def _undo_finished(self, summary: dict) -> None:
         self.is_running = False
-        self.preview_btn.config(state=tk.NORMAL)
+        self.progress_bar.stop()
+        self.progress_bar["mode"] = "determinate"
+        self.progress_bar.pack_forget()
+        self._set_preview_button_state(True)
         self.status_var.set(f"Undo completed: {summary.get('restored')} files restored.")
         self.update_undo_button_state()
         messagebox.showinfo("Undo Completed", f"Successfully restored {summary.get('restored')} files.")
 
     def _undo_error(self, err_msg: str) -> None:
         self.is_running = False
-        self.preview_btn.config(state=tk.NORMAL)
+        self.progress_bar.stop()
+        self.progress_bar["mode"] = "determinate"
+        self.progress_bar.pack_forget()
+        self._set_preview_button_state(True)
         self.status_var.set("Undo failed")
         self.update_undo_button_state()
         messagebox.showerror("Undo Error", err_msg)

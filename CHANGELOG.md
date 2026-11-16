@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.2 (2026-11-17)
+- UI polish: Windows theme, cards, colour-coded counts, table styling. No behaviour change.
+
 ## 0.3.1 (2026-11-17)
 - Windows test build (single .exe), self-test flag.
 
