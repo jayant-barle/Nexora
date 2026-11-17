@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -31,7 +32,9 @@ def format_size(size_bytes: int) -> str:
 
 
 def get_runs_dir() -> Path:
-    """Get the runs directory path next to app.py."""
+    """Get the runs directory path next to app.py or executable."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "runs"
     return Path(__file__).resolve().parent.parent / "runs"
 
 

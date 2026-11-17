@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 import numpy as np
@@ -9,7 +10,22 @@ import cv2
 
 from nexora.faces.detect import read_image_bgr
 
-DEFAULT_SFACE_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "face_recognition_sface_2021dec.onnx"
+
+def get_default_sface_path() -> Path:
+    """Resolve path to SFace ONNX model in dev, bundled, or frozen environment."""
+    filename = "face_recognition_sface_2021dec.onnx"
+    if hasattr(sys, "_MEIPASS"):
+        p = Path(sys._MEIPASS) / "models" / filename
+        if p.exists():
+            return p
+    if getattr(sys, "frozen", False):
+        p = Path(sys.executable).resolve().parent / "models" / filename
+        if p.exists():
+            return p
+    return Path(__file__).resolve().parent.parent.parent / "models" / filename
+
+
+DEFAULT_SFACE_PATH = get_default_sface_path()
 DEFAULT_THRESHOLD = 0.363  # OpenCV recommended cosine threshold for SFace
 
 _recognizer: cv2.FaceRecognizerSF | None = None

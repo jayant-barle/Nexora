@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
@@ -22,9 +23,12 @@ from nexora.faces.recognize import (
     same_person,
 )
 
-RUNS_DIR = Path(__file__).resolve().parent.parent.parent / "runs"
-DEFAULT_FACES_JSON = RUNS_DIR / "faces.json"
-CROPS_DIR = RUNS_DIR / "face_crops"
+
+def get_runs_dir() -> Path:
+    """Get the runs directory path next to app.py or executable."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "runs"
+    return Path(__file__).resolve().parent.parent.parent / "runs"
 
 
 def compute_file_sha256(path: Path) -> str:
@@ -40,7 +44,7 @@ class FaceClusterManager:
     """Manages face cache, clustering into groups, group naming, and face mapping."""
 
     def __init__(self, json_path: Path | None = None) -> None:
-        self.json_path = json_path or DEFAULT_FACES_JSON
+        self.json_path = json_path or (get_runs_dir() / "faces.json")
         self.crops_dir = self.json_path.parent / "face_crops"
         self.cache: dict[str, dict] = {}
         self.groups: list[dict] = []

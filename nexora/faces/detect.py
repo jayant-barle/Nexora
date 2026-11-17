@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Any
 import numpy as np
@@ -10,8 +11,22 @@ import cv2
 from PIL import Image
 import pillow_heif  # registers HEIF opener if installed
 
-# Path to YuNet ONNX model
-DEFAULT_YUNET_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "face_detection_yunet_2023mar.onnx"
+
+def get_default_yunet_path() -> Path:
+    """Resolve path to YuNet ONNX model in dev, bundled, or frozen environment."""
+    filename = "face_detection_yunet_2023mar.onnx"
+    if hasattr(sys, "_MEIPASS"):
+        p = Path(sys._MEIPASS) / "models" / filename
+        if p.exists():
+            return p
+    if getattr(sys, "frozen", False):
+        p = Path(sys.executable).resolve().parent / "models" / filename
+        if p.exists():
+            return p
+    return Path(__file__).resolve().parent.parent.parent / "models" / filename
+
+
+DEFAULT_YUNET_PATH = get_default_yunet_path()
 
 _detector: cv2.FaceDetectorYN | None = None
 _detector_path: Path | None = None
