@@ -34,3 +34,4 @@
   - No faces: Unsorted/.
   - Videos never use faces (name rule only).
   - The owner names each group once; saving the same name for two groups merges them.
+- 2026-11-17: Face detection improvements: YuNet score threshold lowered from 0.8 to 0.6 (NMS 0.3), minimum face size set to 20 pixels, EXIF orientation transposed, multi-scale detection (original, downscale >1280px, upscale <640px), and 90°/270° rotation retry. Stage 3 is still not accepted until the labelled folder is measured.

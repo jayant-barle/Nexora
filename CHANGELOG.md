@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1-dev (2026-11-17)
+- Face detection: orientation fix, multi-scale, rotation, lower threshold and minimum size.
+
 ## 0.4.0-dev (2026-11-17)
 - Face recognition code. Not accepted until accuracy is measured.
 
