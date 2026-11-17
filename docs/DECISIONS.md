@@ -22,3 +22,15 @@
 - 2026-11-04: HEIC images: dates read via pillow-heif. Owner has iPhone photos.
 - 2026-11-17: Test distribution: single-file Windows exe built with PyInstaller. Not code-signed.
 - 2026-11-17: UI polish is a patch release. Behaviour is unchanged.
+- 2026-11-17: Stage 3 models downloaded from OpenCV Zoo (Apache 2.0 licence):
+  - YuNet face detection (`face_detection_yunet_2023mar.onnx`): SHA-256 `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4`.
+  - SFace face recognition (`face_recognition_sface_2021dec.onnx`): SHA-256 `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`.
+- 2026-11-17: Face cosine similarity default threshold is 0.363 (OpenCV's recommended cosine value for SFace). Unmeasured default, to be tuned on the owner's labelled folder.
+- 2026-11-17: Face recognition rules:
+  - Faces evaluated only for images with no name and no EXIF metadata date.
+  - Faces from one named person only: image goes to that person's folder (`Face: <name>`).
+  - Faces from two or more different named people: Unsorted/.
+  - Faces only from unnamed groups: Unsorted/.
+  - No faces: Unsorted/.
+  - Videos never use faces (name rule only).
+  - The owner names each group once; saving the same name for two groups merges them.

@@ -22,6 +22,7 @@ models/
 # Owner's photos and test data (never commit)
 test_photos/
 sample_media/
+tests/faces_labelled/
 
 # OS
 Thumbs.db

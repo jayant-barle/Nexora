@@ -48,10 +48,16 @@ def resolve_collision(target_dir: Path, filename: str, reserved_targets: set[Pat
     return candidate
 
 
-def build_plan(source: Path, dest: Path) -> list[PlannedMove]:
+def build_plan(
+    source: Path,
+    dest: Path,
+    face_map: dict[str, str | None] | None = None,
+) -> list[PlannedMove]:
     """Build the list of planned moves from source to dest.
     
     Pure function: scans top level of source, creates no files or directories.
+    Rule order for images: name, then metadata date, then face, then Unsorted.
+    Videos keep the name rule only (never use faces).
     """
     source_resolved = source.resolve()
     dest_resolved = dest.resolve()
@@ -122,9 +128,20 @@ def build_plan(source: Path, dest: Path) -> list[PlannedMove]:
                 folder_name = f"{year_str}/{month_str}"
                 matched_by = f"Date: {month_str}"
             else:
-                folder_rel = Path("Unsorted")
-                folder_name = "Unsorted"
-                matched_by = "Unsorted"
+                # Check face recognition for images only (videos never use faces)
+                face_person = None
+                if face_map and file_path.suffix.lower() in IMAGE_EXTENSIONS:
+                    resolved_str = str(file_path.resolve())
+                    face_person = face_map.get(resolved_str) or face_map.get(str(file_path)) or face_map.get(file_path.name)
+
+                if face_person:
+                    folder_rel = Path(face_person)
+                    folder_name = face_person
+                    matched_by = f"Face: {face_person}"
+                else:
+                    folder_rel = Path("Unsorted")
+                    folder_name = "Unsorted"
+                    matched_by = "Unsorted"
 
         target_dir = dest / folder_rel
         target_path = resolve_collision(target_dir, file_path.name, reserved_targets)

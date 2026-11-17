@@ -13,10 +13,10 @@
 - [x] Photo without EXIF date does not use file dates.
 - [x] Owner test on the test folder. Owner confirmed 2026-11-17: Preview, Start and Undo work. HEIC images go to date folders.
 
-## Stage 3: face recognition for photos
-- [ ] Face groups can be named by the owner.
-- [ ] Photo with no name and no date is matched to a named group.
-- [ ] Multi-person photo goes to Unsorted.
+## Stage 3: face recognition for photos (code complete, not accepted)
+- [x] Face groups can be named by the owner.
+- [x] Photo with no name and no date is matched to a named group.
+- [x] Multi-person photo goes to Unsorted.
 - [ ] Accuracy measured on a labelled test folder. Results recorded in docs/DECISIONS.md.
 
 ## Expected results (owner's test folder)

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.0-dev (2026-11-17)
+- Face recognition code. Not accepted until accuracy is measured.
+
 ## 0.3.2 (2026-11-17)
 - UI polish: Windows theme, cards, colour-coded counts, table styling. No behaviour change.
 

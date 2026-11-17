@@ -6,13 +6,16 @@ import os
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from PIL import Image, ImageTk
 
 from nexora.plan import PlannedMove, build_plan
 from nexora.mover import run_plan
 from nexora.undo import undo_run
 from nexora import theme
+from nexora.faces.groups import FaceClusterManager
 
 
 def format_size(size_bytes: int) -> str:
@@ -47,11 +50,157 @@ def find_latest_active_run_log() -> Path | None:
     return None
 
 
+class NamePeopleDialog(tk.Toplevel):
+    """Panel for viewing face groups, face crops, and assigning names."""
+
+    def __init__(self, parent: tk.Tk, cluster_manager: FaceClusterManager, on_saved: Callable[[], None] | None = None) -> None:
+        super().__init__(parent)
+        self.title("Name People - Face Groups")
+        self.geometry("620x520")
+        self.minsize(500, 350)
+        self.configure(bg=theme.COLOR_BG)
+        self.cluster_manager = cluster_manager
+        self.on_saved = on_saved
+        self.photo_images: list[ImageTk.PhotoImage] = []
+
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        main_frame = tk.Frame(self, bg=theme.COLOR_BG, padx=16, pady=12)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        header_label = tk.Label(
+            main_frame,
+            text="Name Detected People",
+            font=theme.FONT_SECTION,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_BG,
+        )
+        header_label.pack(anchor=tk.W, pady=(0, 4))
+
+        sub_label = tk.Label(
+            main_frame,
+            text="Assign a name to each face group. Saving the same name for two groups merges them.",
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_MUTED,
+            bg=theme.COLOR_BG,
+        )
+        sub_label.pack(anchor=tk.W, pady=(0, 10))
+
+        # Canvas with scrollbar for group rows
+        container = tk.Frame(main_frame, bg=theme.COLOR_CARD_BG, highlightbackground=theme.COLOR_CARD_BORDER, highlightthickness=1)
+        container.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        canvas = tk.Canvas(container, bg=theme.COLOR_CARD_BG, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(container, orient=tk.VERTICAL, command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=theme.COLOR_CARD_BG, padx=8, pady=8)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        groups = self.cluster_manager.groups
+        if not groups:
+            tk.Label(
+                scrollable_frame,
+                text="No face groups found yet. Click 'Find faces' in the main window.",
+                font=theme.FONT_BODY,
+                fg=theme.COLOR_MUTED,
+                bg=theme.COLOR_CARD_BG,
+            ).pack(pady=20)
+        else:
+            for idx, group in enumerate(groups):
+                row = tk.Frame(scrollable_frame, bg=theme.COLOR_CARD_BG, pady=6)
+                row.pack(fill=tk.X, expand=True)
+
+                # Face crop thumbnail
+                crop_path = group.get("crop_path")
+                thumb_label = tk.Label(row, bg="#E5E7EB", width=8, height=4)
+                if crop_path and os.path.exists(crop_path):
+                    try:
+                        pil_img = Image.open(crop_path).resize((64, 64))
+                        tk_img = ImageTk.PhotoImage(pil_img)
+                        self.photo_images.append(tk_img)
+                        thumb_label.configure(image=tk_img, width=64, height=64)
+                    except Exception:
+                        thumb_label.configure(text="[Face]")
+                else:
+                    thumb_label.configure(text="[Face]")
+                thumb_label.pack(side=tk.LEFT, padx=(0, 12))
+
+                # Group ID / Label
+                info_frame = tk.Frame(row, bg=theme.COLOR_CARD_BG)
+                info_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 12))
+                tk.Label(
+                    info_frame,
+                    text=f"Group #{idx + 1}",
+                    font=theme.FONT_BODY_BOLD,
+                    fg=theme.COLOR_TEXT,
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W)
+
+                # Name entry
+                name_var = tk.StringVar(value=group.get("name") or "")
+                entry = ttk.Entry(row, textvariable=name_var, font=theme.FONT_BODY, width=20)
+                entry.pack(side=tk.LEFT, padx=(0, 10))
+
+                # Save button per row
+                def make_save_cmd(gid=group["id"], var=name_var):
+                    def save_cmd():
+                        val = var.get().strip()
+                        self.cluster_manager.name_group(gid, val)
+                        if self.on_saved:
+                            self.on_saved()
+                        messagebox.showinfo("Saved", f"Updated group with name: {val or '(unnamed)'}")
+                    return save_cmd
+
+                save_btn = tk.Button(
+                    row,
+                    text="Save",
+                    command=make_save_cmd(),
+                    font=theme.FONT_BODY,
+                    bg=theme.COLOR_SECONDARY_BG,
+                    fg=theme.COLOR_SECONDARY_TEXT,
+                    relief=tk.SOLID,
+                    bd=1,
+                    padx=12,
+                    pady=4,
+                    cursor="hand2",
+                )
+                save_btn.pack(side=tk.LEFT)
+
+                # Divider
+                sep = tk.Frame(scrollable_frame, bg=theme.COLOR_CARD_BORDER, height=1)
+                sep.pack(fill=tk.X, pady=4)
+
+        # Close button at bottom
+        close_btn = tk.Button(
+            main_frame,
+            text="Close",
+            command=self.destroy,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            relief=tk.SOLID,
+            bd=1,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+        )
+        close_btn.pack(anchor=tk.E)
+
+
 class NexoraApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Nexora")
-        self.root.geometry("980x660")
+        self.root.geometry("980x680")
         self.root.minsize(800, 500)
         self.root.configure(bg=theme.COLOR_BG)
 
@@ -64,6 +213,7 @@ class NexoraApp:
         self.skipped_count_var = tk.StringVar(value="0")
         self.refused_count_var = tk.StringVar(value="0")
 
+        self.cluster_manager = FaceClusterManager()
         self.current_plan: list[PlannedMove] = []
         self.is_running = False
 
@@ -86,7 +236,6 @@ class NexoraApp:
             except Exception:
                 pass
 
-        # Configure generic styles
         try:
             self.style.configure(".", font=theme.FONT_BODY)
             self.style.configure("Treeview.Heading", font=theme.FONT_BODY_BOLD)
@@ -252,8 +401,41 @@ class NexoraApp:
         )
         self.undo_btn.pack(side=tk.LEFT, padx=(0, 8))
 
+        # Face Recognition Action Buttons
+        self.find_faces_btn = tk.Button(
+            self.action_frame,
+            text="Find faces",
+            command=self._on_find_faces_click,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            activebackground=theme.COLOR_SECONDARY_HOVER,
+            relief=tk.SOLID,
+            bd=1,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+        )
+        self.find_faces_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.name_people_btn = tk.Button(
+            self.action_frame,
+            text="Name people",
+            command=self._on_name_people_click,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            activebackground=theme.COLOR_SECONDARY_HOVER,
+            relief=tk.SOLID,
+            bd=1,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+        )
+        self.name_people_btn.pack(side=tk.LEFT, padx=(0, 8))
+
         self.progress_bar = ttk.Progressbar(self.action_frame, mode="determinate")
-        # Hidden by default when idle; packed dynamically during start/undo
+        # Hidden by default when idle; packed dynamically during start/undo/find faces
 
         # 4. Summary KPI Cards
         summary_frame = tk.Frame(main_frame, bg=theme.COLOR_BG)
@@ -470,6 +652,79 @@ class NexoraApp:
                 cursor="arrow",
             )
 
+    def _on_find_faces_click(self) -> None:
+        """Scan source folder for unnamed, undated images in background thread."""
+        src = self.source_dir.get().strip()
+        if not src or not Path(src).is_dir():
+            messagebox.showwarning("Missing Source", "Please select a valid source folder first.")
+            return
+
+        src_path = Path(src)
+        self.is_running = True
+        self._set_preview_button_state(False)
+        self._set_start_button_state(False)
+        self.find_faces_btn.config(state=tk.DISABLED)
+
+        self.progress_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(16, 0))
+        self.progress_bar["mode"] = "determinate"
+        self.progress_bar["maximum"] = 100
+        self.progress_bar["value"] = 0
+        self.status_var.set("Scanning images for faces...")
+
+        def progress(scanned: int, total: int, faces: int) -> None:
+            self.root.after(0, self._find_faces_progress, scanned, total, faces)
+
+        def worker() -> None:
+            try:
+                summary = self.cluster_manager.scan_source(src_path, progress_callback=progress)
+                self.root.after(0, self._find_faces_finished, summary)
+            except Exception as e:
+                self.root.after(0, self._find_faces_error, str(e))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _find_faces_progress(self, scanned: int, total: int, faces: int) -> None:
+        self.progress_bar["maximum"] = max(total, 1)
+        self.progress_bar["value"] = scanned
+        self.status_var.set(f"Scanning faces: {scanned}/{total} images scanned, {faces} faces found...")
+
+    def _find_faces_finished(self, summary: dict[str, int]) -> None:
+        self.is_running = False
+        self.progress_bar.pack_forget()
+        self._set_preview_button_state(True)
+        self.find_faces_btn.config(state=tk.NORMAL)
+
+        msg = (
+            f"Face scan complete: {summary['images_scanned']} images scanned, "
+            f"{summary['faces_found']} faces found across {summary['groups_count']} groups."
+        )
+        self.status_var.set(msg)
+        messagebox.showinfo("Face Detection Complete", msg)
+
+        # Open the Name People panel
+        if summary.get("groups_count", 0) > 0:
+            self._on_name_people_click()
+
+    def _find_faces_error(self, err_msg: str) -> None:
+        self.is_running = False
+        self.progress_bar.pack_forget()
+        self._set_preview_button_state(True)
+        self.find_faces_btn.config(state=tk.NORMAL)
+        self.status_var.set("Face scan error")
+        messagebox.showerror("Face Scan Error", err_msg)
+
+    def _on_name_people_click(self) -> None:
+        """Open Name People dialog."""
+        self.cluster_manager.load()
+        NamePeopleDialog(self.root, self.cluster_manager, on_saved=self._on_face_groups_updated)
+
+    def _on_face_groups_updated(self) -> None:
+        """Called when a face group name is updated."""
+        self.cluster_manager.load()
+        # If preview is already visible, optionally re-run preview
+        if self.source_dir.get().strip() and self.dest_dir.get().strip():
+            self._on_preview_click()
+
     def _on_preview_click(self) -> None:
         src = self.source_dir.get().strip()
         dst = self.dest_dir.get().strip()
@@ -487,7 +742,10 @@ class NexoraApp:
 
         def worker() -> None:
             try:
-                plan = build_plan(src_path, dst_path)
+                # Load latest face map if available
+                self.cluster_manager.load()
+                face_map = self.cluster_manager.build_face_map()
+                plan = build_plan(src_path, dst_path, face_map=face_map)
                 self.root.after(0, self._preview_success, plan)
             except Exception as e:
                 self.root.after(0, self._preview_error, str(e))
@@ -555,6 +813,7 @@ class NexoraApp:
 
         # Show progress bar during execution
         self.progress_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(16, 0))
+        self.progress_bar["mode"] = "determinate"
         self.progress_bar["maximum"] = len(ready_moves)
         self.progress_bar["value"] = 0
         self.status_var.set("Moving files...")
@@ -572,7 +831,6 @@ class NexoraApp:
 
     def _move_finished(self, summary: dict, log_path: Path) -> None:
         self.is_running = False
-        # Hide progress bar when idle
         self.progress_bar.pack_forget()
         self._set_preview_button_state(True)
 
