@@ -405,6 +405,7 @@ class FaceClusterManager:
                     "canonical_key": (fk, idx),
                     "members": [(fk, idx)],
                     "representative_members": [emb],
+                    "sum_emb": emb.copy(),
                     "count": 1,
                     "centroid": emb.copy(),
                     "crop_paths": [crop_p] if crop_p else [],
@@ -439,6 +440,7 @@ class FaceClusterManager:
                     # Join best cluster; update representative centroid only for first M members to stop drift
                     c = clusters[best_idx]
                     c["members"].append((fk, idx))
+                    c["sum_emb"] += emb
                     c["count"] += 1
                     if len(c["representative_members"]) < MAX_REPRESENTATIVE_MEMBERS:
                         c["representative_members"].append(emb)
@@ -456,11 +458,71 @@ class FaceClusterManager:
                         "canonical_key": (fk, idx),
                         "members": [(fk, idx)],
                         "representative_members": [emb],
+                        "sum_emb": emb.copy(),
                         "count": 1,
                         "centroid": emb.copy(),
                         "crop_paths": [crop_p] if crop_p else [],
                     })
                     n_clusters += 1
+
+        # Pass 2: Iterative merge pass on full centroids
+        # Merge two clusters when their full-centroid similarity is at or above threshold (0.363),
+        # repeating until nothing changes.
+        # Cap any merged cluster at the large-group limit (cluster_cap) to prevent collapse,
+        # and require that at least one cluster is a small/fragment group (<= MAX_REPRESENTATIVE_MEMBERS)
+        # so established multi-photo people are preserved for user review via merge suggestions.
+        while True:
+            k = len(clusters)
+            if k <= 1:
+                break
+
+            full_centroids = np.zeros((k, 128), dtype=np.float32)
+            for i, c in enumerate(clusters):
+                s = c["sum_emb"]
+                norm_s = float(np.linalg.norm(s))
+                full_centroids[i] = (s / norm_s) if norm_s > 0 else s
+
+            sim_matrix = full_centroids @ full_centroids.T
+            np.fill_diagonal(sim_matrix, -1.0)
+
+            best_pair: tuple[int, int] | None = None
+            best_sim = threshold - 1e-6
+
+            for i in range(k):
+                ci_cnt = clusters[i]["count"]
+                if ci_cnt >= cluster_cap:
+                    continue
+                for j in range(i + 1, k):
+                    cj_cnt = clusters[j]["count"]
+                    if (ci_cnt + cj_cnt <= cluster_cap) and (
+                        ci_cnt <= MAX_REPRESENTATIVE_MEMBERS or cj_cnt <= MAX_REPRESENTATIVE_MEMBERS
+                    ):
+                        val = float(sim_matrix[i, j])
+                        if val > best_sim:
+                            best_sim = val
+                            best_pair = (i, j)
+
+            if best_pair is None:
+                break
+
+            i, j = best_pair
+            clusters[i]["members"].extend(clusters[j]["members"])
+            clusters[i]["sum_emb"] += clusters[j]["sum_emb"]
+            clusters[i]["count"] += clusters[j]["count"]
+
+            for rep in clusters[j]["representative_members"]:
+                if len(clusters[i]["representative_members"]) < MAX_REPRESENTATIVE_MEMBERS:
+                    clusters[i]["representative_members"].append(rep)
+
+            mean_emb = np.mean(clusters[i]["representative_members"], axis=0)
+            norm_val = float(np.linalg.norm(mean_emb))
+            clusters[i]["centroid"] = (mean_emb / norm_val) if norm_val > 0 else mean_emb
+
+            for cp in clusters[j]["crop_paths"]:
+                if cp and cp not in clusters[i]["crop_paths"] and len(clusters[i]["crop_paths"]) < 6:
+                    clusters[i]["crop_paths"].append(cp)
+
+            clusters.pop(j)
 
         # Sort clusters deterministically: size descending, tie-break by canonical key
         clusters.sort(key=lambda c: (-c["count"], c["canonical_key"]))

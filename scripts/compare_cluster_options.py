@@ -143,6 +143,49 @@ def cluster_dataset(
                 })
                 n_clusters += 1
 
+    # Pass 2 for frozen_m5 mode (iterative merge pass with large group cap)
+    if mode == "frozen_m5":
+        cluster_cap = min(max(20, int(n_faces * 0.05)), 200)
+        while True:
+            k = len(clusters)
+            if k <= 1:
+                break
+            full_centroids = np.zeros((k, 128), dtype=np.float32)
+            for i, c in enumerate(clusters):
+                s = c["sum_emb"]
+                norm_s = float(np.linalg.norm(s))
+                full_centroids[i] = (s / norm_s) if norm_s > 0 else s
+
+            sim_matrix = full_centroids @ full_centroids.T
+            np.fill_diagonal(sim_matrix, -1.0)
+
+            best_pair: tuple[int, int] | None = None
+            best_sim = threshold - 1e-6
+            for i in range(k):
+                ci_cnt = len(clusters[i]["members"])
+                if ci_cnt >= cluster_cap:
+                    continue
+                for j in range(i + 1, k):
+                    cj_cnt = len(clusters[j]["members"])
+                    if (ci_cnt + cj_cnt <= cluster_cap) and (ci_cnt <= M or cj_cnt <= M):
+                        val = float(sim_matrix[i, j])
+                        if val > best_sim:
+                            best_sim = val
+                            best_pair = (i, j)
+            if best_pair is None:
+                break
+
+            i, j = best_pair
+            clusters[i]["members"].extend(clusters[j]["members"])
+            clusters[i]["sum_emb"] += clusters[j]["sum_emb"]
+            for rep in clusters[j]["rep_members"]:
+                if len(clusters[i]["rep_members"]) < M:
+                    clusters[i]["rep_members"].append(rep)
+            mean_emb = np.mean(clusters[i]["rep_members"], axis=0)
+            norm_val = float(np.linalg.norm(mean_emb))
+            clusters[i]["centroid"] = (mean_emb / norm_val) if norm_val > 0 else mean_emb
+            clusters.pop(j)
+
     elapsed = time.perf_counter() - t0
     pred_labels = [0] * n_faces
     for c_id, c in enumerate(clusters):

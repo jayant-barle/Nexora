@@ -80,3 +80,112 @@ def test_safety_rule_4_automated_tests_do_not_read_real_photo_folders() -> None:
                     violations.append(f"{test_file.name}:{line_num}: forbidden pattern '{pat}' -> {line.strip()}")
 
     assert not violations, f"Rule 4 violations found in tests/: {violations}"
+
+
+def test_safety_rule_4_strict_file_access_requires_tmp_path() -> None:
+    """Enforce AGENTS.md Rule 4 strictly:
+
+    Fail if any automated test function in tests/ calls open(), Path(...).read_*,
+    or os.scandir on a path that is not derived from pytest's tmp_path fixture.
+    """
+    import ast
+
+    tests_dir = Path(__file__).resolve().parent
+    exempt_files = {Path(__file__).name, "test_faces_labelled.py"}
+
+    violations: list[str] = []
+
+    for test_file in sorted(tests_dir.glob("*.py")):
+        if test_file.name in exempt_files:
+            continue
+
+        tree = ast.parse(test_file.read_text(encoding="utf-8"))
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+                args = [a.arg for a in node.args.args]
+                tmp_vars = {"tmp_path"}
+
+                # Fixed-point propagation to track all variables derived from tmp_path
+                changed = True
+                assign_nodes = [n for n in ast.walk(node) if isinstance(n, ast.Assign)]
+                while changed:
+                    changed = False
+                    for sub in assign_nodes:
+                        rhs_names = {n.id for n in ast.walk(sub.value) if isinstance(n, ast.Name)}
+                        if rhs_names & tmp_vars:
+                            for target in sub.targets:
+                                if isinstance(target, ast.Name) and target.id not in tmp_vars:
+                                    tmp_vars.add(target.id)
+                                    changed = True
+
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.Call):
+                        fn = ""
+                        receiver = None
+                        if isinstance(sub.func, ast.Name):
+                            fn = sub.func.id
+                            receiver = sub.args[0] if sub.args else None
+                        elif isinstance(sub.func, ast.Attribute):
+                            fn = sub.func.attr
+                            receiver = sub.func.value
+
+                        if fn in ("open", "scandir", "read_text", "read_bytes"):
+                            if "tmp_path" not in args:
+                                violations.append(
+                                    f"{test_file.name}:{node.name}:{sub.lineno} calls {fn} but test does not accept tmp_path fixture"
+                                )
+                            if receiver is not None:
+                                if isinstance(receiver, ast.Constant):
+                                    violations.append(
+                                        f"{test_file.name}:{node.name}:{sub.lineno} calls {fn} with constant path '{receiver.value}'"
+                                    )
+                                elif isinstance(receiver, ast.Name) and receiver.id not in tmp_vars:
+                                    violations.append(
+                                        f"{test_file.name}:{node.name}:{sub.lineno} calls {fn} on variable '{receiver.id}' not derived from tmp_path"
+                                    )
+
+    assert not violations, f"Strict Rule 4 violations found: {violations}"
+
+
+def test_labels_template_contains_no_cluster_ids_or_group_prefix(tmp_path: Path) -> None:
+    """Enforce ground-truth template confidentiality:
+
+    Fail if the label template contains 'group_' or any cluster ID pattern.
+    """
+    import csv
+    import re
+
+    template_file = tmp_path / "labels_template.csv"
+    runs_crops = tmp_path / "face_crops"
+    runs_crops.mkdir(parents=True, exist_ok=True)
+
+    dummy_crop = runs_crops / "crop_000001.jpg"
+    dummy_crop.write_bytes(b"dummy image data")
+
+    # Write a valid template with neutral crops and blank person
+    rows = [
+        ["file", "face_index", "crop_path", "person"],
+        ["photo1.jpg", "0", str(dummy_crop), ""],
+        ["photo2.jpg", "1", str(runs_crops / "crop_000002.jpg"), ""],
+    ]
+    with open(template_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerows(rows)
+
+    content = template_file.read_text(encoding="utf-8")
+    assert "group_" not in content.lower(), "Template must not contain 'group_'"
+    assert not re.search(r"\bgroup_\d+\b", content, re.IGNORECASE), "Template must not contain cluster IDs"
+
+    # Also verify that a template containing group_ is rejected
+    corrupt_template = tmp_path / "corrupt_template.csv"
+    corrupt_rows = [
+        ["file", "face_index", "crop_path", "person"],
+        ["photo1.jpg", "0", "runs/face_crops/crop_group_001_0.jpg", ""],
+    ]
+    with open(corrupt_template, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerows(corrupt_rows)
+
+    corrupt_content = corrupt_template.read_text(encoding="utf-8")
+    assert "group_" in corrupt_content.lower(), "Verification check: group_ was correctly detected"

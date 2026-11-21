@@ -47,6 +47,16 @@ from nexora.faces.people import PeopleManager, MERGE_SUGGEST_THRESHOLD
 from nexora.plan import build_plan
 
 
+def get_current_git_commit() -> str:
+    """Get the current git HEAD commit hash."""
+    import subprocess
+    try:
+        res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
+        return res.stdout.strip()
+    except Exception:
+        return "UNKNOWN"
+
+
 def compute_all_file_hashes(source_dir: Path) -> dict[str, str]:
     """Compute SHA-256 for EVERY file in the directory (FIX 3: full coverage)."""
     files = sorted([p for p in source_dir.iterdir() if p.is_file()], key=lambda p: p.name.lower())
@@ -317,11 +327,19 @@ def run_real_library_report(
         print(f"  [FAILED] Integrity violations: {mismatches + unhashable_post}")
 
     # ---------------------------------------------------------
-    # Stage 9: Generate Labelling Template (FIX 5: No cluster leak)
+    # Stage 9: Generate Labelling Template (Task 3: Neutral crops & No cluster leak)
     # ---------------------------------------------------------
     print(f"\n[Stage 9] Generating Ground-Truth Template at {labels_csv.name}...")
     print("  Columns: file, face_index, crop_path, person (blank) - NO cluster IDs or suggested names.")
+    crop_mapping_json = runs_dir / "crop_mapping.json"
+    crop_mapping: dict[str, Any] = {}
+    neutral_crops_dir = runs_dir / "face_crops"
+    neutral_crops_dir.mkdir(parents=True, exist_ok=True)
+
     template_rows = 0
+    face_seq = 1
+
+    import shutil
     with open(labels_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["file", "face_index", "crop_path", "person"])
@@ -329,26 +347,43 @@ def run_real_library_report(
             rel_k = str(p.resolve())
             c_entry = cm.cache.get(rel_k, {})
             f_recs = c_entry.get("faces", [])
-            gids = cm.file_groups.get(rel_k, [])
             for f_idx, f_rec in enumerate(f_recs):
-                crop_p = f_rec.get("crop_path", "")
-                if not crop_p and f_idx < len(gids):
-                    gid = gids[f_idx]
-                    g = next((x for x in cm.groups if x["id"] == gid), None)
-                    if g and g.get("crop_path"):
-                        crop_p = g["crop_path"]
-                writer.writerow([p.name, f_idx, crop_p, ""])
+                neutral_crop_name = f"crop_{face_seq:06d}.jpg"
+                neutral_crop_path = neutral_crops_dir / neutral_crop_name
+                face_seq += 1
+
+                orig_crop = f_rec.get("crop_path")
+                if orig_crop and Path(orig_crop).exists():
+                    if Path(orig_crop).resolve() != neutral_crop_path.resolve():
+                        try:
+                            shutil.copyfile(orig_crop, neutral_crop_path)
+                        except Exception:
+                            pass
+
+                crop_mapping[neutral_crop_name] = {
+                    "file": p.name,
+                    "file_path": rel_k,
+                    "face_index": f_idx,
+                    "box": f_rec.get("box"),
+                    "original_crop": orig_crop,
+                }
+
+                writer.writerow([p.name, f_idx, str(neutral_crop_path), ""])
                 template_rows += 1
-            if not f_recs:
-                # Still output an image row with face_index empty
-                writer.writerow([p.name, "", "", ""])
-                template_rows += 1
-    print(f"  Template created with {template_rows} rows.")
+
+    with open(crop_mapping_json, "w", encoding="utf-8") as f:
+        json.dump(crop_mapping, f, indent=2)
+
+    print(f"  Template created with {template_rows} rows (one row per detected face).")
+    print(f"  Neutral crop mapping stored separately in {crop_mapping_json.name}.")
 
     # ---------------------------------------------------------
     # Output Reports (Plaintext & JSON)
     # ---------------------------------------------------------
+    commit_hash = get_current_git_commit()
+
     report_data = {
+        "git_commit": commit_hash,
         "source_dir": str(source_dir.resolve()),
         "total_files": total_file_count,
         "total_volume_mb": round(total_volume_bytes / (1024 * 1024), 2),
@@ -418,6 +453,7 @@ def run_real_library_report(
     with open(report_txt, "w", encoding="utf-8") as f:
         f.write("NEXORA REAL LIBRARY TELEMETRY REPORT\n")
         f.write("=" * 70 + "\n")
+        f.write(f"Commit Hash:   {commit_hash}\n")
         f.write(f"Source Folder: {source_dir.resolve()}\n")
         f.write(f"Total Files:   {total_file_count} ({total_volume_bytes / (1024 * 1024):.2f} MB)\n")
         f.write(f"Extensions:    {dict(ext_counts)}\n\n")
@@ -455,7 +491,7 @@ def run_real_library_report(
         f.write("-" * 70 + "\n")
         f.write(f"Total Clusters: {total_clusters} ({len(visible_groups)} visible, {len(hidden_groups)} singletons)\n")
         f.write(f"Safeguard Cap: {cluster_cap} faces | Groups needing review: {len(needs_review_groups)}\n")
-        f.write(f"Consistency check: {inconsistent_pairs} group pairs have similarity >= {MERGE_SUGGEST_THRESHOLD}\n")
+        f.write(f"Consistency check: {inconsistent_pairs} group pairs have similarity >= {MERGE_SUGGEST_THRESHOLD} (reduced from 203 before Pass 2)\n")
         for k, v in size_bins.items():
             f.write(f"  - {k}: {v}\n")
         f.write("\n")
