@@ -285,17 +285,18 @@ class FaceClusterManager:
         return best_group
 
     def cluster_all_faces(self, threshold: float = DEFAULT_THRESHOLD) -> None:
-        """Cluster ALL faces across self.cache in one pass after the scan.
+        """Cluster all faces across self.cache in fixed canonical order.
         
-        Uses average-linkage agglomerative clustering on cosine distance (threshold 0.363 default).
-        Uses cluster centroids (mean of L2-normalised embeddings) for comparisons.
-        Result does not depend on file order (canonical sorting makes it shuffle-invariant).
-        Re-running is idempotent and preserves names stored by member face in self.face_names.
+        Incremental centroid clustering on cosine similarity (threshold 0.363 by default).
+        Processes faces in deterministic order sorted by (file_key, face_idx).
+        For each face, compares its normalised embedding with current cluster centroids
+        via a single numpy matrix-vector product. Joins the best cluster if similarity >= threshold,
+        updating its centroid incrementally, or starts a new cluster.
+        Deterministic, shuffle-invariant, and idempotent on re-run.
         """
         # Collect all accepted faces
         face_items: list[dict[str, Any]] = []
 
-        # Sort file keys canonically
         for file_key in sorted(self.cache.keys()):
             entry = self.cache[file_key]
             faces = entry.get("faces", [])
@@ -324,76 +325,61 @@ class FaceClusterManager:
         # Canonical sort by (file_key, face_idx) to guarantee complete shuffle-invariance
         face_items.sort(key=lambda x: (x["file_key"], x["face_idx"]))
 
-        # Build initial singleton clusters
+        n_faces = len(face_items)
+        # Preallocate centroids buffer for up to n_faces clusters (shape (n_faces, 128))
+        centroids_buffer = np.zeros((n_faces, 128), dtype=np.float32)
+        n_clusters = 0
+
         clusters: list[dict[str, Any]] = []
-        for i, item in enumerate(face_items):
-            crops = [item["crop_path"]] if item.get("crop_path") else []
-            clusters.append({
-                "id": i,
-                "members": [(item["file_key"], item["face_idx"])],
-                "emb_sum": item["norm_emb"].copy(),
-                "count": 1,
-                "centroid": item["norm_emb"].copy(),
-                "crop_paths": crops,
-                "canonical_key": (item["file_key"], item["face_idx"]),
-            })
 
-        # Agglomerative clustering: merge highest cosine similarity >= threshold
-        while len(clusters) > 1:
-            best_sim = -1.0
-            best_i = -1
-            best_j = -1
-            n = len(clusters)
+        for item in face_items:
+            emb = item["norm_emb"]
+            fk = item["file_key"]
+            idx = item["face_idx"]
+            crop_p = item.get("crop_path")
 
-            for i in range(n):
-                ci = clusters[i]
-                for j in range(i + 1, n):
-                    cj = clusters[j]
-                    sim = float(np.dot(ci["centroid"], cj["centroid"]))
-                    if sim > best_sim:
-                        best_sim = sim
-                        best_i = i
-                        best_j = j
-                    elif sim == best_sim and best_sim >= threshold:
-                        # Deterministic tie-breaking using canonical keys
-                        key_curr = (ci["canonical_key"], cj["canonical_key"])
-                        key_best = (clusters[best_i]["canonical_key"], clusters[best_j]["canonical_key"])
-                        if key_curr < key_best:
-                            best_i = i
-                            best_j = j
+            if n_clusters == 0:
+                # First face creates first cluster
+                centroids_buffer[0] = emb
+                n_clusters = 1
+                clusters.append({
+                    "canonical_key": (fk, idx),
+                    "members": [(fk, idx)],
+                    "emb_sum": emb.copy(),
+                    "count": 1,
+                    "centroid": emb.copy(),
+                    "crop_paths": [crop_p] if crop_p else [],
+                })
+            else:
+                # Compare against all current cluster centroids via matrix-vector product
+                sims = centroids_buffer[:n_clusters] @ emb
+                best_idx = int(np.argmax(sims))
+                best_sim = float(sims[best_idx])
 
-            if best_sim < threshold or best_i == -1:
-                break
-
-            ci = clusters[best_i]
-            cj = clusters[best_j]
-
-            merged_members = sorted(ci["members"] + cj["members"])
-            merged_sum = ci["emb_sum"] + cj["emb_sum"]
-            merged_count = ci["count"] + cj["count"]
-            norm = float(np.linalg.norm(merged_sum))
-            merged_centroid = (merged_sum / norm) if norm > 0 else merged_sum
-
-            merged_crops = []
-            for cp in ci["crop_paths"] + cj["crop_paths"]:
-                if cp and cp not in merged_crops:
-                    merged_crops.append(cp)
-                    if len(merged_crops) >= 6:
-                        break
-
-            new_cluster = {
-                "id": ci["id"],
-                "members": merged_members,
-                "emb_sum": merged_sum,
-                "count": merged_count,
-                "centroid": merged_centroid,
-                "crop_paths": merged_crops,
-                "canonical_key": merged_members[0],
-            }
-
-            del clusters[best_j]
-            del clusters[best_i]
-            clusters.append(new_cluster)
+                if best_sim >= threshold:
+                    # Join best cluster and update centroid incrementally
+                    c = clusters[best_idx]
+                    c["members"].append((fk, idx))
+                    c["emb_sum"] += emb
+                    c["count"] += 1
+                    norm_val = float(np.linalg.norm(c["emb_sum"]))
+                    new_centroid = (c["emb_sum"] / norm_val) if norm_val > 0 else c["emb_sum"]
+                    c["centroid"] = new_centroid
+                    centroids_buffer[best_idx] = new_centroid
+                    if crop_p and crop_p not in c["crop_paths"] and len(c["crop_paths"]) < 6:
+                        c["crop_paths"].append(crop_p)
+                else:
+                    # Start a new cluster
+                    centroids_buffer[n_clusters] = emb
+                    clusters.append({
+                        "canonical_key": (fk, idx),
+                        "members": [(fk, idx)],
+                        "emb_sum": emb.copy(),
+                        "count": 1,
+                        "centroid": emb.copy(),
+                        "crop_paths": [crop_p] if crop_p else [],
+                    })
+                    n_clusters += 1
 
         # Sort clusters deterministically: size descending, tie-break by canonical key
         clusters.sort(key=lambda c: (-c["count"], c["canonical_key"]))
@@ -409,17 +395,17 @@ class FaceClusterManager:
 
             # Check if any member has an assigned name in self.face_names
             member_names = [
-                self.face_names[f"{fk}:{idx}"]
-                for fk, idx in c["members"]
-                if f"{fk}:{idx}" in self.face_names
+                self.face_names[f"{m_fk}:{m_idx}"]
+                for m_fk, m_idx in c["members"]
+                if f"{m_fk}:{m_idx}" in self.face_names
             ]
             assigned_display = None
             assigned_folder = None
             if member_names:
                 assigned_display = collections.Counter(member_names).most_common(1)[0][0]
                 assigned_folder = assigned_display.strip().lower()
-                for fk, idx in c["members"]:
-                    self.face_names[f"{fk}:{idx}"] = assigned_display
+                for m_fk, m_idx in c["members"]:
+                    self.face_names[f"{m_fk}:{m_idx}"] = assigned_display
 
             group_dict = {
                 "id": gid,
@@ -428,7 +414,7 @@ class FaceClusterManager:
                 "crop_path": c["crop_paths"][0] if c["crop_paths"] else "",
                 "crop_paths": c["crop_paths"],
                 "representative_embedding": [float(x) for x in c["centroid"]],
-                "member_faces": [f"{fk}:{idx}" for fk, idx in c["members"]],
+                "member_faces": [f"{m_fk}:{m_idx}" for m_fk, m_idx in c["members"]],
             }
             new_groups.append(group_dict)
 

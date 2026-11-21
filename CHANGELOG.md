@@ -2,10 +2,11 @@
 
 ## 0.5.2-dev (2026-11-21)
 - Restored placement order so unnamed faces, hidden 1-face groups, and false faces never block name or date rules.
-- Agglomerative clustering: average-linkage single-pass clustering on cosine distance (threshold 0.363) comparing centroids; deterministic and shuffle-invariant.
+- Incremental centroid clustering on cosine similarity (threshold 0.363 default) comparing against normalized cluster centroids via matrix-vector dot products; deterministic, shuffle-invariant, and near-linear.
 - Name persistence across re-clustering: names stored by member face in runs/faces.json.
-- Visibility threshold set to 2: clusters with 2+ faces visible as "Unnamed person N"; 1-face clusters stay hidden and ignored by placement.
+- Visibility threshold set to 2: clusters with 2+ faces visible as "Unnamed person N"; 1-face clusters stay hidden and ignored by placement (unmeasured default, owner review pending).
 - Accuracy measurement script scripts/measure_faces.py added for pairwise precision/recall/FPR evaluation across thresholds 0.6, 0.7, 0.85.
+- Clustering benchmark script scripts/benchmark_cluster.py added to measure time and peak memory on synthetic 128-d embeddings for 1k, 5k, and 10k faces.
 - Accuracy not yet measured. Owner review pending.
 
 ## 0.5.1-dev (2026-11-21)
