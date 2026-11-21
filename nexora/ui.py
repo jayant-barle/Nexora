@@ -75,6 +75,10 @@ class NexoraApp:
 
         self.cluster_manager = FaceClusterManager()
         self.people_manager = PeopleManager(self.cluster_manager)
+        if self.cluster_manager.json_path.exists():
+            visible = self.people_manager.get_visible_groups()
+            m_scanned = len(self.cluster_manager.cache)
+            self.status_var.set(f"Found {len(visible)} people from {m_scanned} scanned images")
         self.current_plan: list[PlannedMove] = []
         self.is_running = False
         self.scan_stop_event: threading.Event | None = None
@@ -304,11 +308,11 @@ class NexoraApp:
         )
         self.preview_btn.pack(side=tk.LEFT, padx=(0, 8))
 
-        # Approve button (enabled only after preview; disabled while running)
+        # Start button (enabled only after preview; disabled while running)
         self.start_btn = tk.Button(
             self.action_frame,
-            text="Approve",
-            command=self._on_approve_click,
+            text="Start",
+            command=self._on_start_click,
             font=theme.FONT_BODY_BOLD,
             bg=theme.COLOR_PRIMARY_DISABLED,
             fg=theme.COLOR_PRIMARY_TEXT,
@@ -489,7 +493,7 @@ class NexoraApp:
         for widget in self.people_scroll_frame.winfo_children():
             widget.destroy()
 
-        groups = self.cluster_manager.groups
+        groups = self.people_manager.get_visible_groups()
         if not groups:
             tk.Label(
                 self.people_scroll_frame,
@@ -721,6 +725,9 @@ class NexoraApp:
                 cursor="arrow",
             )
 
+    def _set_start_button_state(self, enabled: bool) -> None:
+        self._set_approve_button_state(enabled)
+
     def _set_preview_button_state(self, enabled: bool) -> None:
         if enabled:
             self.preview_btn.config(
@@ -776,15 +783,15 @@ class NexoraApp:
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_stop_scan_click(self) -> None:
-        """Signal the background scan to stop gracefully."""
+        """Signal the background scan to stop gracefully after current batch."""
         if self.scan_stop_event:
             self.scan_stop_event.set()
-            self.status_var.set("Stopping scan and saving cache...")
+            self.status_var.set("Stopping scan after current batch...")
 
     def _scan_progress(self, scanned: int, total: int, faces: int) -> None:
         self.progress_bar["maximum"] = max(total, 1)
         self.progress_bar["value"] = scanned
-        self.status_var.set(f"Scanning people: {scanned}/{total} files scanned, {faces} faces found...")
+        self.status_var.set(f"Scanned {scanned} of {total}. Results saved.")
 
     def _scan_finished(self, summary: dict[str, int]) -> None:
         self.is_running = False
@@ -933,6 +940,8 @@ class NexoraApp:
         self.current_plan = []
         self._set_approve_button_state(False)
         self.update_undo_button_state()
+
+    _on_start_click = _on_approve_click
 
     def _on_undo_click(self) -> None:
         latest_log = find_latest_active_run_log()

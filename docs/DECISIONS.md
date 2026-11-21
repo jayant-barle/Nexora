@@ -42,3 +42,16 @@
 - 2026-11-21: "Group photos" folder used for images with two or more faces belonging to different named people.
 - 2026-11-21: Face matching threshold is recorded as an unmeasured default (0.363 cosine similarity for SFace) until accuracy is tested on the owner's labelled library.
 - 2026-11-21: People screen is implemented as a dedicated second tab in ttk.Notebook within the main application window, displaying up to 6 sample face crops per group, name editing, splitting, and merging.
+- 2026-11-21: Faster scan and false face reduction improvements:
+  - Longest side normalized to 640 pixels for image and video frame analysis.
+  - EXIF orientation applied first; single fallback pass at 90° rotation only if no faces detected.
+  - Video analysis: 5 frames sampled, each normalized to 640px longest side.
+  - Multiprocessing: ProcessPoolExecutor with (CPU count - 1) workers; models preloaded per worker process.
+  - Face detection score threshold raised to 0.85 (YuNet).
+  - Minimum face size set to 48 pixels in 640px space.
+  - Shape filter: drop face boxes with aspect ratio > 2.5 (h/w > 2.5 or w/h > 2.5).
+  - Face embedding computed only for detected faces that pass the quality filter.
+  - Face groups must contain at least 3 faces before being shown on the People screen; groups with 1 or 2 faces remain in runs/faces.json but hidden until more faces join.
+  - Clustering threshold kept at 0.363 (SFace cosine similarity unmeasured default).
+  - Progress persistence: runs/faces.json saved atomically (.tmp then replace) every 50 images and upon stop/failure.
+  - App startup displays "Found N people from M scanned images" immediately if runs/faces.json exists.

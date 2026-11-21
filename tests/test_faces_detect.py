@@ -34,14 +34,23 @@ def test_detect_faces_missing_file_returns_empty_and_does_not_raise(tmp_path: Pa
 
 
 def _create_synthetic_face_image() -> np.ndarray:
-    """Create a 300x300 synthetic face image recognizable by YuNet at score threshold 0.6."""
-    img = np.full((300, 300, 3), 180, dtype=np.uint8)
+    """Create a 300x300 synthetic face image recognizable by YuNet at score threshold 0.85."""
     import cv2
-    cv2.ellipse(img, (150, 150), (60, 80), 0, 0, 360, (140, 180, 220), -1)
-    cv2.circle(img, (130, 130), 8, (20, 20, 20), -1)
-    cv2.circle(img, (170, 130), 8, (20, 20, 20), -1)
-    cv2.line(img, (150, 140), (150, 165), (20, 20, 20), 3)
-    cv2.line(img, (135, 185), (165, 185), (20, 20, 20), 4)
+    img = np.full((300, 300, 3), 240, dtype=np.uint8)
+    eye_y = 140
+    cv2.ellipse(img, (150, 150), (65, 85), 0, 0, 360, (180, 200, 230), -1)
+    cv2.line(img, (115, eye_y - 15), (140, eye_y - 12), (50, 40, 30), 3)
+    cv2.line(img, (160, eye_y - 12), (185, eye_y - 15), (50, 40, 30), 3)
+    cv2.circle(img, (128, eye_y), 9, (255, 255, 255), -1)
+    cv2.circle(img, (172, eye_y), 9, (255, 255, 255), -1)
+    cv2.circle(img, (128, eye_y), 5, (80, 50, 30), -1)
+    cv2.circle(img, (172, eye_y), 5, (80, 50, 30), -1)
+    cv2.circle(img, (129, eye_y - 1), 2, (255, 255, 255), -1)
+    cv2.circle(img, (173, eye_y - 1), 2, (255, 255, 255), -1)
+    cv2.line(img, (150, eye_y + 10), (145, eye_y + 30), (100, 120, 160), 2)
+    cv2.line(img, (145, eye_y + 30), (155, eye_y + 30), (100, 120, 160), 2)
+    cv2.ellipse(img, (150, eye_y + 50), (22, 10), 0, 0, 360, (100, 100, 200), -1)
+    cv2.line(img, (132, eye_y + 50), (168, eye_y + 50), (60, 60, 150), 2)
     return img
 
 

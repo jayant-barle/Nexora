@@ -46,6 +46,9 @@ def to_folder_name(name: str) -> str:
     return folder
 
 
+MIN_VISIBLE_GROUP_SIZE = 3
+
+
 class PeopleManager:
     """Manages people naming, merging, splitting, and unnamed group numbering."""
 
@@ -66,6 +69,10 @@ class PeopleManager:
         for gids in self.file_groups.values():
             count += gids.count(group_id)
         return count
+
+    def get_visible_groups(self) -> list[dict]:
+        """Return only groups that contain at least 3 faces (groups with 1-2 faces are hidden)."""
+        return [g for g in self.groups if self.get_group_size(g["id"]) >= MIN_VISIBLE_GROUP_SIZE]
 
     def get_unnamed_numbering(self) -> dict[str, str]:
         """Compute 'Unnamed person N' mapping for unnamed groups ordered by group size."""
