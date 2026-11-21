@@ -35,3 +35,10 @@
   - Videos never use faces (name rule only).
   - The owner names each group once; saving the same name for two groups merges them.
 - 2026-11-17: Face detection improvements: YuNet score threshold lowered from 0.8 to 0.6 (NMS 0.3), minimum face size set to 20 pixels, EXIF orientation transposed, multi-scale detection (original, downscale >1280px, upscale <640px), and 90°/270° rotation retry. Stage 3 is still not accepted until the labelled folder is measured.
+- 2026-11-21: Stage 4 placement order (Section 4 of PRD v2.0):
+  - Images: (1) Exactly one face belonging to a named person -> `<dest>/<Person>/<filename>`, (2) Two or more faces belonging to different named people -> `<dest>/Group photos/<filename>`, (3) Name in file name -> `<dest>/<name>/<filename>`, (4) Metadata date -> `<dest>/<YYYY>/<YYYY-MM>/<filename>`, (5) Otherwise -> `<dest>/Unsorted/<filename>`.
+  - Videos: (1) Named person appears in >= 2 of 5 sampled frames -> `<dest>/<Person>/<filename>`, (2) Name in file name -> `<dest>/<name>/<filename>`, (3) Otherwise -> `<dest>/Unsorted/<filename>`.
+- 2026-11-21: Video frame sampling rule: 5 frames spaced evenly through the video using OpenCV VideoCapture. A face/person counts for a video only if it appears in at least 2 of the 5 sampled frames. Videos never use dates. Unreadable videos are marked "could not read" and continue.
+- 2026-11-21: "Group photos" folder used for images with two or more faces belonging to different named people.
+- 2026-11-21: Face matching threshold is recorded as an unmeasured default (0.363 cosine similarity for SFace) until accuracy is tested on the owner's labelled library.
+- 2026-11-21: People screen is implemented as a dedicated second tab in ttk.Notebook within the main application window, displaying up to 6 sample face crops per group, name editing, splitting, and merging.

@@ -20,12 +20,12 @@
 - [ ] Accuracy measured on a labelled test folder. Results recorded in docs/DECISIONS.md.
 
 ## Stage 4: People screen, person folders, group photos, approval (code complete, not accepted)
-- [ ] Naming, merging and splitting face groups in people model.
-- [ ] Person folder and Group photos placement rules (overriding name and date rules).
-- [ ] Video frame sampling (5 frames, >=2 frames for face match).
-- [ ] Scan cache skips unchanged files by SHA-256.
-- [ ] People screen UI with face crop cards, naming, split and merge.
-- [ ] Approve button with confirmation dialog, verified mover and log.
+- [x] Naming, merging and splitting face groups in people model.
+- [x] Person folder and Group photos placement rules (overriding name and date rules).
+- [x] Video frame sampling (5 frames, >=2 frames for face match).
+- [x] Scan cache skips unchanged files by SHA-256.
+- [x] People screen UI with face crop cards, naming, split and merge.
+- [x] Approve button with confirmation dialog, verified mover and log.
 - [ ] Owner test on a copy of the library.
 
 ## Expected results (owner's test folder)

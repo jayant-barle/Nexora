@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.0-dev (2026-11-21)
+- People screen, person and group-photo folders, scan across all images and video frames, Approve step.
+
 ## 0.4.1-dev (2026-11-17)
 - Face detection: orientation fix, multi-scale, rotation, lower threshold and minimum size.
 

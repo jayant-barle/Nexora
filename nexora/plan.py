@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from nexora.names import extract_name, is_image_or_video, IMAGE_EXTENSIONS
+from nexora.names import extract_name, is_image_or_video, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from nexora.metadata import capture_date
+from nexora.faces.people import to_folder_name
 
 
 @dataclass
@@ -52,12 +55,23 @@ def build_plan(
     source: Path,
     dest: Path,
     face_map: dict[str, str | None] | None = None,
+    face_data: dict[str, Any] | None = None,
 ) -> list[PlannedMove]:
     """Build the list of planned moves from source to dest.
     
     Pure function: scans top level of source, creates no files or directories.
-    Rule order for images: name, then metadata date, then face, then Unsorted.
-    Videos keep the name rule only (never use faces).
+    
+    Stage 4 rules:
+    Images:
+      1. Exactly 1 face belonging to a named person -> <dest>/<Person>/<filename>, matched_by = "Person: <Name>"
+      2. 2+ faces belonging to different named people -> <dest>/Group photos/<filename>, matched_by = "Group photos"
+      3. Name in file name -> <dest>/<name>/<filename>, matched_by = "Name: <name>"
+      4. Metadata date -> <dest>/<YYYY>/<YYYY-MM>/<filename>, matched_by = "Date: <YYYY-MM>"
+      5. Otherwise -> <dest>/Unsorted/<filename>, matched_by = "Unsorted"
+    Videos:
+      1. Named person appears in >= 2 of 5 sampled frames -> <dest>/<Person>/<filename>, matched_by = "Person: <Name>"
+      2. Name in file name -> <dest>/<name>/<filename>, matched_by = "Name: <name>"
+      3. Otherwise -> <dest>/Unsorted/<filename>, matched_by = "Unsorted"
     """
     source_resolved = source.resolve()
     dest_resolved = dest.resolve()
@@ -110,38 +124,123 @@ def build_plan(
             )
             continue
 
-        name = extract_name(file_path.name)
-        if name:
-            folder_rel = Path(name)
-            folder_name = name
-            matched_by = f"Name: {name}"
-        else:
-            # Check capture date for images only
-            date_val = None
-            if file_path.suffix.lower() in IMAGE_EXTENSIONS:
-                date_val = capture_date(file_path)
+        resolved_str = str(file_path.resolve())
+        is_video = file_path.suffix.lower() in VIDEO_EXTENSIONS
 
-            if date_val is not None:
-                year_str = f"{date_val.year:04d}"
-                month_str = f"{date_val.year:04d}-{date_val.month:02d}"
-                folder_rel = Path(year_str) / month_str
-                folder_name = f"{year_str}/{month_str}"
-                matched_by = f"Date: {month_str}"
-            else:
-                # Check face recognition for images only (videos never use faces)
-                face_person = None
-                if face_map and file_path.suffix.lower() in IMAGE_EXTENSIONS:
-                    resolved_str = str(file_path.resolve())
-                    face_person = face_map.get(resolved_str) or face_map.get(str(file_path)) or face_map.get(file_path.name)
+        # Check if Stage 4 face_data is provided
+        if face_data is not None:
+            file_face_info = (
+                face_data.get(resolved_str)
+                or face_data.get(str(file_path))
+                or face_data.get(file_path.name)
+            )
 
-                if face_person:
-                    folder_rel = Path(face_person)
-                    folder_name = face_person
-                    matched_by = f"Face: {face_person}"
+            if is_video:
+                # Video placement in Stage 4
+                video_person = file_face_info.get("video_person") if file_face_info else None
+                if video_person:
+                    f_name = to_folder_name(video_person)
+                    folder_rel = Path(f_name)
+                    folder_name = f_name
+                    matched_by = f"Person: {video_person}"
                 else:
-                    folder_rel = Path("Unsorted")
-                    folder_name = "Unsorted"
-                    matched_by = "Unsorted"
+                    name = extract_name(file_path.name)
+                    if name:
+                        folder_rel = Path(name)
+                        folder_name = name
+                        matched_by = f"Name: {name}"
+                    else:
+                        folder_rel = Path("Unsorted")
+                        folder_name = "Unsorted"
+                        matched_by = "Unsorted"
+            else:
+                # Image placement in Stage 4
+                faces_list = file_face_info.get("faces") if file_face_info else None
+                matched_face = False
+                folder_rel = Path("Unsorted")
+                folder_name = "Unsorted"
+                matched_by = "Unsorted"
+
+                if faces_list is not None and len(faces_list) > 0:
+                    # Check for unnamed faces first: unnamed faces go to Unsorted
+                    if None in faces_list:
+                        folder_rel = Path("Unsorted")
+                        folder_name = "Unsorted"
+                        matched_by = "Unsorted"
+                        matched_face = True
+                    else:
+                        named_set = set(faces_list)
+                        if len(named_set) >= 2:
+                            # 2 or more faces belonging to different named people
+                            folder_rel = Path("Group photos")
+                            folder_name = "Group photos"
+                            matched_by = "Group photos"
+                            matched_face = True
+                        elif len(faces_list) == 1 and faces_list[0]:
+                            # Exactly one face belonging to a named person
+                            p_name = faces_list[0]
+                            f_name = to_folder_name(p_name)
+                            folder_rel = Path(f_name)
+                            folder_name = f_name
+                            matched_by = f"Person: {p_name}"
+                            matched_face = True
+
+                if not matched_face:
+                    # Fallback to name rule
+                    name = extract_name(file_path.name)
+                    if name:
+                        folder_rel = Path(name)
+                        folder_name = name
+                        matched_by = f"Name: {name}"
+                    else:
+                        # Fallback to date rule
+                        date_val = capture_date(file_path)
+                        if date_val is not None:
+                            year_str = f"{date_val.year:04d}"
+                            month_str = f"{date_val.year:04d}-{date_val.month:02d}"
+                            folder_rel = Path(year_str) / month_str
+                            folder_name = f"{year_str}/{month_str}"
+                            matched_by = f"Date: {month_str}"
+                        else:
+                            folder_rel = Path("Unsorted")
+                            folder_name = "Unsorted"
+                            matched_by = "Unsorted"
+
+        else:
+            # Stage 3 fallback (face_map or no face data)
+            name = extract_name(file_path.name)
+            if name:
+                folder_rel = Path(name)
+                folder_name = name
+                matched_by = f"Name: {name}"
+            else:
+                date_val = None
+                if file_path.suffix.lower() in IMAGE_EXTENSIONS:
+                    date_val = capture_date(file_path)
+
+                if date_val is not None:
+                    year_str = f"{date_val.year:04d}"
+                    month_str = f"{date_val.year:04d}-{date_val.month:02d}"
+                    folder_rel = Path(year_str) / month_str
+                    folder_name = f"{year_str}/{month_str}"
+                    matched_by = f"Date: {month_str}"
+                else:
+                    face_person = None
+                    if face_map and file_path.suffix.lower() in IMAGE_EXTENSIONS:
+                        face_person = (
+                            face_map.get(resolved_str)
+                            or face_map.get(str(file_path))
+                            or face_map.get(file_path.name)
+                        )
+
+                    if face_person:
+                        folder_rel = Path(face_person)
+                        folder_name = face_person
+                        matched_by = f"Face: {face_person}"
+                    else:
+                        folder_rel = Path("Unsorted")
+                        folder_name = "Unsorted"
+                        matched_by = "Unsorted"
 
         target_dir = dest / folder_rel
         target_path = resolve_collision(target_dir, file_path.name, reserved_targets)

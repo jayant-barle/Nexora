@@ -67,12 +67,14 @@ def get_detector(
         return None
 
 
-def read_image_bgr(image_path: Path | str, apply_exif_transpose: bool = True) -> np.ndarray | None:
-    """Safely read an image from disk as a BGR numpy array using Pillow.
+def read_image_bgr(image_path: Path | str | np.ndarray, apply_exif_transpose: bool = True) -> np.ndarray | None:
+    """Safely read an image from disk or accept numpy array as a BGR numpy array.
     
-    Applies EXIF orientation normalization (ImageOps.exif_transpose) by default.
+    Applies EXIF orientation normalization (ImageOps.exif_transpose) by default for disk images.
     Supports JPEG, PNG, WEBP, and HEIC on Windows without raising.
     """
+    if isinstance(image_path, np.ndarray):
+        return image_path
     try:
         with Image.open(image_path) as pil_img:
             if apply_exif_transpose:
