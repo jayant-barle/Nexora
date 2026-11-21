@@ -219,3 +219,25 @@ def test_video_with_no_name_goes_to_unsorted(tmp_path: Path) -> None:
     assert move.matched_by == "Unsorted"
     assert move.target == dst / "Unsorted" / "VID_1234.mp4"
     assert move.status == "ready"
+
+
+def test_undated_image_with_modified_time_never_uses_mtime_for_placement(tmp_path: Path) -> None:
+    """Confirm Rule 2: Never use file created or modified dates to place a file."""
+    import os
+    import time
+    src = tmp_path / "source"
+    dst = tmp_path / "dest"
+    src.mkdir()
+    dst.mkdir()
+
+    img_path = src / "IMG_9999.jpg"
+    _create_image_with_date(img_path, date_str=None)
+    # Set filesystem mtime to year 2026 (1777000000)
+    fake_mtime = 1777000000.0
+    os.utime(img_path, (fake_mtime, fake_mtime))
+
+    plan = build_plan(src, dst)
+    assert len(plan) == 1
+    move = plan[0]
+    assert move.folder == "Unsorted", f"Must go to Unsorted, got {move.folder}"
+    assert move.matched_by == "Unsorted", f"Matched by must be Unsorted, got {move.matched_by}"

@@ -407,11 +407,18 @@ def test_clustering_well_separated_case(tmp_path: Path):
     n_people = 1000
     faces_per_person = 10
 
+    # Generate 1,000 distinct centers with pairwise cosine < 0.30 (guaranteed well-separated)
+    centers: list[np.ndarray] = []
+    while len(centers) < n_people:
+        c = _unit_vec(rng)
+        if not centers or np.max(np.array(centers) @ c) < 0.30:
+            centers.append(c)
+
     cache: dict[str, dict] = {}
     ground_truth_labels: list[int] = []
 
     for p in range(n_people):
-        cp = _unit_vec(rng)
+        cp = centers[p]
         for i in range(faces_per_person):
             noise = 0.3 * _unit_vec(rng)
             f_emb = cp + noise
@@ -459,6 +466,8 @@ def test_clustering_well_separated_case(tmp_path: Path):
     assert elapsed < 5.0, f"Clustering 10k faces took {elapsed:.2f} s, must be < 5 s"
     assert pair_precision >= 0.95, f"Pair precision {pair_precision:.4f} must be >= 0.95"
     assert pair_recall >= 0.95, f"Pair recall {pair_recall:.4f} must be >= 0.95"
+    inconsistent = cm.count_inconsistent_pairs(threshold=0.363)
+    assert inconsistent == 0, f"Inconsistent pairs count must be 0 on well-separated case, got {inconsistent}"
 
 
 def test_giant_cluster_safeguard_needs_review_and_withheld_from_plan(tmp_path: Path):

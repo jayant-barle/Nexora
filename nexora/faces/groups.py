@@ -488,12 +488,18 @@ class FaceClusterManager:
                 for m_fk, m_idx in c["members"]:
                     self.face_names[f"{m_fk}:{m_idx}"] = assigned_display
 
+            crops_for_group = list(c["crop_paths"])
+            if not crops_for_group and self.crops_dir.exists():
+                existing_crops = sorted([str(p) for p in self.crops_dir.glob(f"crop_{gid}_*.jpg")])
+                if existing_crops:
+                    crops_for_group = existing_crops[:6]
+
             group_dict = {
                 "id": gid,
                 "name": assigned_folder,
                 "display_name": assigned_display,
-                "crop_path": c["crop_paths"][0] if c["crop_paths"] else "",
-                "crop_paths": c["crop_paths"],
+                "crop_path": crops_for_group[0] if crops_for_group else "",
+                "crop_paths": crops_for_group,
                 "representative_embedding": [float(x) for x in c["centroid"]],
                 "member_faces": [f"{m_fk}:{m_idx}" for m_fk, m_idx in c["members"]],
                 "needs_review": (c["count"] > cluster_cap) and not assigned_display,
@@ -528,6 +534,21 @@ class FaceClusterManager:
                     if gid:
                         assigned_gids.append(gid)
                 self.file_groups[file_key] = assigned_gids
+
+    def count_inconsistent_pairs(self, threshold: float = DEFAULT_THRESHOLD) -> int:
+        """Count pairs of cluster representative embeddings whose cosine similarity >= threshold."""
+        reps = [
+            np.array(g["representative_embedding"], dtype=np.float32)
+            for g in self.groups
+            if g.get("representative_embedding")
+        ]
+        if len(reps) <= 1:
+            return 0
+        mat = np.array(reps)
+        sim_matrix = mat @ mat.T
+        triu_indices = np.triu_indices(len(reps), k=1)
+        sims = sim_matrix[triu_indices]
+        return int(np.sum(sims >= threshold))
 
     def scan_source(
         self,
@@ -771,10 +792,25 @@ class FaceClusterManager:
                                         gid for gid, f_set in group_frame_occurrences.items()
                                         if len(f_set) >= 2
                                     ]
-                                    serializable_faces = [
-                                        {"box": r["box"], "score": r["score"], "embedding": r["embedding"]}
-                                        for r in all_video_faces
-                                    ]
+                                    serializable_faces = []
+                                    for f_idx, r in enumerate(all_video_faces):
+                                        crop_p = None
+                                        cb = r.get("crop_bytes")
+                                        if cb:
+                                            c_path = self.crops_dir / f"crop_vid_{curr_sha[:10]}_{f_idx}.jpg"
+                                            try:
+                                                with open(c_path, "wb") as f_crop:
+                                                    f_crop.write(cb)
+                                                crop_p = str(c_path)
+                                            except Exception:
+                                                pass
+                                        serializable_faces.append({
+                                            "box": r["box"],
+                                            "score": r["score"],
+                                            "embedding": r["embedding"],
+                                            "crop_path": crop_p,
+                                            "frame_idx": r.get("frame_idx", 0),
+                                        })
                                     self.cache[resolved_key] = {
                                         "size": curr_size,
                                         "sha256": curr_sha,
@@ -807,10 +843,24 @@ class FaceClusterManager:
                                             self._append_crop_bytes(group, face_rec.get("crop_bytes"))
                                         assigned_group_ids.append(group["id"])
 
-                                    serializable_faces = [
-                                        {"box": r["box"], "score": r["score"], "embedding": r["embedding"]}
-                                        for r in face_records
-                                    ]
+                                    serializable_faces = []
+                                    for idx, r in enumerate(face_records):
+                                        crop_p = None
+                                        cb = r.get("crop_bytes")
+                                        if cb:
+                                            c_path = self.crops_dir / f"crop_{curr_sha[:10]}_{idx}.jpg"
+                                            try:
+                                                with open(c_path, "wb") as f_crop:
+                                                    f_crop.write(cb)
+                                                crop_p = str(c_path)
+                                            except Exception:
+                                                pass
+                                        serializable_faces.append({
+                                            "box": r["box"],
+                                            "score": r["score"],
+                                            "embedding": r["embedding"],
+                                            "crop_path": crop_p,
+                                        })
                                     self.cache[resolved_key] = {
                                         "size": curr_size,
                                         "sha256": curr_sha,
@@ -844,10 +894,12 @@ class FaceClusterManager:
 
         finally:
             elapsed = time.perf_counter() - start_time
+            inconsistent_pairs = self.count_inconsistent_pairs(threshold=threshold)
             summary_line = (
                 f"Summary: total files: {scanned_count}, ok: {count_ok}, "
                 f"cached: {count_cached}, could-not-read: {count_could_not_read}, "
                 f"no-faces: {count_no_faces}, errors: {count_errors}, "
+                f"inconsistent-pairs: {inconsistent_pairs}, "
                 f"elapsed seconds: {elapsed:.2f}"
             )
             log_f.write(summary_line + "\n")

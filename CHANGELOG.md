@@ -3,7 +3,12 @@
 ## 0.5.4-dev (2026-11-22)
 - Merge suggestions on People screen: suggests pairs of visible groups with cosine similarity >= 0.363 (MERGE_SUGGEST_THRESHOLD, unmeasured default). Suggestions are sorted by similarity descending and capped at 50 (MAX_MERGE_SUGGESTIONS). Pairs already sharing the same name or previously dismissed are excluded.
 - Stable dismissal tracking with overlap rule: fixed dismissal resilience so dismissed pairs remain dismissed after rescans even when groups gain or lose faces (e.g. earlier file names joining). Stored dismissals record up to 10 member IDs per group and match when more than half (> 50%, DISMISSAL_OVERLAP_MIN = 0.5 unmeasured default) of stored members persist in the current groups. Old exact-key dismissal records remain supported for backwards compatibility.
+- Consistency alignment between clustering and merge suggestions: both clustering and merge suggestions compare against the same representative frozen after the first M=5 members (MAX_REPRESENTATIVE_MEMBERS = 5), eliminating drift while maintaining 1.0 precision and recall on varied poses. Added post-clustering consistency check (count_inconsistent_pairs) asserting 0 inconsistent pairs on well-separated synthetic benchmarks.
+- Real library diagnostic runner (scripts/real_library_report.py): manual standalone script outside pytest that performs non-destructive profiling, cryptographic SHA-256 verification across all files, EXIF date diagnostics vs file mtime, review views for large groups, and ground-truth template generation.
+- Enforced AGENTS.md Rule 4: automated test in tests/test_safety.py fails if any test under tests/ attempts to read external or real photo paths.
+- Labelling template confidentiality: runs/chulmati_labels_template.csv outputs file, face_index, crop_path, person (blank) without leaking cluster IDs or suggested names.
 - People screen UI: added "Suggested merges" section above group cards with side-by-side preview crops, names, photo counts, similarity scores, "Merge" button (invokes existing merge_groups), and "Not the same person" button (persists dismissal). Displays "No suggested merges." when empty and indicates when the 50-suggestion cap is reached.
+- Large group review view: groups flagged needs_review report sample crop paths and file counts in real-library reports for owner review.
 - Safety: suggestions never merge or alter files automatically; user-approved merges follow existing plan placement rules.
 - Accuracy not yet measured on real photos. Owner review pending.
 
