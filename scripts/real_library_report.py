@@ -329,8 +329,14 @@ def run_real_library_report(
             rel_k = str(p.resolve())
             c_entry = cm.cache.get(rel_k, {})
             f_recs = c_entry.get("faces", [])
+            gids = cm.file_groups.get(rel_k, [])
             for f_idx, f_rec in enumerate(f_recs):
                 crop_p = f_rec.get("crop_path", "")
+                if not crop_p and f_idx < len(gids):
+                    gid = gids[f_idx]
+                    g = next((x for x in cm.groups if x["id"] == gid), None)
+                    if g and g.get("crop_path"):
+                        crop_p = g["crop_path"]
                 writer.writerow([p.name, f_idx, crop_p, ""])
                 template_rows += 1
             if not f_recs:
