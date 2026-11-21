@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3-dev (2026-11-22)
+- Progress file versioning: schema_version 2 in runs/faces.json with automatic in-place migration preserving cache and names. Corrupt files are backed up to runs/faces.corrupt-<timestamp>.json, reported in the status bar, and scan starts clean. Atomic writes (.tmp -> fsync -> os.replace) preserved every 50 files and on stop/error/finish.
+- Per-scan log: each scan writes runs/scan-<YYYYMMDD-HHMMSS>.log recording one line per file (status, file name, faces found, reason if not ok) and an end summary line (total files, ok, cached, could-not-read, no-faces, errors, elapsed seconds).
+- Unreadable files tracking: unreadable files tracked in runs/faces.json under "unreadable", cleared when later successfully read. People screen includes read-only "Unreadable files (N)" viewer.
+- Accuracy not yet measured on real photos. Owner review pending.
+
 ## 0.5.2-dev (2026-11-22)
 - Labelled evaluation script scripts/measure_faces.py enhanced with cosine similarity histograms (same-person vs different-person), accuracy/recall/precision/FPR tables, and false merge file lists; outputs formatted runs/measure_report.txt and exits cleanly without fake numbers when no dataset exists.
 - Stopped synthetic sweeps; retained MIN_MEMBER_MATCHES = 2 at threshold 0.363 as unmeasured default pending owner review on real photos.

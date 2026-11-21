@@ -7,6 +7,8 @@ import json
 import os
 import sys
 import threading
+import time
+from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Any
@@ -182,16 +184,21 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
     else:
         # Image
         try:
-            detected = detect_faces(file_path, model_path=y_path, score_threshold=SCORE_THRESHOLD)
-            img_bgr = None
+            img_bgr = read_image_bgr(file_path, apply_exif_transpose=True)
+            if img_bgr is None:
+                return {
+                    "resolved_key": file_path_str,
+                    "type": "image",
+                    "size": curr_size,
+                    "sha256": curr_sha,
+                    "status": "could not read",
+                    "faces": [],
+                }
+
+            detected = detect_faces(img_bgr, model_path=y_path, score_threshold=SCORE_THRESHOLD)
             face_records = []
 
             for face in detected:
-                if img_bgr is None:
-                    img_bgr = read_image_bgr(file_path, apply_exif_transpose=True)
-                if img_bgr is None:
-                    continue
-
                 emb = embed_face(img_bgr, face, model_path=s_path)
                 if emb is None:
                     continue
@@ -242,35 +249,72 @@ class FaceClusterManager:
         self.groups: list[dict] = []
         self.file_groups: dict[str, list[str]] = {}
         self.face_names: dict[str, str] = {}
+        self.unreadable: set[str] = set()
+        self.corrupt_backup_path: Path | None = None
+        self.last_scan_log: Path | None = None
         self.load()
 
     def load(self) -> None:
-        """Load state from JSON if it exists."""
+        """Load state from JSON if it exists.
+        
+        If corrupt or unreadable, moves to runs/faces.corrupt-<timestamp>.json and starts clean.
+        If schema_version is missing or older than 2, migrates in place preserving cache and names.
+        """
+        self.corrupt_backup_path = None
         if not self.json_path.exists():
             return
         try:
             with open(self.json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self.cache = data.get("cache", {})
-            self.groups = data.get("groups", [])
-            self.file_groups = data.get("file_groups", {})
-            self.face_names = data.get("face_names", {})
+            if not isinstance(data, dict):
+                raise ValueError("Root element of faces.json is not a dictionary")
         except Exception:
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            corrupt_path = self.json_path.parent / f"faces.corrupt-{ts}.json"
+            counter = 1
+            while corrupt_path.exists():
+                corrupt_path = self.json_path.parent / f"faces.corrupt-{ts}_{counter}.json"
+                counter += 1
+            try:
+                os.replace(self.json_path, corrupt_path)
+                self.corrupt_backup_path = corrupt_path
+            except Exception:
+                pass
             self.cache = {}
             self.groups = []
             self.file_groups = {}
             self.face_names = {}
+            self.unreadable = set()
+            return
+
+        schema_version = data.get("schema_version")
+        self.cache = data.get("cache", {})
+        self.groups = data.get("groups", [])
+        self.file_groups = data.get("file_groups", {})
+        self.face_names = data.get("face_names", {})
+        self.unreadable = set(data.get("unreadable", []))
+
+        # Check cache for any existing entries with status="could not read"
+        for k, v in self.cache.items():
+            if isinstance(v, dict) and v.get("status") == "could not read":
+                self.unreadable.add(k)
+
+        # Migrate schema 1 (or missing schema_version) in place to schema 2
+        if schema_version is None or schema_version < 2:
+            self.save()
 
     def save(self) -> None:
-        """Save state to JSON atomically using a temp file and replace."""
+        """Save state to JSON atomically using a temp file and replace with schema_version 2."""
         self.json_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = self.json_path.with_suffix(".tmp")
         data = {
-            "version": 1,
+            "schema_version": 2,
+            "version": 2,
             "cache": self.cache,
             "groups": self.groups,
             "file_groups": self.file_groups,
             "face_names": self.face_names,
+            "unreadable": sorted(list(self.unreadable)),
         }
         with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
@@ -487,13 +531,25 @@ class FaceClusterManager:
         progress_callback: Callable[[int, int, int], None] | None = None,
         stop_event: threading.Event | None = None,
         max_workers: int | None = None,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """Scan source folder for all images and videos and cluster faces.
         
-        Saves runs/faces.json atomically after every 50 images and upon stop/finish.
-        Uses ProcessPoolExecutor with (CPU count - 1) workers for fast parallel scanning.
+        Saves runs/faces.json atomically after every 50 images and upon stop/error/finish.
+        Writes runs/scan-<YYYYMMDD-HHMMSS>.log with per-file status and summary line.
         """
         self.crops_dir.mkdir(parents=True, exist_ok=True)
+        runs_dir = self.json_path.parent
+        runs_dir.mkdir(parents=True, exist_ok=True)
+
+        scan_ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_path = runs_dir / f"scan-{scan_ts}.log"
+        counter = 1
+        while log_path.exists():
+            log_path = runs_dir / f"scan-{scan_ts}_{counter}.log"
+            counter += 1
+
+        self.last_scan_log = log_path
+        start_time = time.perf_counter()
 
         candidates: list[Path] = []
         for p in sorted(source_dir.iterdir(), key=lambda x: x.name.lower()):
@@ -507,212 +563,302 @@ class FaceClusterManager:
         total_faces_found = 0
         scanned_count = 0
 
-        # Separate candidates into cached (unchanged) and uncached
-        cached_tasks: list[tuple[Path, int, str, bool]] = []
-        uncached_tasks: list[tuple[Path, int, str, bool]] = []
+        count_ok = 0
+        count_cached = 0
+        count_could_not_read = 0
+        count_no_faces = 0
+        count_errors = 0
 
-        for p in candidates:
-            resolved_key = str(p.resolve())
-            try:
-                curr_size = p.stat().st_size
-            except OSError:
-                curr_size = 0
-            is_video = p.suffix.lower() in VIDEO_EXTENSIONS
+        log_f = open(log_path, "w", encoding="utf-8")
 
-            cached_entry = self.cache.get(resolved_key)
-            if cached_entry and cached_entry.get("size") == curr_size:
-                curr_sha = compute_file_sha256(p)
-                if cached_entry.get("sha256") == curr_sha:
-                    cached_tasks.append((p, curr_size, curr_sha, is_video))
-                    continue
-            else:
-                curr_sha = compute_file_sha256(p)
-            uncached_tasks.append((p, curr_size, curr_sha, is_video))
+        try:
+            # Separate candidates into cached (unchanged) and uncached
+            cached_tasks: list[tuple[Path, int, str, bool]] = []
+            uncached_tasks: list[tuple[Path, int, str, bool]] = []
 
-        # First, process cached hits quickly
-        for p, curr_size, curr_sha, is_video in cached_tasks:
-            if stop_event and stop_event.is_set():
-                break
+            for p in candidates:
+                resolved_key = str(p.resolve())
+                try:
+                    curr_size = p.stat().st_size
+                except OSError:
+                    curr_size = 0
+                is_video = p.suffix.lower() in VIDEO_EXTENSIONS
 
-            resolved_key = str(p.resolve())
-            cached_entry = self.cache[resolved_key]
-            if is_video:
-                total_faces_found += len(cached_entry.get("faces", []))
-            else:
-                total_faces_found += len(cached_entry.get("faces", []))
+                cached_entry = self.cache.get(resolved_key)
+                if cached_entry and cached_entry.get("size") == curr_size:
+                    curr_sha = compute_file_sha256(p)
+                    if cached_entry.get("sha256") == curr_sha:
+                        cached_tasks.append((p, curr_size, curr_sha, is_video))
+                        continue
+                else:
+                    curr_sha = compute_file_sha256(p)
+                uncached_tasks.append((p, curr_size, curr_sha, is_video))
 
-            scanned_count += 1
-            if scanned_count % 50 == 0:
-                self.save()
-                if progress_callback:
-                    progress_callback(scanned_count, total_items, total_faces_found)
-
-        # Second, process uncached items
-        is_mocked = hasattr(self._process_image, "mock_calls")
-        yunet_path_str = str(get_default_yunet_path())
-        sface_path_str = str(DEFAULT_SFACE_PATH)
-
-        workers = max_workers or max(1, (os.cpu_count() or 2) - 1)
-
-        # If mocked or single worker or few items, run directly
-        if is_mocked or workers <= 1 or len(uncached_tasks) <= 1:
-            for item_path, curr_size, curr_sha, is_video in uncached_tasks:
+            # First, process cached hits quickly
+            for p, curr_size, curr_sha, is_video in cached_tasks:
                 if stop_event and stop_event.is_set():
                     break
 
-                resolved_key = str(item_path.resolve())
-                if is_video:
-                    total_faces_found += self._process_video(item_path, curr_size, curr_sha, threshold)
+                resolved_key = str(p.resolve())
+                cached_entry = self.cache[resolved_key]
+                c_status = cached_entry.get("status", "ok")
+
+                if c_status == "could not read":
+                    count_could_not_read += 1
+                    self.unreadable.add(resolved_key)
+                    log_line = f"could-not-read, {p.name}, 0 faces, cached unreadable file"
                 else:
-                    face_records = self._process_image(item_path, curr_size, curr_sha)
-                    total_faces_found += len(face_records)
+                    self.unreadable.discard(resolved_key)
+                    count_cached += 1
+                    faces_cnt = len(cached_entry.get("faces", []))
+                    total_faces_found += faces_cnt
+                    log_line = f"skipped-cached, {p.name}, {faces_cnt} faces"
 
-                    assigned_group_ids: list[str] = []
-                    for face_rec in face_records:
-                        emb = np.array(face_rec["embedding"], dtype=np.float32)
-                        group = self._find_matching_group(emb, threshold)
-                        if group is None:
-                            group = self._create_group(face_rec)
-                        else:
-                            self._append_crop(group, face_rec.get("crop"))
-                        assigned_group_ids.append(group["id"])
-
-                    serializable_faces = [
-                        {"box": r["box"], "score": r["score"], "embedding": r["embedding"]}
-                        for r in face_records
-                    ]
-                    self.cache[resolved_key] = {
-                        "size": curr_size,
-                        "sha256": curr_sha,
-                        "type": "image",
-                        "status": "ok",
-                        "faces": serializable_faces,
-                    }
-                    self.file_groups[resolved_key] = assigned_group_ids
+                log_f.write(log_line + "\n")
+                log_f.flush()
 
                 scanned_count += 1
                 if scanned_count % 50 == 0:
                     self.save()
                     if progress_callback:
                         progress_callback(scanned_count, total_items, total_faces_found)
-        else:
-            # Parallel execution with ProcessPoolExecutor in chunks of 50
-            batch_size = 50
-            task_args_list = [
-                (str(p.resolve()), is_vid, sz, sha, yunet_path_str, sface_path_str)
-                for p, sz, sha, is_vid in uncached_tasks
-            ]
 
-            with ProcessPoolExecutor(
-                max_workers=workers,
-                initializer=_worker_init,
-                initargs=(yunet_path_str, sface_path_str, SCORE_THRESHOLD),
-            ) as executor:
-                for i in range(0, len(task_args_list), batch_size):
+            # Second, process uncached items
+            is_mocked = hasattr(self._process_image, "mock_calls")
+            yunet_path_str = str(get_default_yunet_path())
+            sface_path_str = str(DEFAULT_SFACE_PATH)
+
+            workers = max_workers or max(1, (os.cpu_count() or 2) - 1)
+
+            # If mocked or single worker or few items, run directly
+            if is_mocked or workers <= 1 or len(uncached_tasks) <= 1:
+                for item_path, curr_size, curr_sha, is_video in uncached_tasks:
                     if stop_event and stop_event.is_set():
                         break
 
-                    chunk_tasks = task_args_list[i : i + batch_size]
-                    futures = [executor.submit(_worker_process_file, t) for t in chunk_tasks]
+                    resolved_key = str(item_path.resolve())
+                    try:
+                        if is_video:
+                            total_faces_found += self._process_video(item_path, curr_size, curr_sha, threshold)
+                        else:
+                            face_records = self._process_image(item_path, curr_size, curr_sha)
+                            if self.cache.get(resolved_key, {}).get("status") != "could not read":
+                                total_faces_found += len(face_records)
+                                assigned_group_ids: list[str] = []
+                                for face_rec in face_records:
+                                    emb = np.array(face_rec["embedding"], dtype=np.float32)
+                                    group = self._find_matching_group(emb, threshold)
+                                    if group is None:
+                                        group = self._create_group(face_rec)
+                                    else:
+                                        self._append_crop(group, face_rec.get("crop"))
+                                    assigned_group_ids.append(group["id"])
 
-                    for fut in as_completed(futures):
-                        if stop_event and stop_event.is_set():
-                            break
-
-                        result = fut.result()
-                        resolved_key = result["resolved_key"]
-                        item_type = result["type"]
-                        curr_size = result["size"]
-                        curr_sha = result["sha256"]
-
-                        if item_type == "video":
-                            if result["status"] == "could not read":
+                                existing_cached_faces = self.cache.get(resolved_key, {}).get("faces", [])
+                                serializable_faces = []
+                                for idx, r in enumerate(face_records):
+                                    cp = r.get("crop_path")
+                                    if cp is None and idx < len(existing_cached_faces):
+                                        cp = existing_cached_faces[idx].get("crop_path")
+                                    serializable_faces.append({
+                                        "box": r["box"],
+                                        "score": r.get("score", 1.0),
+                                        "embedding": r["embedding"],
+                                        "crop_path": cp,
+                                    })
                                 self.cache[resolved_key] = {
                                     "size": curr_size,
                                     "sha256": curr_sha,
-                                    "type": "video",
-                                    "status": "could not read",
-                                    "faces": [],
+                                    "type": "image",
+                                    "status": "ok",
+                                    "faces": serializable_faces,
                                 }
-                                self.file_groups[resolved_key] = []
-                            else:
-                                frame_faces = result.get("frame_faces", [])
-                                group_frame_occurrences: dict[str, set[int]] = {}
-                                all_video_faces: list[dict] = []
+                                self.file_groups[resolved_key] = assigned_group_ids
 
-                                for frame_idx, faces_in_frame in enumerate(frame_faces):
-                                    for face_rec in faces_in_frame:
+                        c_entry = self.cache.get(resolved_key, {})
+                        if c_entry.get("status") == "could not read":
+                            count_could_not_read += 1
+                            self.unreadable.add(resolved_key)
+                            log_line = f"could-not-read, {item_path.name}, 0 faces, could not open or decode file"
+                        else:
+                            self.unreadable.discard(resolved_key)
+                            n_f = len(c_entry.get("faces", []))
+                            if n_f == 0:
+                                count_no_faces += 1
+                                log_line = f"no-faces, {item_path.name}, 0 faces"
+                            else:
+                                count_ok += 1
+                                log_line = f"ok, {item_path.name}, {n_f} faces"
+                    except Exception as err:
+                        count_errors += 1
+                        log_line = f"error, {item_path.name}, 0 faces, {err}"
+
+                    log_f.write(log_line + "\n")
+                    log_f.flush()
+
+                    scanned_count += 1
+                    if scanned_count % 50 == 0:
+                        self.save()
+                        if progress_callback:
+                            progress_callback(scanned_count, total_items, total_faces_found)
+            else:
+                # Parallel execution with ProcessPoolExecutor in chunks of 50
+                batch_size = 50
+                task_args_list = [
+                    (str(p.resolve()), is_vid, sz, sha, yunet_path_str, sface_path_str)
+                    for p, sz, sha, is_vid in uncached_tasks
+                ]
+
+                with ProcessPoolExecutor(
+                    max_workers=workers,
+                    initializer=_worker_init,
+                    initargs=(yunet_path_str, sface_path_str, SCORE_THRESHOLD),
+                ) as executor:
+                    for i in range(0, len(task_args_list), batch_size):
+                        if stop_event and stop_event.is_set():
+                            break
+
+                        chunk_tasks = task_args_list[i : i + batch_size]
+                        futures = [executor.submit(_worker_process_file, t) for t in chunk_tasks]
+
+                        for fut in as_completed(futures):
+                            if stop_event and stop_event.is_set():
+                                break
+
+                            try:
+                                result = fut.result()
+                                resolved_key = result["resolved_key"]
+                                item_type = result["type"]
+                                curr_size = result["size"]
+                                curr_sha = result["sha256"]
+                                item_name = Path(resolved_key).name
+
+                                if result.get("status") == "could not read":
+                                    self.cache[resolved_key] = {
+                                        "size": curr_size,
+                                        "sha256": curr_sha,
+                                        "type": item_type,
+                                        "status": "could not read",
+                                        "faces": [],
+                                    }
+                                    self.file_groups[resolved_key] = []
+                                    self.unreadable.add(resolved_key)
+                                    count_could_not_read += 1
+                                    log_line = f"could-not-read, {item_name}, 0 faces, could not open or decode file"
+                                elif item_type == "video":
+                                    self.unreadable.discard(resolved_key)
+                                    frame_faces = result.get("frame_faces", [])
+                                    group_frame_occurrences: dict[str, set[int]] = {}
+                                    all_video_faces: list[dict] = []
+
+                                    for frame_idx, faces_in_frame in enumerate(frame_faces):
+                                        for face_rec in faces_in_frame:
+                                            emb = np.array(face_rec["embedding"], dtype=np.float32)
+                                            all_video_faces.append(face_rec)
+                                            group = self._find_matching_group(emb, threshold)
+                                            if group is None:
+                                                group = self._create_group_from_bytes(face_rec)
+                                            else:
+                                                self._append_crop_bytes(group, face_rec.get("crop_bytes"))
+                                            group_frame_occurrences.setdefault(group["id"], set()).add(frame_idx)
+
+                                    qualifying_gids = [
+                                        gid for gid, f_set in group_frame_occurrences.items()
+                                        if len(f_set) >= 2
+                                    ]
+                                    serializable_faces = [
+                                        {"box": r["box"], "score": r["score"], "embedding": r["embedding"]}
+                                        for r in all_video_faces
+                                    ]
+                                    self.cache[resolved_key] = {
+                                        "size": curr_size,
+                                        "sha256": curr_sha,
+                                        "type": "video",
+                                        "status": "ok",
+                                        "faces": serializable_faces,
+                                    }
+                                    self.file_groups[resolved_key] = qualifying_gids
+                                    total_faces_found += len(all_video_faces)
+                                    num_f = len(all_video_faces)
+                                    if num_f == 0:
+                                        count_no_faces += 1
+                                        log_line = f"no-faces, {item_name}, 0 faces"
+                                    else:
+                                        count_ok += 1
+                                        log_line = f"ok, {item_name}, {num_f} faces"
+                                else:
+                                    # Image
+                                    self.unreadable.discard(resolved_key)
+                                    face_records = result.get("faces", [])
+                                    total_faces_found += len(face_records)
+
+                                    assigned_group_ids = []
+                                    for face_rec in face_records:
                                         emb = np.array(face_rec["embedding"], dtype=np.float32)
-                                        all_video_faces.append(face_rec)
                                         group = self._find_matching_group(emb, threshold)
                                         if group is None:
                                             group = self._create_group_from_bytes(face_rec)
                                         else:
                                             self._append_crop_bytes(group, face_rec.get("crop_bytes"))
-                                        group_frame_occurrences.setdefault(group["id"], set()).add(frame_idx)
+                                        assigned_group_ids.append(group["id"])
 
-                                qualifying_gids = [
-                                    gid for gid, f_set in group_frame_occurrences.items()
-                                    if len(f_set) >= 2
-                                ]
-                                serializable_faces = [
-                                    {"box": r["box"], "score": r["score"], "embedding": r["embedding"]}
-                                    for r in all_video_faces
-                                ]
-                                self.cache[resolved_key] = {
-                                    "size": curr_size,
-                                    "sha256": curr_sha,
-                                    "type": "video",
-                                    "status": "ok",
-                                    "faces": serializable_faces,
-                                }
-                                self.file_groups[resolved_key] = qualifying_gids
-                                total_faces_found += len(all_video_faces)
-                        else:
-                            # Image
-                            face_records = result.get("faces", [])
-                            total_faces_found += len(face_records)
+                                    serializable_faces = [
+                                        {"box": r["box"], "score": r["score"], "embedding": r["embedding"]}
+                                        for r in face_records
+                                    ]
+                                    self.cache[resolved_key] = {
+                                        "size": curr_size,
+                                        "sha256": curr_sha,
+                                        "type": "image",
+                                        "status": "ok",
+                                        "faces": serializable_faces,
+                                    }
+                                    self.file_groups[resolved_key] = assigned_group_ids
+                                    num_f = len(face_records)
+                                    if num_f == 0:
+                                        count_no_faces += 1
+                                        log_line = f"no-faces, {item_name}, 0 faces"
+                                    else:
+                                        count_ok += 1
+                                        log_line = f"ok, {item_name}, {num_f} faces"
+                            except Exception as err:
+                                count_errors += 1
+                                log_line = f"error, {item_name}, 0 faces, {err}"
 
-                            assigned_group_ids = []
-                            for face_rec in face_records:
-                                emb = np.array(face_rec["embedding"], dtype=np.float32)
-                                group = self._find_matching_group(emb, threshold)
-                                if group is None:
-                                    group = self._create_group_from_bytes(face_rec)
-                                else:
-                                    self._append_crop_bytes(group, face_rec.get("crop_bytes"))
-                                assigned_group_ids.append(group["id"])
+                            log_f.write(log_line + "\n")
+                            log_f.flush()
 
-                            serializable_faces = [
-                                {"box": r["box"], "score": r["score"], "embedding": r["embedding"]}
-                                for r in face_records
-                            ]
-                            self.cache[resolved_key] = {
-                                "size": curr_size,
-                                "sha256": curr_sha,
-                                "type": "image",
-                                "status": "ok",
-                                "faces": serializable_faces,
-                            }
-                            self.file_groups[resolved_key] = assigned_group_ids
+                            scanned_count += 1
+                            if scanned_count % 50 == 0:
+                                self.save()
+                                if progress_callback:
+                                    progress_callback(scanned_count, total_items, total_faces_found)
 
-                        scanned_count += 1
-                        if scanned_count % 50 == 0:
-                            self.save()
-                            if progress_callback:
-                                progress_callback(scanned_count, total_items, total_faces_found)
+            if not (stop_event and stop_event.is_set()):
+                self.cluster_all_faces(threshold=threshold)
 
-        # Cluster all faces in one pass
-        self.cluster_all_faces(threshold=threshold)
-        # Final save upon finish or stop
-        self.save()
-        if progress_callback:
-            progress_callback(scanned_count, total_items, total_faces_found)
+        finally:
+            elapsed = time.perf_counter() - start_time
+            summary_line = (
+                f"Summary: total files: {scanned_count}, ok: {count_ok}, "
+                f"cached: {count_cached}, could-not-read: {count_could_not_read}, "
+                f"no-faces: {count_no_faces}, errors: {count_errors}, "
+                f"elapsed seconds: {elapsed:.2f}"
+            )
+            log_f.write(summary_line + "\n")
+            log_f.flush()
+            log_f.close()
+
+            # Save on stop, error, and normal finish
+            self.save()
+            if progress_callback:
+                progress_callback(scanned_count, total_items, total_faces_found)
 
         return {
             "images_scanned": scanned_count,
             "faces_found": total_faces_found,
             "groups_count": len(self.groups),
+            "log_path": str(log_path),
         }
 
     def _create_group(self, face_rec: dict) -> dict:
@@ -803,14 +949,29 @@ class FaceClusterManager:
 
     def _process_image(self, img_path: Path, size: int, sha256: str) -> list[dict]:
         """Detect faces and compute embeddings for an image, updating cache."""
-        faces = detect_faces(img_path)
+        resolved_key = str(img_path.resolve())
+        img_bgr = read_image_bgr(img_path, apply_exif_transpose=True)
+        if img_bgr is None:
+            self.cache[resolved_key] = {
+                "size": size,
+                "sha256": sha256,
+                "type": "image",
+                "status": "could not read",
+                "faces": [],
+            }
+            self.file_groups[resolved_key] = []
+            self.unreadable.add(resolved_key)
+            return []
+
+        self.unreadable.discard(resolved_key)
+        faces = detect_faces(img_bgr)
         face_records = []
 
         for face in faces:
-            emb = embed_face(img_path, face)
+            emb = embed_face(img_bgr, face)
             if emb is None:
                 continue
-            crop = align_and_crop(img_path, face)
+            crop = align_and_crop(img_bgr, face)
 
             box = [int(v) for v in face[0:4]]
             score = float(face[14]) if len(face) > 14 else 1.0
@@ -840,10 +1001,11 @@ class FaceClusterManager:
                 except Exception:
                     pass
 
-        self.cache[str(img_path.resolve())] = {
+        self.cache[resolved_key] = {
             "size": size,
             "sha256": sha256,
             "type": "image",
+            "status": "ok",
             "faces": serializable_faces,
         }
         return face_records
@@ -862,6 +1024,7 @@ class FaceClusterManager:
                     "faces": [],
                 }
                 self.file_groups[resolved_key] = []
+                self.unreadable.add(resolved_key)
                 return 0
 
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -875,6 +1038,7 @@ class FaceClusterManager:
                     "faces": [],
                 }
                 self.file_groups[resolved_key] = []
+                self.unreadable.add(resolved_key)
                 return 0
 
             indices = [
@@ -906,8 +1070,10 @@ class FaceClusterManager:
                     "faces": [],
                 }
                 self.file_groups[resolved_key] = []
+                self.unreadable.add(resolved_key)
                 return 0
 
+            self.unreadable.discard(resolved_key)
             group_frame_occurrences: dict[str, set[int]] = {}
             all_video_faces: list[dict] = []
 
@@ -969,6 +1135,7 @@ class FaceClusterManager:
                 "faces": [],
             }
             self.file_groups[resolved_key] = []
+            self.unreadable.add(resolved_key)
             return 0
 
     def name_group(self, group_id: str, name: str) -> None:

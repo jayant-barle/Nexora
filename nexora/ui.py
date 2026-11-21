@@ -75,7 +75,11 @@ class NexoraApp:
 
         self.cluster_manager = FaceClusterManager()
         self.people_manager = PeopleManager(self.cluster_manager)
-        if self.cluster_manager.json_path.exists():
+        if self.cluster_manager.corrupt_backup_path:
+            self.status_var.set(
+                f"Corrupt faces.json moved to {self.cluster_manager.corrupt_backup_path.name}; starting clean."
+            )
+        elif self.cluster_manager.json_path.exists():
             visible = self.people_manager.get_visible_groups()
             m_scanned = len(self.cluster_manager.cache)
             self.status_var.set(f"Found {len(visible)} people from {m_scanned} scanned images")
@@ -451,6 +455,21 @@ class NexoraApp:
         )
         refresh_btn.pack(side=tk.RIGHT)
 
+        self.unreadable_btn = tk.Button(
+            top_bar,
+            text=f"Unreadable files ({len(self.cluster_manager.unreadable)})",
+            command=self._show_unreadable_files_window,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            relief=tk.SOLID,
+            bd=1,
+            padx=10,
+            pady=3,
+            cursor="hand2",
+        )
+        self.unreadable_btn.pack(side=tk.RIGHT, padx=(0, 8))
+
         # Scrollable container for cards
         card_container = tk.Frame(
             self.tab_people,
@@ -489,6 +508,12 @@ class NexoraApp:
         """Render one card per face group with sample crops, naming, split, and merge."""
         self.cluster_manager.load()
         self.crop_photo_cache.clear()
+        if hasattr(self, "unreadable_btn"):
+            self.unreadable_btn.config(text=f"Unreadable files ({len(self.cluster_manager.unreadable)})")
+        if self.cluster_manager.corrupt_backup_path:
+            self.status_var.set(
+                f"Corrupt faces.json moved to {self.cluster_manager.corrupt_backup_path.name}; starting clean."
+            )
 
         for widget in self.people_scroll_frame.winfo_children():
             widget.destroy()
@@ -832,6 +857,76 @@ class NexoraApp:
                     bg=theme.COLOR_CARD_BG,
                 ).pack(anchor=tk.W, padx=(12, 0))
 
+    def _show_unreadable_files_window(self) -> None:
+        """Display read-only dialog listing all files that could not be opened or decoded."""
+        win = tk.Toplevel(self.root)
+        win.title("Unreadable Files")
+        win.geometry("640x400")
+        win.minsize(480, 300)
+        win.configure(bg=theme.COLOR_BG)
+        win.transient(self.root)
+
+        header_frame = tk.Frame(win, bg=theme.COLOR_BG, padx=16, pady=12)
+        header_frame.pack(fill=tk.X)
+
+        count = len(self.cluster_manager.unreadable)
+        tk.Label(
+            header_frame,
+            text=f"Files that could not be read ({count})",
+            font=theme.FONT_SECTION,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_BG,
+        ).pack(anchor=tk.W)
+
+        tk.Label(
+            header_frame,
+            text="These files could not be opened or decoded. They were not moved or altered.",
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_MUTED,
+            bg=theme.COLOR_BG,
+        ).pack(anchor=tk.W, pady=(2, 0))
+
+        content_frame = tk.Frame(win, bg=theme.COLOR_CARD_BG, padx=8, pady=8)
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 12))
+
+        txt = tk.Text(
+            content_frame,
+            wrap=tk.WORD,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_CARD_BG,
+            fg=theme.COLOR_TEXT,
+            relief=tk.FLAT,
+            padx=8,
+            pady=8,
+        )
+        scroll = ttk.Scrollbar(content_frame, orient=tk.VERTICAL, command=txt.yview)
+        txt.configure(yscrollcommand=scroll.set)
+        txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        if not self.cluster_manager.unreadable:
+            txt.insert(tk.END, "No unreadable files found.\n")
+        else:
+            for p_str in sorted(self.cluster_manager.unreadable):
+                txt.insert(tk.END, f"{p_str}\n")
+        txt.configure(state=tk.DISABLED)
+
+        btn_frame = tk.Frame(win, bg=theme.COLOR_BG, padx=16, pady=0)
+        btn_frame.pack(fill=tk.X, pady=(0, 12))
+
+        tk.Button(
+            btn_frame,
+            text="Close",
+            command=win.destroy,
+            font=theme.FONT_BODY,
+            bg=theme.COLOR_SECONDARY_BG,
+            fg=theme.COLOR_SECONDARY_TEXT,
+            relief=tk.SOLID,
+            bd=1,
+            padx=14,
+            pady=4,
+            cursor="hand2",
+        ).pack(side=tk.RIGHT)
 
     def _browse_source(self) -> None:
         folder = filedialog.askdirectory(title="Select Source Folder")
