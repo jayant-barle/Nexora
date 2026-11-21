@@ -33,6 +33,13 @@ from nexora.faces.recognize import (
     get_recognizer,
 )
 
+# Named constants for drift mitigation and giant cluster safeguard
+MAX_REPRESENTATIVE_MEMBERS = 5  # M: freeze comparison representative after first M members to stop centroid drift
+REPRESENTATIVE_M = MAX_REPRESENTATIVE_MEMBERS
+CLUSTER_CAP_RATIO = 0.05        # Flag cluster as "needs review" if it exceeds 5% of scanned faces
+CLUSTER_CAP_MAX = 200           # Flag cluster as "needs review" if it exceeds 200 faces
+CLUSTER_CAP_FLOOR = 20          # Floor threshold so small test clusters are not falsely flagged
+
 
 def get_runs_dir() -> Path:
     """Get the runs directory path next to app.py or executable."""
@@ -326,6 +333,8 @@ class FaceClusterManager:
         face_items.sort(key=lambda x: (x["file_key"], x["face_idx"]))
 
         n_faces = len(face_items)
+        cluster_cap = min(max(CLUSTER_CAP_FLOOR, int(n_faces * CLUSTER_CAP_RATIO)), CLUSTER_CAP_MAX)
+
         # Preallocate centroids buffer for up to n_faces clusters (shape (n_faces, 128))
         centroids_buffer = np.zeros((n_faces, 128), dtype=np.float32)
         n_clusters = 0
@@ -345,7 +354,7 @@ class FaceClusterManager:
                 clusters.append({
                     "canonical_key": (fk, idx),
                     "members": [(fk, idx)],
-                    "emb_sum": emb.copy(),
+                    "representative_members": [emb],
                     "count": 1,
                     "centroid": emb.copy(),
                     "crop_paths": [crop_p] if crop_p else [],
@@ -357,15 +366,17 @@ class FaceClusterManager:
                 best_sim = float(sims[best_idx])
 
                 if best_sim >= threshold:
-                    # Join best cluster and update centroid incrementally
+                    # Join best cluster; update representative centroid only for first M members to stop drift
                     c = clusters[best_idx]
                     c["members"].append((fk, idx))
-                    c["emb_sum"] += emb
                     c["count"] += 1
-                    norm_val = float(np.linalg.norm(c["emb_sum"]))
-                    new_centroid = (c["emb_sum"] / norm_val) if norm_val > 0 else c["emb_sum"]
-                    c["centroid"] = new_centroid
-                    centroids_buffer[best_idx] = new_centroid
+                    if len(c["representative_members"]) < MAX_REPRESENTATIVE_MEMBERS:
+                        c["representative_members"].append(emb)
+                        mean_emb = np.mean(c["representative_members"], axis=0)
+                        norm_val = float(np.linalg.norm(mean_emb))
+                        new_centroid = (mean_emb / norm_val) if norm_val > 0 else mean_emb
+                        c["centroid"] = new_centroid
+                        centroids_buffer[best_idx] = new_centroid
                     if crop_p and crop_p not in c["crop_paths"] and len(c["crop_paths"]) < 6:
                         c["crop_paths"].append(crop_p)
                 else:
@@ -374,7 +385,7 @@ class FaceClusterManager:
                     clusters.append({
                         "canonical_key": (fk, idx),
                         "members": [(fk, idx)],
-                        "emb_sum": emb.copy(),
+                        "representative_members": [emb],
                         "count": 1,
                         "centroid": emb.copy(),
                         "crop_paths": [crop_p] if crop_p else [],
@@ -415,6 +426,7 @@ class FaceClusterManager:
                 "crop_paths": c["crop_paths"],
                 "representative_embedding": [float(x) for x in c["centroid"]],
                 "member_faces": [f"{m_fk}:{m_idx}" for m_fk, m_idx in c["members"]],
+                "needs_review": (c["count"] > cluster_cap) and not assigned_display,
             }
             new_groups.append(group_dict)
 

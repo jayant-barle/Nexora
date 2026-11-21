@@ -120,6 +120,7 @@ class PeopleManager:
 
         target_group["name"] = folder_name
         target_group["display_name"] = clean_name
+        target_group["needs_review"] = False
 
         # Store names by member face in cm.face_names so names survive re-clustering
         if not hasattr(self.cm, "face_names"):
@@ -228,6 +229,7 @@ class PeopleManager:
         rep_b = (mean_b / norm_b) if norm_b > 0 else mean_b
 
         target_group["representative_embedding"] = [float(x) for x in rep_a]
+        target_group["needs_review"] = False
 
         new_group = {
             "id": new_gid,
@@ -236,6 +238,7 @@ class PeopleManager:
             "crop_path": target_group.get("crop_path", ""),
             "crop_paths": target_group.get("crop_paths", [])[:3],
             "representative_embedding": [float(x) for x in rep_b],
+            "needs_review": False,
         }
         self.groups.append(new_group)
 
@@ -295,6 +298,13 @@ class PeopleManager:
             pname = g.get("display_name") or g.get("name")
             folder_name = (g.get("name") or "").strip().lower()
             size = self.get_group_size(gid)
+            needs_review = g.get("needs_review", False)
+
+            # If marked needs review and not yet named or split by owner, withhold from automatic placement
+            if needs_review and not folder_name:
+                group_person[gid] = "HIDDEN"
+                continue
+
             if folder_name:
                 # Visible if total faces for this named person >= MIN_VISIBLE_GROUP_SIZE
                 if person_counts.get(folder_name, 0) >= MIN_VISIBLE_GROUP_SIZE:

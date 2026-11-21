@@ -545,6 +545,15 @@ class NexoraApp:
                 bg=theme.COLOR_BG,
             ).pack(side=tk.LEFT, padx=(8, 0))
 
+            if group.get("needs_review"):
+                tk.Label(
+                    header_frame,
+                    text="needs review",
+                    font=theme.FONT_BODY,
+                    fg="#DC2626",
+                    bg=theme.COLOR_BG,
+                ).pack(side=tk.LEFT, padx=(8, 0))
+
             # Crops strip: up to 6 sample face crops
             crops_strip = tk.Frame(card, bg=theme.COLOR_BG)
             crops_strip.pack(fill=tk.X, pady=(0, 8))

@@ -320,3 +320,179 @@ def test_scan_mid_run_kill_and_resume_loses_no_progress(tmp_path: Path):
     assert len(rescanned_files) == 6, f"Expected 6 files scanned on resume, got {len(rescanned_files)}"
     assert len(cm2.cache) == 10
     assert res["images_scanned"] == 10
+
+
+def test_clustering_collapse_case_stopped_by_representative_m(tmp_path: Path):
+    """The collapse case: 3,000 faces, 300 people, base + spread (spread 0.5, noise 0.4).
+    
+    With centroid drift stopped by first M=5 representatives, pair precision must be >= 0.9.
+    """
+    from collections import Counter
+
+    def _unit_vec(rng: np.random.Generator, dim: int = 128) -> np.ndarray:
+        v = rng.standard_normal(dim).astype(np.float32)
+        return v / np.linalg.norm(v)
+
+    rng = np.random.default_rng(42)
+    base = 0.18 * _unit_vec(rng)
+    n_people = 300
+    faces_per_person = 10
+
+    cache: dict[str, dict] = {}
+    ground_truth_labels: list[int] = []
+
+    for p in range(n_people):
+        spread = 0.5 * _unit_vec(rng)
+        cp = base + spread
+        cp = cp / np.linalg.norm(cp)
+        for i in range(faces_per_person):
+            noise = 0.4 * _unit_vec(rng)
+            f_emb = cp + noise
+            f_emb = f_emb / np.linalg.norm(f_emb)
+            fk = f"collapse_img_{p:04d}_{i:02d}.jpg"
+            ground_truth_labels.append(p)
+            cache[fk] = {
+                "size": 1024,
+                "sha256": f"dummy_sha_{p}_{i}",
+                "type": "image",
+                "status": "ok",
+                "faces": [
+                    {
+                        "box": [10, 10, 50, 50],
+                        "score": 0.95,
+                        "embedding": [float(x) for x in f_emb],
+                    }
+                ],
+            }
+
+    cm = FaceClusterManager(json_path=tmp_path / "faces.json")
+    cm.cache = cache
+    cm.cluster_all_faces(threshold=0.363)
+
+    # Compute pairwise precision and recall via contingency table
+    pred_labels: list[str] = []
+    for p in range(n_people):
+        for i in range(faces_per_person):
+            fk = f"collapse_img_{p:04d}_{i:02d}.jpg"
+            pred_labels.append(cm.file_groups[fk][0])
+
+    c_counts = Counter(pred_labels)
+    p_counts = Counter(ground_truth_labels)
+    pair_counts = Counter(zip(pred_labels, ground_truth_labels))
+
+    tp = sum(cnt * (cnt - 1) // 2 for cnt in pair_counts.values())
+    tp_fp = sum(cnt * (cnt - 1) // 2 for cnt in c_counts.values())
+    tp_fn = sum(cnt * (cnt - 1) // 2 for cnt in p_counts.values())
+
+    pair_precision = tp / tp_fp if tp_fp > 0 else 0.0
+    pair_recall = tp / tp_fn if tp_fn > 0 else 0.0
+
+    assert pair_precision >= 0.9, f"Pair precision {pair_precision:.4f} must be >= 0.9"
+    assert len(cm.groups) >= 290, f"Expected ~300 clusters, got {len(cm.groups)}"
+
+
+def test_clustering_well_separated_case(tmp_path: Path):
+    """Well-separated case: 10,000 faces, 1,000 people, noise 0.3.
+    
+    Pair precision >= 0.95, pair recall >= 0.95, time under 5 s.
+    """
+    import time
+    from collections import Counter
+
+    def _unit_vec(rng: np.random.Generator, dim: int = 128) -> np.ndarray:
+        v = rng.standard_normal(dim).astype(np.float32)
+        return v / np.linalg.norm(v)
+
+    rng = np.random.default_rng(42)
+    n_people = 1000
+    faces_per_person = 10
+
+    cache: dict[str, dict] = {}
+    ground_truth_labels: list[int] = []
+
+    for p in range(n_people):
+        cp = _unit_vec(rng)
+        for i in range(faces_per_person):
+            noise = 0.3 * _unit_vec(rng)
+            f_emb = cp + noise
+            f_emb = f_emb / np.linalg.norm(f_emb)
+            fk = f"wellsep_img_{p:04d}_{i:02d}.jpg"
+            ground_truth_labels.append(p)
+            cache[fk] = {
+                "size": 1024,
+                "sha256": f"dummy_sha_{p}_{i}",
+                "type": "image",
+                "status": "ok",
+                "faces": [
+                    {
+                        "box": [10, 10, 50, 50],
+                        "score": 0.95,
+                        "embedding": [float(x) for x in f_emb],
+                    }
+                ],
+            }
+
+    cm = FaceClusterManager(json_path=tmp_path / "faces.json")
+    cm.cache = cache
+
+    t0 = time.perf_counter()
+    cm.cluster_all_faces(threshold=0.363)
+    elapsed = time.perf_counter() - t0
+
+    pred_labels: list[str] = []
+    for p in range(n_people):
+        for i in range(faces_per_person):
+            fk = f"wellsep_img_{p:04d}_{i:02d}.jpg"
+            pred_labels.append(cm.file_groups[fk][0])
+
+    c_counts = Counter(pred_labels)
+    p_counts = Counter(ground_truth_labels)
+    pair_counts = Counter(zip(pred_labels, ground_truth_labels))
+
+    tp = sum(cnt * (cnt - 1) // 2 for cnt in pair_counts.values())
+    tp_fp = sum(cnt * (cnt - 1) // 2 for cnt in c_counts.values())
+    tp_fn = sum(cnt * (cnt - 1) // 2 for cnt in p_counts.values())
+
+    pair_precision = tp / tp_fp if tp_fp > 0 else 0.0
+    pair_recall = tp / tp_fn if tp_fn > 0 else 0.0
+
+    assert elapsed < 5.0, f"Clustering 10k faces took {elapsed:.2f} s, must be < 5 s"
+    assert pair_precision >= 0.95, f"Pair precision {pair_precision:.4f} must be >= 0.95"
+    assert pair_recall >= 0.95, f"Pair recall {pair_recall:.4f} must be >= 0.95"
+
+
+def test_giant_cluster_safeguard_needs_review_and_withheld_from_plan(tmp_path: Path):
+    """If a cluster grows past cap, it is marked 'needs review' and withheld from automatic placement until named."""
+    from unittest.mock import patch
+    from nexora.faces.groups import FaceClusterManager
+
+    cm = FaceClusterManager(json_path=tmp_path / "faces.json")
+    # Create 30 faces all with identical embeddings -> single cluster of size 30
+    emb = [1.0] + [0.0] * 127
+    for i in range(30):
+        cm.cache[f"giant_{i:02d}.jpg"] = {
+            "size": 100,
+            "sha256": f"sha_{i}",
+            "type": "image",
+            "faces": [{"box": [10, 10, 50, 50], "score": 0.9, "embedding": emb}],
+        }
+
+    # Patch cap floor to 10 so 30 faces exceeds cap
+    with patch("nexora.faces.groups.CLUSTER_CAP_FLOOR", 10):
+        cm.cluster_all_faces(threshold=0.363)
+
+    assert len(cm.groups) == 1
+    g = cm.groups[0]
+    assert g["needs_review"] is True, "Cluster exceeding cap must be marked needs_review"
+
+    pm = PeopleManager(cm)
+    face_data = pm.get_face_data_for_plan()
+    # Unnamed group with needs_review must be treated as HIDDEN ("no face") in plan data
+    assert face_data["giant_00.jpg"]["faces"] == []
+
+    # Naming the group clears needs_review and makes it eligible for automatic placement
+    pm.name_group(g["id"], "Charlie")
+    assert g["needs_review"] is False
+    face_data_after = pm.get_face_data_for_plan()
+    assert face_data_after["giant_00.jpg"]["faces"] == ["Charlie"]
+

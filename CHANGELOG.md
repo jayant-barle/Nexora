@@ -3,10 +3,12 @@
 ## 0.5.2-dev (2026-11-21)
 - Restored placement order so unnamed faces, hidden 1-face groups, and false faces never block name or date rules.
 - Incremental centroid clustering on cosine similarity (threshold 0.363 default) comparing against normalized cluster centroids via matrix-vector dot products; deterministic, shuffle-invariant, and near-linear.
+- Centroid drift mitigation: cluster comparison representatives frozen after first M=5 members (MAX_REPRESENTATIVE_MEMBERS = 5), eliminating chaining collapse across faces.
+- Giant cluster safeguard: clusters exceeding cap (min(5% of faces, 200)) marked "needs review" and withheld from automatic placement until named or split.
 - Name persistence across re-clustering: names stored by member face in runs/faces.json.
 - Visibility threshold set to 2: clusters with 2+ faces visible as "Unnamed person N"; 1-face clusters stay hidden and ignored by placement (unmeasured default, owner review pending).
 - Accuracy measurement script scripts/measure_faces.py added for pairwise precision/recall/FPR evaluation across thresholds 0.6, 0.7, 0.85.
-- Clustering benchmark script scripts/benchmark_cluster.py added to measure time and peak memory on synthetic 128-d embeddings for 1k, 5k, and 10k faces.
+- Clustering benchmark script scripts/benchmark_cluster.py updated to test 1k, 5k, 10k faces as well as collapse and well-separated cases.
 - Accuracy not yet measured. Owner review pending.
 
 ## 0.5.1-dev (2026-11-21)

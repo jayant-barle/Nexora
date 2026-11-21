@@ -66,3 +66,8 @@
   - Name persistence: Names stored by member face ({file}:{index}) in runs/faces.json rather than group ID, ensuring names survive re-clustering and scans are idempotent.
   - People visibility: Clusters with >= 2 faces shown on People screen as "Unnamed person N". Clusters with 1 face stay hidden and are ignored by placement (MIN_VISIBLE_GROUP_SIZE = 2). This threshold is an unmeasured default pending owner review on real photos.
   - Measurable accuracy: Added scripts/measure_faces.py to evaluate pairwise precision, recall, FPR, false merges, and false splits at thresholds 0.6, 0.7, 0.85 against tests/faces_labelled/expected_faces.csv. Accuracy not yet measured on real photos (owner review pending).
+- 2026-11-22: Clustering collapse safeguard and centroid drift fix:
+  - Stop centroid drift: In FaceClusterManager.cluster_all_faces, comparison representatives are built strictly from the first M members (MAX_REPRESENTATIVE_MEMBERS = 5). Centroids are frozen after M members, eliminating chaining drift across people while preserving deterministic fixed-order matrix-vector performance.
+  - Giant cluster safeguard: If a cluster grows past a cap (CLUSTER_CAP_RATIO = 0.05 or 5% of faces, CLUSTER_CAP_MAX = 200, CLUSTER_CAP_FLOOR = 20), it is marked "needs review" on the People screen and withheld from automatic placement until the owner explicitly names or splits it. Recorded as an unmeasured default pending owner review.
+  - Synthetic regression benchmarks: Added tests for the collapse case (3,000 faces, 300 people, base + spread 0.5, noise 0.4: pair precision >= 0.9) and well-separated case (10,000 faces, 1,000 people, noise 0.3: pair precision >= 0.95, recall >= 0.95, time < 5 s).
+  - Accuracy not yet measured on real photos. Owner review pending.
