@@ -42,7 +42,7 @@
 - 2026-11-21: "Group photos" folder used for images with two or more faces belonging to different named people.
 - 2026-11-21: Face matching threshold is recorded as an unmeasured default (0.363 cosine similarity for SFace) until accuracy is tested on the owner's labelled library.
 - 2026-11-21: People screen is implemented as a dedicated second tab in ttk.Notebook within the main application window, displaying up to 6 sample face crops per group, name editing, splitting, and merging.
-- 2026-11-21: Faster scan and false face reduction improvements:
+- 2026-11-21: Faster scan (640px, parallel workers) and fewer false faces:
   - Longest side normalized to 640 pixels for image and video frame analysis.
   - EXIF orientation applied first; single fallback pass at 90° rotation only if no faces detected.
   - Video analysis: 5 frames sampled, each normalized to 640px longest side.
