@@ -26,7 +26,7 @@ def get_default_sface_path() -> Path:
 
 
 DEFAULT_SFACE_PATH = get_default_sface_path()
-DEFAULT_THRESHOLD = 0.363  # OpenCV recommended cosine threshold for SFace
+DEFAULT_THRESHOLD = 0.363  # OpenCV recommended cosine threshold for SFace (unmeasured default, owner review pending)
 
 _recognizer: cv2.FaceRecognizerSF | None = None
 _recognizer_path: Path | None = None

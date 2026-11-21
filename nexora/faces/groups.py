@@ -36,7 +36,7 @@ from nexora.faces.recognize import (
 # Named constants for drift mitigation and giant cluster safeguard
 MAX_REPRESENTATIVE_MEMBERS = 5  # M: freeze comparison representative after first M members to stop centroid drift
 REPRESENTATIVE_M = MAX_REPRESENTATIVE_MEMBERS
-MIN_MEMBER_MATCHES = 2          # Require a face to match at least 2 members of an established cluster
+MIN_MEMBER_MATCHES = 2          # Require a face to match at least 2 members of an established cluster (unmeasured default, owner review pending)
 CLUSTER_CAP_RATIO = 0.05        # Flag cluster as "needs review" if it exceeds 5% of scanned faces
 CLUSTER_CAP_MAX = 200           # Flag cluster as "needs review" if it exceeds 200 faces
 CLUSTER_CAP_FLOOR = 20          # Floor threshold so small test clusters are not falsely flagged

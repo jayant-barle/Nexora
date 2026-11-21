@@ -554,6 +554,44 @@ class NexoraApp:
                     bg=theme.COLOR_BG,
                 ).pack(side=tk.LEFT, padx=(8, 0))
 
+            # Status row: placement status & associated photos
+            status_row = tk.Frame(card, bg=theme.COLOR_BG)
+            status_row.pack(fill=tk.X, pady=(0, 4))
+
+            folder_name = (group.get("name") or "").strip().lower()
+            needs_review = group.get("needs_review", False)
+
+            if needs_review and not folder_name:
+                status_text = "Placement: Withheld (needs review - large group: name it to use it)"
+                status_fg = "#DC2626"
+            elif not folder_name:
+                status_text = "Placement: Withheld (unnamed - name it to use it)"
+                status_fg = "#D97706"
+            else:
+                status_text = f"Placement: Active -> folder '{folder_name}/'"
+                status_fg = "#059669"
+
+            tk.Label(
+                status_row,
+                text=status_text,
+                font=theme.FONT_BODY_BOLD,
+                fg=status_fg,
+                bg=theme.COLOR_BG,
+            ).pack(side=tk.LEFT)
+
+            group_files = [Path(fk).name for fk, gids in self.people_manager.file_groups.items() if gid in gids]
+            if group_files:
+                sample_files = group_files[:3]
+                extra = f" (+{len(group_files) - 3} more)" if len(group_files) > 3 else ""
+                files_text = f"Photos ({len(group_files)}): {', '.join(sample_files)}{extra}"
+                tk.Label(
+                    status_row,
+                    text=f"  |  {files_text}",
+                    font=theme.FONT_BODY,
+                    fg=theme.COLOR_MUTED,
+                    bg=theme.COLOR_BG,
+                ).pack(side=tk.LEFT)
+
             # Crops strip: up to 6 sample face crops
             crops_strip = tk.Frame(card, bg=theme.COLOR_BG)
             crops_strip.pack(fill=tk.X, pady=(0, 8))
@@ -690,6 +728,110 @@ class NexoraApp:
                     cursor="hand2",
                 )
                 merge_btn.pack(side=tk.LEFT)
+
+        # Withheld photos section at bottom of People screen
+        withheld_frame = tk.Frame(
+            self.people_scroll_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=14,
+            pady=12,
+        )
+        withheld_frame.pack(fill=tk.X, expand=True, pady=(12, 10))
+
+        tk.Label(
+            withheld_frame,
+            text="Photos Withheld From Placement",
+            font=theme.FONT_SECTION,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.W, pady=(0, 4))
+
+        withheld_report = self.people_manager.get_withheld_photos_report()
+        total_withheld = (
+            len(withheld_report["needs_review"])
+            + len(withheld_report["unnamed"])
+            + len(withheld_report["hidden_group"])
+        )
+
+        if total_withheld == 0:
+            tk.Label(
+                withheld_frame,
+                text="All detected faces belong to active named groups. No photos are currently withheld.",
+                font=theme.FONT_BODY,
+                fg="#059669",
+                bg=theme.COLOR_CARD_BG,
+            ).pack(anchor=tk.W)
+        else:
+            tk.Label(
+                withheld_frame,
+                text="These photos will use Name rule, Date rule, or Unsorted/ until their group is named or reviewed:",
+                font=theme.FONT_BODY,
+                fg=theme.COLOR_MUTED,
+                bg=theme.COLOR_CARD_BG,
+            ).pack(anchor=tk.W, pady=(0, 6))
+
+            if withheld_report["needs_review"]:
+                unique_nr = sorted({item["file_name"] for item in withheld_report["needs_review"]})
+                nr_sub = tk.Frame(withheld_frame, bg=theme.COLOR_CARD_BG)
+                nr_sub.pack(fill=tk.X, pady=(2, 4))
+                tk.Label(
+                    nr_sub,
+                    text=f"* Needs review ({len(unique_nr)} photos in large groups):",
+                    font=theme.FONT_BODY_BOLD,
+                    fg="#DC2626",
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W)
+                sample_nr = ", ".join(unique_nr[:6]) + (f" (+{len(unique_nr) - 6} more)" if len(unique_nr) > 6 else "")
+                tk.Label(
+                    nr_sub,
+                    text=f"  {sample_nr}",
+                    font=theme.FONT_BODY,
+                    fg=theme.COLOR_MUTED,
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W, padx=(12, 0))
+
+            if withheld_report["unnamed"]:
+                unique_un = sorted({item["file_name"] for item in withheld_report["unnamed"]})
+                un_sub = tk.Frame(withheld_frame, bg=theme.COLOR_CARD_BG)
+                un_sub.pack(fill=tk.X, pady=(2, 4))
+                tk.Label(
+                    un_sub,
+                    text=f"* Unnamed groups ({len(unique_un)} photos in groups with >= 2 faces):",
+                    font=theme.FONT_BODY_BOLD,
+                    fg="#D97706",
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W)
+                sample_un = ", ".join(unique_un[:6]) + (f" (+{len(unique_un) - 6} more)" if len(unique_un) > 6 else "")
+                tk.Label(
+                    un_sub,
+                    text=f"  {sample_un}",
+                    font=theme.FONT_BODY,
+                    fg=theme.COLOR_MUTED,
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W, padx=(12, 0))
+
+            if withheld_report["hidden_group"]:
+                unique_hg = sorted({item["file_name"] for item in withheld_report["hidden_group"]})
+                hg_sub = tk.Frame(withheld_frame, bg=theme.COLOR_CARD_BG)
+                hg_sub.pack(fill=tk.X, pady=(2, 4))
+                tk.Label(
+                    hg_sub,
+                    text=f"* Hidden groups ({len(unique_hg)} photos in single-face clusters):",
+                    font=theme.FONT_BODY_BOLD,
+                    fg=theme.COLOR_TEXT,
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W)
+                sample_hg = ", ".join(unique_hg[:6]) + (f" (+{len(unique_hg) - 6} more)" if len(unique_hg) > 6 else "")
+                tk.Label(
+                    hg_sub,
+                    text=f"  {sample_hg}",
+                    font=theme.FONT_BODY,
+                    fg=theme.COLOR_MUTED,
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W, padx=(12, 0))
+
 
     def _browse_source(self) -> None:
         folder = filedialog.askdirectory(title="Select Source Folder")

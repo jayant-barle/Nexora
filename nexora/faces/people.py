@@ -344,3 +344,73 @@ class PeopleManager:
                 }
 
         return face_data
+
+    def get_withheld_photos_report(self) -> dict[str, list[dict[str, Any]]]:
+        """Categorize all photos withheld from automatic people placement and explain why.
+        
+        Returns a dictionary with keys:
+          - 'needs_review': Photos in clusters exceeding the review cap that have not been named or split.
+          - 'unnamed': Photos in visible clusters (>= 2 faces) that have not been assigned a name.
+          - 'hidden_group': Photos in single-face clusters (< 2 faces) withheld until more faces join.
+        
+        Each item is a dict with:
+          'file_key': str,
+          'file_name': str,
+          'group_id': str,
+          'display_name': str,
+          'size': int,
+          'reason': str,
+        """
+        person_counts: dict[str, int] = {}
+        for g in self.groups:
+            folder_name = (g.get("name") or "").strip().lower()
+            if folder_name:
+                person_counts[folder_name] = person_counts.get(folder_name, 0) + self.get_group_size(g["id"])
+
+        report: dict[str, list[dict[str, Any]]] = {
+            "needs_review": [],
+            "unnamed": [],
+            "hidden_group": [],
+        }
+
+        unnamed_numbering = self.get_unnamed_numbering()
+
+        for g in self.groups:
+            gid = g["id"]
+            folder_name = (g.get("name") or "").strip().lower()
+            size = self.get_group_size(gid)
+            display_name = g.get("display_name") or g.get("name") or unnamed_numbering.get(gid, "Unnamed person")
+            needs_review = g.get("needs_review", False)
+
+            reason_key = None
+            reason_text = ""
+
+            if needs_review and not folder_name:
+                reason_key = "needs_review"
+                reason_text = "Cluster exceeded size cap; needs review or naming before automatic placement"
+            elif not folder_name:
+                if size < MIN_VISIBLE_GROUP_SIZE:
+                    reason_key = "hidden_group"
+                    reason_text = f"Hidden single-face cluster ({size} face); withheld until more faces join"
+                else:
+                    reason_key = "unnamed"
+                    reason_text = "Group is unnamed; name it to place photos into a person folder"
+            elif person_counts.get(folder_name, 0) < MIN_VISIBLE_GROUP_SIZE:
+                reason_key = "hidden_group"
+                reason_text = f"Named person has fewer than {MIN_VISIBLE_GROUP_SIZE} faces across library"
+
+            if reason_key:
+                # Find all files with faces belonging to this group
+                files_in_group = [fk for fk, gids in self.file_groups.items() if gid in gids]
+                for fk in sorted(files_in_group):
+                    report[reason_key].append({
+                        "file_key": fk,
+                        "file_name": Path(fk).name,
+                        "group_id": gid,
+                        "display_name": display_name,
+                        "size": size,
+                        "reason": reason_text,
+                    })
+
+        return report
+

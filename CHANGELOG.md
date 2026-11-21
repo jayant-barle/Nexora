@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.5.2-dev (2026-11-21)
+## 0.5.2-dev (2026-11-22)
+- Labelled evaluation script scripts/measure_faces.py enhanced with cosine similarity histograms (same-person vs different-person), accuracy/recall/precision/FPR tables, and false merge file lists; outputs formatted runs/measure_report.txt and exits cleanly without fake numbers when no dataset exists.
+- Stopped synthetic sweeps; retained MIN_MEMBER_MATCHES = 2 at threshold 0.363 as unmeasured default pending owner review on real photos.
+- People screen transparency: shows placement status on group cards and displays a dedicated section showing photos withheld from placement and why (needs review, unnamed, or hidden group). Placement rules remain unchanged.
 - Restored placement order so unnamed faces, hidden 1-face groups, and false faces never block name or date rules.
 - Incremental centroid clustering on cosine similarity (threshold 0.363 default) comparing against normalized cluster centroids via matrix-vector dot products; deterministic, shuffle-invariant, and near-linear.
 - Centroid drift mitigation: cluster comparison representatives frozen after first M=5 members (MAX_REPRESENTATIVE_MEMBERS = 5), eliminating chaining collapse across faces.

@@ -567,3 +567,80 @@ def test_prolific_person_cap_behavior(tmp_path: Path):
     assert face_data_after["prolific_0000.jpg"]["faces"] == ["Jayant"]
 
 
+def test_people_manager_withheld_photos_report(tmp_path: Path):
+    """Test get_withheld_photos_report categorizes photos correctly."""
+    from nexora.faces.groups import FaceClusterManager
+    from nexora.faces.people import PeopleManager
+
+    cm = FaceClusterManager(json_path=tmp_path / "faces.json")
+    # Group 1: size 1 (< MIN_VISIBLE_GROUP_SIZE) -> hidden_group
+    # Group 2: size 2, unnamed -> unnamed
+    # Group 3: size 25, needs_review=True, unnamed -> needs_review
+    # Group 4: size 3, named -> active (not withheld)
+    cm.groups = [
+        {"id": "g_hidden", "name": None, "display_name": None, "needs_review": False},
+        {"id": "g_unnamed", "name": None, "display_name": None, "needs_review": False},
+        {"id": "g_review", "name": None, "display_name": None, "needs_review": True},
+        {"id": "g_active", "name": "alice", "display_name": "Alice", "needs_review": False},
+    ]
+    cm.file_groups = {
+        "C:/photos/solo_face.jpg": ["g_hidden"],
+        "C:/photos/pair1.jpg": ["g_unnamed"],
+        "C:/photos/pair2.jpg": ["g_unnamed"],
+        "C:/photos/review1.jpg": ["g_review"],
+        "C:/photos/alice1.jpg": ["g_active"],
+        "C:/photos/alice2.jpg": ["g_active"],
+    }
+    # Add dummy faces so sizes match
+    for i in range(20):
+        cm.file_groups[f"C:/photos/review_{i}.jpg"] = ["g_review"]
+
+    pm = PeopleManager(cm)
+    report = pm.get_withheld_photos_report()
+
+    # solo_face should be in hidden_group
+    hidden_files = [x["file_name"] for x in report["hidden_group"]]
+    assert "solo_face.jpg" in hidden_files
+
+    # pair1.jpg, pair2.jpg in unnamed
+    unnamed_files = [x["file_name"] for x in report["unnamed"]]
+    assert "pair1.jpg" in unnamed_files
+    assert "pair2.jpg" in unnamed_files
+
+    # review files in needs_review
+    review_files = [x["file_name"] for x in report["needs_review"]]
+    assert "review1.jpg" in review_files
+
+    # alice files should NOT be in any withheld bucket
+    all_withheld = (
+        [x["file_name"] for x in report["hidden_group"]]
+        + [x["file_name"] for x in report["unnamed"]]
+        + [x["file_name"] for x in report["needs_review"]]
+    )
+    assert "alice1.jpg" not in all_withheld
+    assert "alice2.jpg" not in all_withheld
+
+
+def test_measure_faces_clean_exit_without_data(tmp_path: Path):
+    """Test scripts/measure_faces.py cleanly exits with code 0 and reports no crash or fake numbers."""
+    from scripts.measure_faces import evaluate_dataset
+
+    txt_out = tmp_path / "measure_report.txt"
+    json_out = tmp_path / "measure_faces_report.json"
+    missing_csv = tmp_path / "nonexistent_faces.csv"
+
+    res = evaluate_dataset(
+        csv_path=missing_csv,
+        image_dir=tmp_path / "images",
+        txt_report_output=txt_out,
+        json_report_output=json_out,
+    )
+
+    assert res == {}
+    assert txt_out.exists()
+    content = txt_out.read_text(encoding="utf-8")
+    assert "No labelled dataset found" in content
+    assert "Accuracy not yet measured. Owner review pending." in content
+
+
+
