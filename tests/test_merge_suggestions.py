@@ -455,3 +455,178 @@ def test_safety_no_automatic_merge_and_plan_placement_preserved(tmp_path: Path):
 
     assert "alice" in plan_map_after[str(f1.resolve())].lower()
     assert "alice" in plan_map_after[str(f2.resolve())].lower()
+
+
+def test_reproduce_dismissed_pair_reappears_when_earlier_file_added(tmp_path: Path):
+    """Reproduce issue: adding a face with an earlier file name changes top-5 key and causes dismissed pair to reappear."""
+    src = tmp_path / "src"
+    src.mkdir()
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    json_path = runs_dir / "faces.json"
+
+    # Group A has files m_a1, m_a2; group B has files m_b1, m_b2
+    # At clustering threshold 0.40, cosine 0.38 keeps them in separate clusters.
+    # At suggestion threshold 0.363, cosine 0.38 suggests them as a merge pair.
+    emb_a = [1.0, 0.0] + [0.0] * 126
+    emb_b = [0.38, 0.925] + [0.0] * 126
+
+    files = {
+        "m_a1.jpg": emb_a,
+        "m_a2.jpg": emb_a,
+        "m_b1.jpg": emb_b,
+        "m_b2.jpg": emb_b,
+    }
+    for fname in files:
+        (src / fname).write_bytes(b"dummy_content_" + fname.encode())
+
+    cm = FaceClusterManager(json_path=json_path)
+
+    def mock_process_image(p: Path, sz: int, sha: str) -> list[dict]:
+        emb = files.get(p.name, emb_a)
+        return [{"box": [10, 10, 50, 50], "score": 0.9, "embedding": emb}]
+
+    with patch.object(cm, "_process_image", side_effect=mock_process_image):
+        cm.scan_source(src, threshold=0.40, max_workers=1)
+
+    pm = PeopleManager(cm)
+    assert len(pm.get_visible_groups()) == 2
+    suggestions, total = pm.get_merge_suggestions()
+    assert total == 1, f"Expected 1 suggestion, got {total}"
+    s = suggestions[0]
+    gid_a, gid_b = s["group_a_id"], s["group_b_id"]
+
+    # Dismiss the pair
+    pm.dismiss_merge(gid_a, gid_b)
+    suggestions_after, total_after = pm.get_merge_suggestions()
+    assert total_after == 0
+
+    # Now add one new face with an earlier file name to group A: "aaa_a0.jpg"
+    files["aaa_a0.jpg"] = emb_a
+    (src / "aaa_a0.jpg").write_bytes(b"dummy_content_aaa_a0")
+
+    # Rescan with normal scan path
+    cm2 = FaceClusterManager(json_path=json_path)
+    with patch.object(cm2, "_process_image", side_effect=mock_process_image):
+        cm2.scan_source(src, threshold=0.40, max_workers=1)
+
+    pm2 = PeopleManager(cm2)
+    suggestions_rescan, total_rescan = pm2.get_merge_suggestions()
+    # The pair must stay dismissed!
+    assert total_rescan == 0, f"Expected 0 suggestions after rescan, but dismissed pair reappeared: {suggestions_rescan}"
+
+
+def test_dismissed_pair_stays_dismissed_after_face_removed_from_group_b(tmp_path: Path):
+    """Task 3b: Dismissed pair stays dismissed after one face is removed from group B, then rescan."""
+    src = tmp_path / "src"
+    src.mkdir()
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    json_path = runs_dir / "faces.json"
+
+    emb_a = [1.0, 0.0] + [0.0] * 126
+    emb_b = [0.38, 0.925] + [0.0] * 126
+
+    # Group A has 3 faces, Group B has 3 faces
+    files = {
+        "m_a1.jpg": emb_a,
+        "m_a2.jpg": emb_a,
+        "m_a3.jpg": emb_a,
+        "m_b1.jpg": emb_b,
+        "m_b2.jpg": emb_b,
+        "m_b3.jpg": emb_b,
+    }
+    for fname in files:
+        (src / fname).write_bytes(b"dummy_content_" + fname.encode())
+
+    cm = FaceClusterManager(json_path=json_path)
+
+    def mock_process_image(p: Path, sz: int, sha: str) -> list[dict]:
+        emb = files.get(p.name, emb_a)
+        return [{"box": [10, 10, 50, 50], "score": 0.9, "embedding": emb}]
+
+    with patch.object(cm, "_process_image", side_effect=mock_process_image):
+        cm.scan_source(src, threshold=0.40, max_workers=1)
+
+    pm = PeopleManager(cm)
+    assert len(pm.get_visible_groups()) == 2
+    suggestions, total = pm.get_merge_suggestions()
+    assert total == 1
+    s = suggestions[0]
+    gid_a, gid_b = s["group_a_id"], s["group_b_id"]
+
+    # Dismiss pair
+    pm.dismiss_merge(gid_a, gid_b)
+    assert len(pm.get_merge_suggestions()[0]) == 0
+
+    # Remove m_b3.jpg from source
+    (src / "m_b3.jpg").unlink()
+    files.pop("m_b3.jpg")
+
+    # Rescan
+    cm2 = FaceClusterManager(json_path=json_path)
+    with patch.object(cm2, "_process_image", side_effect=mock_process_image):
+        cm2.scan_source(src, threshold=0.40, max_workers=1)
+
+    pm2 = PeopleManager(cm2)
+    # Group B still has 2 members >= MIN_VISIBLE_GROUP_SIZE (2 out of 3 stored members remain = 66.7% > 50%)
+    assert len(pm2.get_visible_groups()) == 2
+    suggestions_rescan, total_rescan = pm2.get_merge_suggestions()
+    assert total_rescan == 0, f"Expected pair to stay dismissed after face removal, got {suggestions_rescan}"
+
+
+def test_overlap_boundary_cutoff_at_point_five():
+    """Task 3c: Check that cut-off is strictly > 0.5 (more than half). Exactly 50% overlap returns False; 75% returns True."""
+    from nexora.faces.suggestions import is_pair_dismissed, DISMISSAL_OVERLAP_MIN
+    assert DISMISSAL_OVERLAP_MIN == 0.5
+
+    # Stored dismissal with 4 members in each group
+    stored_record = {
+        "key": "dummy_key",
+        "members_a": ["f1:0", "f2:0", "f3:0", "f4:0"],
+        "members_b": ["f5:0", "f6:0", "f7:0", "f8:0"],
+    }
+    dismissals = [stored_record]
+
+    # Group B has all 4 members present
+    group_b = {"id": "group_002", "member_faces": ["f5:0", "f6:0", "f7:0", "f8:0"]}
+
+    # Case 1: Exactly 50% overlap (2 out of 4 members of group A present)
+    # 2/4 = 0.50, which is NOT > 0.50 ("more than half"). Must NOT be dismissed (suggested again).
+    group_a_boundary = {"id": "group_001", "member_faces": ["f1:0", "f2:0", "other1:0", "other2:0"]}
+    assert is_pair_dismissed(group_a_boundary, group_b, dismissals) is False
+
+    # Case 2: Above boundary (3 out of 4 members present = 75% > 50%)
+    # 3/4 = 0.75 > 0.50. Must be dismissed.
+    group_a_above = {"id": "group_001", "member_faces": ["f1:0", "f2:0", "f3:0", "other1:0"]}
+    assert is_pair_dismissed(group_a_above, group_b, dismissals) is True
+
+    # Case 3: Below boundary (1 out of 4 members present = 25% < 50%)
+    group_a_below = {"id": "group_001", "member_faces": ["f1:0", "other1:0", "other2:0", "other3:0"]}
+    assert is_pair_dismissed(group_a_below, group_b, dismissals) is False
+
+    # Case 4: Group A has 75%, but Group B has exactly 50% (2 out of 4) -> False
+    group_b_boundary = {"id": "group_002", "member_faces": ["f5:0", "f6:0", "other3:0", "other4:0"]}
+    assert is_pair_dismissed(group_a_above, group_b_boundary, dismissals) is False
+
+
+def test_old_format_dismissal_entry_still_works(tmp_path: Path):
+    """Task 3d: Read old-format dismissal entries (string hash) and confirm they still dismiss matching pairs."""
+    from nexora.faces.suggestions import compute_pair_dismissal_key, is_pair_dismissed
+
+    group_a = {"id": "group_001", "member_faces": ["file1.jpg:0", "file2.jpg:0"]}
+    group_b = {"id": "group_002", "member_faces": ["file3.jpg:0", "file4.jpg:0"]}
+
+    exact_key = compute_pair_dismissal_key(group_a, group_b)
+
+    # Old format: string key only
+    old_dismissed_merges = [exact_key]
+
+    # Matching pair is dismissed
+    assert is_pair_dismissed(group_a, group_b, old_dismissed_merges) is True
+
+    # Non-matching pair is not dismissed
+    group_c = {"id": "group_003", "member_faces": ["file5.jpg:0", "file6.jpg:0"]}
+    assert is_pair_dismissed(group_a, group_c, old_dismissed_merges) is False
+
+

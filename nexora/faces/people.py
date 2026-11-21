@@ -12,7 +12,10 @@ from nexora.faces.recognize import cosine_similarity
 from nexora.faces.suggestions import (
     MERGE_SUGGEST_THRESHOLD,
     MAX_MERGE_SUGGESTIONS,
+    DISMISSAL_OVERLAP_MIN,
     compute_pair_dismissal_key,
+    create_dismissal_record,
+    is_pair_dismissed,
     find_merge_suggestions,
 )
 
@@ -290,11 +293,11 @@ class PeopleManager:
         Returns (capped_suggestions, total_count).
         """
         unnamed = self.get_unnamed_numbering()
-        dismissed = getattr(self.cm, "dismissed_merges", set())
+        dismissed = getattr(self.cm, "dismissed_merges", [])
         return find_merge_suggestions(
             groups=self.get_visible_groups(),
             file_groups=self.file_groups,
-            dismissed_keys=dismissed,
+            dismissed_merges=dismissed,
             threshold=threshold,
             unnamed_numbering=unnamed,
             max_suggestions=max_suggestions,
@@ -306,10 +309,14 @@ class PeopleManager:
         g_b = next((g for g in self.groups if g["id"] == group_id_b), None)
         if not g_a or not g_b:
             return
-        key = compute_pair_dismissal_key(g_a, g_b, self.file_groups)
-        if not hasattr(self.cm, "dismissed_merges"):
-            self.cm.dismissed_merges = set()
-        self.cm.dismissed_merges.add(key)
+        if not hasattr(self.cm, "dismissed_merges") or not isinstance(self.cm.dismissed_merges, list):
+            self.cm.dismissed_merges = list(getattr(self.cm, "dismissed_merges", []))
+
+        if is_pair_dismissed(g_a, g_b, self.cm.dismissed_merges, self.file_groups):
+            return
+
+        record = create_dismissal_record(g_a, g_b, self.file_groups)
+        self.cm.dismissed_merges.append(record)
         self.cm.save()
 
     def get_face_data_for_plan(self) -> dict[str, dict[str, Any]]:

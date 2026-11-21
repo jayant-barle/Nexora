@@ -250,7 +250,7 @@ class FaceClusterManager:
         self.file_groups: dict[str, list[str]] = {}
         self.face_names: dict[str, str] = {}
         self.unreadable: set[str] = set()
-        self.dismissed_merges: set[str] = set()
+        self.dismissed_merges: list[Any] = []
         self.corrupt_backup_path: Path | None = None
         self.last_scan_log: Path | None = None
         self.load()
@@ -286,7 +286,7 @@ class FaceClusterManager:
             self.file_groups = {}
             self.face_names = {}
             self.unreadable = set()
-            self.dismissed_merges = set()
+            self.dismissed_merges = []
             return
 
         schema_version = data.get("schema_version")
@@ -295,7 +295,8 @@ class FaceClusterManager:
         self.file_groups = data.get("file_groups", {})
         self.face_names = data.get("face_names", {})
         self.unreadable = set(data.get("unreadable", []))
-        self.dismissed_merges = set(data.get("dismissed_merges", []))
+        loaded_dismissals = data.get("dismissed_merges", [])
+        self.dismissed_merges = list(loaded_dismissals) if isinstance(loaded_dismissals, (list, set)) else []
 
         # Check cache for any existing entries with status="could not read"
         for k, v in self.cache.items():
@@ -318,7 +319,7 @@ class FaceClusterManager:
             "file_groups": self.file_groups,
             "face_names": self.face_names,
             "unreadable": sorted(list(self.unreadable)),
-            "dismissed_merges": sorted(list(self.dismissed_merges)),
+            "dismissed_merges": self.dismissed_merges,
         }
         with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
