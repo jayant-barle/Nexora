@@ -1,7 +1,7 @@
 # Changelog
 
 ## 0.5.1-dev (2026-11-21)
-- Faster scan (640px, parallel workers), fewer false faces (score 0.85, min size 48px, shape filter, min group size 3), progress saved during scan.
+- Faster scan (1280px, parallel workers), fewer false faces (score 0.85, min size 48px on 1280px, shape filter, min group size 3), progress saved during scan. Accuracy not yet measured. Owner review pending.
 
 ## 0.5.0-dev (2026-11-21)
 - People screen, person and group-photo folders, scan across all images and video frames, Approve step.

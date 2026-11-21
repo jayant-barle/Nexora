@@ -64,7 +64,7 @@ def _worker_init(yunet_path_str: str | None, sface_path_str: str | None, score_t
 
 
 def _worker_process_file(task_args: tuple) -> dict[str, Any]:
-    """Worker task that processes a single image or video at 640px resolution.
+    """Worker task that processes a single image or video at 1280px resolution.
     
     Computes face embeddings only for faces that pass the quality filter.
     """
@@ -106,15 +106,15 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
                 ret, frame = cap.read()
                 if ret and frame is not None:
-                    # Normalize frame to 640px
+                    # Normalize frame to 1280px
                     fh, fw = frame.shape[:2]
                     longest = max(fh, fw)
                     if longest != TARGET_SIZE and longest > 0:
                         scale = TARGET_SIZE / float(longest)
-                        frame_640 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
+                        frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
                     else:
-                        frame_640 = frame
-                    frames.append(frame_640)
+                        frame_1280 = frame
+                    frames.append(frame_1280)
             cap.release()
 
             if len(frames) == 0:
@@ -674,14 +674,15 @@ class FaceClusterManager:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
                 ret, frame = cap.read()
                 if ret and frame is not None:
+                    # Normalize frame to 1280px
                     fh, fw = frame.shape[:2]
                     longest = max(fh, fw)
                     if longest != TARGET_SIZE and longest > 0:
                         scale = TARGET_SIZE / float(longest)
-                        frame_640 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
+                        frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
                     else:
-                        frame_640 = frame
-                    frames.append(frame_640)
+                        frame_1280 = frame
+                    frames.append(frame_1280)
             cap.release()
 
             if len(frames) == 0:

@@ -1,4 +1,4 @@
-"""Face detection using OpenCV YuNet model with 640px normalization, quality filtering, and 90-degree fallback."""
+"""Face detection using OpenCV YuNet model with 1280px normalization, quality filtering, and rotation fallback."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from PIL import Image, ImageOps
 import pillow_heif  # registers HEIF opener if installed
 
 SCORE_THRESHOLD = 0.85  # Raised to 0.85 for high precision and fewer false positives
-MIN_FACE_SIZE = 48      # Minimum 48px width and height in 640px space
+MIN_FACE_SIZE = 48      # Minimum 48px width and height in 1280px analysis image
 MAX_ASPECT_RATIO = 2.5  # Drop boxes more than 2.5x taller than wide or wider than tall
-TARGET_SIZE = 640       # Longest side normalized to 640px
+TARGET_SIZE = 1280      # Longest side normalized to 1280px
 NMS_THRESHOLD = 0.3     # Non-maximum suppression threshold
 
 
@@ -107,12 +107,18 @@ def passes_quality_filter(
     face: np.ndarray,
     min_size: int = MIN_FACE_SIZE,
     max_aspect: float = MAX_ASPECT_RATIO,
+    scale_to_1280: float = 1.0,
 ) -> bool:
-    """Filter face by minimum size and aspect ratio in 640px space.
-    
-    Drops faces smaller than min_size (48px) or whose box is more than
-    max_aspect (2.5) times taller than wide or wider than tall.
-    """
+    """Filter face by minimum size (48px) and aspect ratio (2.5) measured on the 1280-pixel analysis image."""
+    w = float(face[2]) * scale_to_1280
+    h = float(face[3]) * scale_to_1280
+    if w < min_size or h < min_size:
+        return False
+    if w <= 0 or h <= 0:
+        return False
+    if h > max_aspect * w or w > max_aspect * h:
+        return False
+    return True
     w = float(face[2])
     h = float(face[3])
     if w < min_size or h < min_size:
@@ -188,12 +194,13 @@ def detect_faces(
     min_face_size: int = MIN_FACE_SIZE,
     max_aspect: float = MAX_ASPECT_RATIO,
 ) -> list[np.ndarray]:
-    """Detect faces with 640px normalization, quality filtering, and 90-degree fallback only.
+    """Detect faces with 1280px normalization, quality filtering, and 90°/270° rotation retry.
     
     1. EXIF orientation applied first.
-    2. Longest side scaled to 640px.
-    3. Pass 1: Upright 640px image (score >= 0.85, size >= 48px, aspect ratio <= 2.5).
-    4. Pass 2: If no face found, one extra pass at 90 degrees only.
+    2. Longest side scaled to 1280px (with upscale for small images).
+    3. Pass 1: Upright 1280px image (score >= 0.85, size >= 48px on 1280px, aspect ratio <= 2.5).
+    4. Pass 2: If no face found, rotation fallback: try 90 and 270 degrees.
+    5. Pass 3: Small image fallback at native / 640px space.
     
     Returns a list of face arrays in original image coordinate space. Never raises.
     """
@@ -210,41 +217,66 @@ def detect_faces(
         if detector is None:
             return []
 
-        # Resize so longest side is 640px
         longest = max(orig_h, orig_w)
-        if longest != TARGET_SIZE:
+
+        # Resize so longest side is 1280px
+        if longest != TARGET_SIZE and longest > 0:
             scale = TARGET_SIZE / float(longest)
-            w_640 = int(round(orig_w * scale))
-            h_640 = int(round(orig_h * scale))
-            img_640 = cv2.resize(img, (w_640, h_640), interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR)
-            sx = w_640 / float(orig_w)
-            sy = h_640 / float(orig_h)
+            w_target = int(round(orig_w * scale))
+            h_target = int(round(orig_h * scale))
+            img_target = cv2.resize(
+                img,
+                (w_target, h_target),
+                interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR,
+            )
+            sx = w_target / float(orig_w)
+            sy = h_target / float(orig_h)
         else:
-            img_640 = img
-            w_640, h_640 = orig_w, orig_h
+            img_target = img
+            w_target, h_target = orig_w, orig_h
             sx = 1.0
             sy = 1.0
 
-        # Pass 1: Upright 640px image
-        raw = _detect_raw(detector, img_640)
+        # Pass 1: Upright 1280px image
+        raw = _detect_raw(detector, img_target)
         valid_faces = [f for f in raw if passes_quality_filter(f, min_face_size, max_aspect)]
         if valid_faces:
             return _invert_scale(valid_faces, sx, sy)
 
-        # Pass 2: If no face found, try one extra pass at 90 degrees only
-        rot90 = cv2.rotate(img_640, cv2.ROTATE_90_CLOCKWISE)
+        # Pass 2: If no face found, try rotation fallback: 90 and 270 degrees
+        rot90 = cv2.rotate(img_target, cv2.ROTATE_90_CLOCKWISE)
         raw_90 = _detect_raw(detector, rot90)
         valid_90 = [f for f in raw_90 if passes_quality_filter(f, min_face_size, max_aspect)]
         if valid_90:
-            inv_90 = _invert_rot90(valid_90, img_640.shape[0])
+            inv_90 = _invert_rot90(valid_90, img_target.shape[0])
             return _invert_scale(inv_90, sx, sy)
 
-        rot270 = cv2.rotate(img_640, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        rot270 = cv2.rotate(img_target, cv2.ROTATE_90_COUNTERCLOCKWISE)
         raw_270 = _detect_raw(detector, rot270)
         valid_270 = [f for f in raw_270 if passes_quality_filter(f, min_face_size, max_aspect)]
         if valid_270:
-            inv_270 = _invert_rot270(valid_270, img_640.shape[1])
+            inv_270 = _invert_rot270(valid_270, img_target.shape[1])
             return _invert_scale(inv_270, sx, sy)
+
+        # Pass 3: If original is smaller than 1280px, try at original resolution
+        if longest < TARGET_SIZE and longest > 0:
+            scale_to_1280 = TARGET_SIZE / float(longest)
+            raw_orig = _detect_raw(detector, img)
+            valid_orig = [f for f in raw_orig if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
+            if valid_orig:
+                return valid_orig
+
+            r90_orig = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+            raw_r90 = _detect_raw(detector, r90_orig)
+            valid_r90 = [f for f in raw_r90 if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
+            if valid_r90:
+                return _invert_rot90(valid_r90, orig_h)
+
+            r270_orig = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            raw_r270 = _detect_raw(detector, r270_orig)
+            valid_r270 = [f for f in raw_r270 if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
+            if valid_r270:
+                return _invert_rot270(valid_r270, orig_w)
 
         return []
     except Exception:

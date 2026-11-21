@@ -42,13 +42,15 @@
 - 2026-11-21: "Group photos" folder used for images with two or more faces belonging to different named people.
 - 2026-11-21: Face matching threshold is recorded as an unmeasured default (0.363 cosine similarity for SFace) until accuracy is tested on the owner's labelled library.
 - 2026-11-21: People screen is implemented as a dedicated second tab in ttk.Notebook within the main application window, displaying up to 6 sample face crops per group, name editing, splitting, and merging.
-- 2026-11-21: Faster scan (640px, parallel workers) and fewer false faces:
-  - Longest side normalized to 640 pixels for image and video frame analysis.
-  - EXIF orientation applied first; single fallback pass at 90° rotation only if no faces detected.
-  - Video analysis: 5 frames sampled, each normalized to 640px longest side.
+- 2026-11-21: Faster scan (1280px, parallel workers) and fewer false faces:
+  - Target: accuracy first. Speed is secondary and depends on the number of files.
+  - Accuracy not yet measured. Owner review pending.
+  - Longest side normalized to 1280 pixels for image and video frame analysis (with upscale for small images).
+  - EXIF orientation applied first; rotation fallback at 90° and 270° if no faces are detected on the upright pass.
+  - Video analysis: 5 frames sampled, each normalized to 1280px longest side.
   - Multiprocessing: ProcessPoolExecutor with (CPU count - 1) workers; models preloaded per worker process.
-  - Face detection score threshold raised to 0.85 (YuNet).
-  - Minimum face size set to 48 pixels in 640px space.
+  - Face detection score threshold kept at 0.85 (YuNet).
+  - Minimum face size: 48 pixels measured on the 1280-pixel analysis image.
   - Shape filter: drop face boxes with aspect ratio > 2.5 (h/w > 2.5 or w/h > 2.5).
   - Face embedding computed only for detected faces that pass the quality filter.
   - Face groups must contain at least 3 faces before being shown on the People screen; groups with 1 or 2 faces remain in runs/faces.json but hidden until more faces join.
