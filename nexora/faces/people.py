@@ -46,7 +46,7 @@ def to_folder_name(name: str) -> str:
     return folder
 
 
-MIN_VISIBLE_GROUP_SIZE = 3
+MIN_VISIBLE_GROUP_SIZE = 2
 
 
 class PeopleManager:
@@ -71,14 +71,14 @@ class PeopleManager:
         return count
 
     def get_visible_groups(self) -> list[dict]:
-        """Return only groups that contain at least 3 faces (groups with 1-2 faces are hidden)."""
+        """Return only groups that contain at least 2 faces (clusters with 1 face are hidden)."""
         return [g for g in self.groups if self.get_group_size(g["id"]) >= MIN_VISIBLE_GROUP_SIZE]
 
     def get_unnamed_numbering(self) -> dict[str, str]:
         """Compute 'Unnamed person N' mapping for unnamed groups ordered by group size."""
         unnamed_groups: list[tuple[str, int]] = []
         for g in self.groups:
-            if not g.get("name"):
+            if not g.get("name") and not g.get("display_name"):
                 gid = g["id"]
                 size = self.get_group_size(gid)
                 unnamed_groups.append((gid, size))
@@ -120,6 +120,17 @@ class PeopleManager:
 
         target_group["name"] = folder_name
         target_group["display_name"] = clean_name
+
+        # Store names by member face in cm.face_names so names survive re-clustering
+        if not hasattr(self.cm, "face_names"):
+            self.cm.face_names = {}
+        for fk, gids in self.file_groups.items():
+            for idx, gid in enumerate(gids):
+                if gid == group_id:
+                    self.cm.face_names[f"{fk}:{idx}"] = clean_name
+        if target_group.get("member_faces"):
+            for m in target_group["member_faces"]:
+                self.cm.face_names[m] = clean_name
 
         self.cm.save()
         return clean_name
@@ -265,20 +276,36 @@ class PeopleManager:
     def get_face_data_for_plan(self) -> dict[str, dict[str, Any]]:
         """Build face_data dictionary for build_plan.
         
+        Treats faces in hidden groups (size < MIN_VISIBLE_GROUP_SIZE) as 'no face'.
         For images:
           {"faces": [person_display_name_or_None, ...]}
         For videos:
           {"video_person": person_display_name_if_matched}
         """
-        # Map group_id to person display name if named, or None if unnamed
+        # Count total faces per named person across all groups sharing that name (case-insensitive)
+        person_counts: dict[str, int] = {}
+        for g in self.groups:
+            folder_name = (g.get("name") or "").strip().lower()
+            if folder_name:
+                person_counts[folder_name] = person_counts.get(folder_name, 0) + self.get_group_size(g["id"])
+
         group_person: dict[str, str | None] = {}
         for g in self.groups:
-            if g.get("display_name"):
-                group_person[g["id"]] = g["display_name"]
-            elif g.get("name"):
-                group_person[g["id"]] = g["name"]
+            gid = g["id"]
+            pname = g.get("display_name") or g.get("name")
+            folder_name = (g.get("name") or "").strip().lower()
+            size = self.get_group_size(gid)
+            if folder_name:
+                # Visible if total faces for this named person >= MIN_VISIBLE_GROUP_SIZE
+                if person_counts.get(folder_name, 0) >= MIN_VISIBLE_GROUP_SIZE:
+                    group_person[gid] = pname
+                else:
+                    group_person[gid] = "HIDDEN"
             else:
-                group_person[g["id"]] = None
+                if size >= MIN_VISIBLE_GROUP_SIZE:
+                    group_person[gid] = None  # visible unnamed
+                else:
+                    group_person[gid] = "HIDDEN"
 
         face_data: dict[str, dict[str, Any]] = {}
 
@@ -287,16 +314,21 @@ class PeopleManager:
             is_video = cache_entry.get("type") == "video"
 
             if is_video:
-                # Video: a named person counts if appearing in >= 2 of 5 sampled frames
-                # In file_groups[file_key], groups are already those appearing in >= 2 frames
-                named_candidates = [group_person[gid] for gid in gids if group_person.get(gid)]
+                # Video: a visible named person counts if appearing in >= 2 of 5 sampled frames
+                named_candidates = [
+                    group_person[gid] for gid in gids
+                    if gid in group_person and group_person[gid] not in (None, "HIDDEN")
+                ]
                 video_person = named_candidates[0] if named_candidates else None
                 face_data[file_key] = {
                     "video_person": video_person,
                 }
             else:
-                # Image: list of person names or None for each face
-                faces = [group_person.get(gid) for gid in gids]
+                # Image: list of visible person names or None for each visible face; hidden faces omitted
+                faces = [
+                    group_person[gid] for gid in gids
+                    if gid in group_person and group_person[gid] != "HIDDEN"
+                ]
                 face_data[file_key] = {
                     "faces": faces,
                 }

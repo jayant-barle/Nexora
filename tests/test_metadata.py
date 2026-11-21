@@ -56,11 +56,8 @@ def test_modified_time_does_not_change_result(tmp_path: Path) -> None:
 
 
 def test_heic_image_with_datetime_original(tmp_path: Path) -> None:
-    try:
-        from pillow_heif import register_heif_opener
-        register_heif_opener()
-    except Exception as e:
-        pytest.skip(f"pillow_heif not available: {e}")
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
 
     heic_path = tmp_path / "iphone_photo.heic"
     img = Image.new("RGB", (20, 20), color="yellow")

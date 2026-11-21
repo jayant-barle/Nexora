@@ -233,6 +233,7 @@ class FaceClusterManager:
         self.cache: dict[str, dict] = {}
         self.groups: list[dict] = []
         self.file_groups: dict[str, list[str]] = {}
+        self.face_names: dict[str, str] = {}
         self.load()
 
     def load(self) -> None:
@@ -245,10 +246,12 @@ class FaceClusterManager:
             self.cache = data.get("cache", {})
             self.groups = data.get("groups", [])
             self.file_groups = data.get("file_groups", {})
+            self.face_names = data.get("face_names", {})
         except Exception:
             self.cache = {}
             self.groups = []
             self.file_groups = {}
+            self.face_names = {}
 
     def save(self) -> None:
         """Save state to JSON atomically using a temp file and replace."""
@@ -259,6 +262,7 @@ class FaceClusterManager:
             "cache": self.cache,
             "groups": self.groups,
             "file_groups": self.file_groups,
+            "face_names": self.face_names,
         }
         with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
@@ -279,6 +283,183 @@ class FaceClusterManager:
                 best_sim = sim
                 best_group = group
         return best_group
+
+    def cluster_all_faces(self, threshold: float = DEFAULT_THRESHOLD) -> None:
+        """Cluster ALL faces across self.cache in one pass after the scan.
+        
+        Uses average-linkage agglomerative clustering on cosine distance (threshold 0.363 default).
+        Uses cluster centroids (mean of L2-normalised embeddings) for comparisons.
+        Result does not depend on file order (canonical sorting makes it shuffle-invariant).
+        Re-running is idempotent and preserves names stored by member face in self.face_names.
+        """
+        # Collect all accepted faces
+        face_items: list[dict[str, Any]] = []
+
+        # Sort file keys canonically
+        for file_key in sorted(self.cache.keys()):
+            entry = self.cache[file_key]
+            faces = entry.get("faces", [])
+            for face_idx, f_rec in enumerate(faces):
+                raw_emb = f_rec.get("embedding")
+                if not raw_emb:
+                    continue
+                arr = np.array(raw_emb, dtype=np.float32)
+                norm = float(np.linalg.norm(arr))
+                if norm == 0.0:
+                    continue
+                norm_emb = arr / norm
+                face_items.append({
+                    "file_key": file_key,
+                    "face_idx": face_idx,
+                    "norm_emb": norm_emb,
+                    "crop_path": f_rec.get("crop_path"),
+                    "frame_idx": f_rec.get("frame_idx", 0),
+                })
+
+        if not face_items:
+            self.groups = []
+            self.file_groups = {fk: [] for fk in self.cache}
+            return
+
+        # Canonical sort by (file_key, face_idx) to guarantee complete shuffle-invariance
+        face_items.sort(key=lambda x: (x["file_key"], x["face_idx"]))
+
+        # Build initial singleton clusters
+        clusters: list[dict[str, Any]] = []
+        for i, item in enumerate(face_items):
+            crops = [item["crop_path"]] if item.get("crop_path") else []
+            clusters.append({
+                "id": i,
+                "members": [(item["file_key"], item["face_idx"])],
+                "emb_sum": item["norm_emb"].copy(),
+                "count": 1,
+                "centroid": item["norm_emb"].copy(),
+                "crop_paths": crops,
+                "canonical_key": (item["file_key"], item["face_idx"]),
+            })
+
+        # Agglomerative clustering: merge highest cosine similarity >= threshold
+        while len(clusters) > 1:
+            best_sim = -1.0
+            best_i = -1
+            best_j = -1
+            n = len(clusters)
+
+            for i in range(n):
+                ci = clusters[i]
+                for j in range(i + 1, n):
+                    cj = clusters[j]
+                    sim = float(np.dot(ci["centroid"], cj["centroid"]))
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_i = i
+                        best_j = j
+                    elif sim == best_sim and best_sim >= threshold:
+                        # Deterministic tie-breaking using canonical keys
+                        key_curr = (ci["canonical_key"], cj["canonical_key"])
+                        key_best = (clusters[best_i]["canonical_key"], clusters[best_j]["canonical_key"])
+                        if key_curr < key_best:
+                            best_i = i
+                            best_j = j
+
+            if best_sim < threshold or best_i == -1:
+                break
+
+            ci = clusters[best_i]
+            cj = clusters[best_j]
+
+            merged_members = sorted(ci["members"] + cj["members"])
+            merged_sum = ci["emb_sum"] + cj["emb_sum"]
+            merged_count = ci["count"] + cj["count"]
+            norm = float(np.linalg.norm(merged_sum))
+            merged_centroid = (merged_sum / norm) if norm > 0 else merged_sum
+
+            merged_crops = []
+            for cp in ci["crop_paths"] + cj["crop_paths"]:
+                if cp and cp not in merged_crops:
+                    merged_crops.append(cp)
+                    if len(merged_crops) >= 6:
+                        break
+
+            new_cluster = {
+                "id": ci["id"],
+                "members": merged_members,
+                "emb_sum": merged_sum,
+                "count": merged_count,
+                "centroid": merged_centroid,
+                "crop_paths": merged_crops,
+                "canonical_key": merged_members[0],
+            }
+
+            del clusters[best_j]
+            del clusters[best_i]
+            clusters.append(new_cluster)
+
+        # Sort clusters deterministically: size descending, tie-break by canonical key
+        clusters.sort(key=lambda c: (-c["count"], c["canonical_key"]))
+
+        face_to_group_id: dict[tuple[str, int], str] = {}
+        new_groups: list[dict[str, Any]] = []
+
+        import collections
+        for rank, c in enumerate(clusters, start=1):
+            gid = f"group_{rank:03d}"
+            for m in c["members"]:
+                face_to_group_id[m] = gid
+
+            # Check if any member has an assigned name in self.face_names
+            member_names = [
+                self.face_names[f"{fk}:{idx}"]
+                for fk, idx in c["members"]
+                if f"{fk}:{idx}" in self.face_names
+            ]
+            assigned_display = None
+            assigned_folder = None
+            if member_names:
+                assigned_display = collections.Counter(member_names).most_common(1)[0][0]
+                assigned_folder = assigned_display.strip().lower()
+                for fk, idx in c["members"]:
+                    self.face_names[f"{fk}:{idx}"] = assigned_display
+
+            group_dict = {
+                "id": gid,
+                "name": assigned_folder,
+                "display_name": assigned_display,
+                "crop_path": c["crop_paths"][0] if c["crop_paths"] else "",
+                "crop_paths": c["crop_paths"],
+                "representative_embedding": [float(x) for x in c["centroid"]],
+                "member_faces": [f"{fk}:{idx}" for fk, idx in c["members"]],
+            }
+            new_groups.append(group_dict)
+
+        self.groups = new_groups
+
+        # Update file_groups
+        self.file_groups = {}
+        for file_key in sorted(self.cache.keys()):
+            entry = self.cache[file_key]
+            item_type = entry.get("type")
+            faces = entry.get("faces", [])
+
+            if item_type == "video":
+                frame_occurrences: dict[str, set[int]] = {}
+                for idx, f in enumerate(faces):
+                    gid = face_to_group_id.get((file_key, idx))
+                    if gid:
+                        f_idx = f.get("frame_idx", 0)
+                        frame_occurrences.setdefault(gid, set()).add(f_idx)
+                qualifying_gids = [
+                    gid for gid, fset in sorted(frame_occurrences.items())
+                    if len(fset) >= 2
+                ]
+                self.file_groups[file_key] = qualifying_gids
+            else:
+                assigned_gids = []
+                for idx in range(len(faces)):
+                    gid = face_to_group_id.get((file_key, idx))
+                    if gid:
+                        assigned_gids.append(gid)
+                self.file_groups[file_key] = assigned_gids
 
     def scan_source(
         self,
@@ -502,6 +683,8 @@ class FaceClusterManager:
                             if progress_callback:
                                 progress_callback(scanned_count, total_items, total_faces_found)
 
+        # Cluster all faces in one pass
+        self.cluster_all_faces(threshold=threshold)
         # Final save upon finish or stop
         self.save()
         if progress_callback:
@@ -625,9 +808,19 @@ class FaceClusterManager:
                 "box": r["box"],
                 "score": r["score"],
                 "embedding": r["embedding"],
+                "crop_path": str(self.crops_dir / f"crop_{sha256[:10]}_{idx}.jpg") if r.get("crop") is not None else None,
             }
-            for r in face_records
+            for idx, r in enumerate(face_records)
         ]
+        # Save crops to disk
+        for idx, r in enumerate(face_records):
+            if r.get("crop") is not None:
+                c_path = self.crops_dir / f"crop_{sha256[:10]}_{idx}.jpg"
+                try:
+                    cv2.imwrite(str(c_path), r["crop"])
+                except Exception:
+                    pass
+
         self.cache[str(img_path.resolve())] = {
             "size": size,
             "sha256": sha256,
@@ -762,8 +955,10 @@ class FaceClusterManager:
     def name_group(self, group_id: str, name: str) -> None:
         """Name a group. One name can cover multiple groups; saving same name merges them."""
         clean_name = name.strip().lower() if name else None
+        display_name = name.strip() if name else None
         if not clean_name:
             clean_name = None
+            display_name = None
 
         target_group = None
         for g in self.groups:
@@ -775,7 +970,27 @@ class FaceClusterManager:
             return
 
         target_group["name"] = clean_name
-        target_group["display_name"] = name.strip() if name else None
+        target_group["display_name"] = display_name
+
+        # Store name by member face in self.face_names so it survives re-clustering
+        if not hasattr(self, "face_names"):
+            self.face_names = {}
+
+        for file_key, gids in self.file_groups.items():
+            for idx, gid in enumerate(gids):
+                if gid == group_id:
+                    if display_name:
+                        self.face_names[f"{file_key}:{idx}"] = display_name
+                    elif f"{file_key}:{idx}" in self.face_names:
+                        del self.face_names[f"{file_key}:{idx}"]
+
+        if target_group.get("member_faces"):
+            for m in target_group["member_faces"]:
+                if display_name:
+                    self.face_names[m] = display_name
+                elif m in self.face_names:
+                    del self.face_names[m]
+
         self.save()
 
     def get_group_name(self, group_id: str) -> str | None:

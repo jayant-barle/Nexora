@@ -63,7 +63,29 @@ def test_two_known_people_go_to_group_photos(tmp_path: Path):
 
 
 def test_unnamed_person_goes_to_unsorted(tmp_path: Path):
-    """An image showing an unnamed person goes to Unsorted."""
+    """An image showing an unnamed person goes to Unsorted when it has no name or EXIF date."""
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+
+    img_file = src / "IMG_0042.jpg"
+    _create_plain_image(img_file)
+
+    face_data = {
+        str(img_file.resolve()): {"faces": [None]}  # Unnamed face
+    }
+
+    plan = build_plan(src, dst, face_data=face_data)
+    assert len(plan) == 1
+    assert plan[0].status == "ready"
+    assert plan[0].folder == "Unsorted"
+    assert plan[0].matched_by == "Unsorted"
+    assert plan[0].target == dst / "Unsorted" / "IMG_0042.jpg"
+
+
+def test_unnamed_face_with_name_in_file_name_goes_to_name_folder(tmp_path: Path):
+    """An unnamed face does not block the name rule: tokyo_beach.jpg goes to tokyo/."""
     src = tmp_path / "src"
     dst = tmp_path / "dst"
     src.mkdir()
@@ -79,9 +101,84 @@ def test_unnamed_person_goes_to_unsorted(tmp_path: Path):
     plan = build_plan(src, dst, face_data=face_data)
     assert len(plan) == 1
     assert plan[0].status == "ready"
-    assert plan[0].folder == "Unsorted"
-    assert plan[0].matched_by == "Unsorted"
-    assert plan[0].target == dst / "Unsorted" / "tokyo_beach.jpg"
+    assert plan[0].folder == "tokyo"
+    assert plan[0].matched_by == "Name: tokyo"
+    assert plan[0].target == dst / "tokyo" / "tokyo_beach.jpg"
+
+
+def test_hidden_one_face_group_with_name_goes_to_name_folder(tmp_path: Path):
+    """A face from a hidden 1-face group is treated as no face and does not block the name rule."""
+    from nexora.faces.groups import FaceClusterManager
+    from nexora.faces.people import PeopleManager
+
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+
+    img_file = src / "paris_holiday.jpg"
+    _create_plain_image(img_file)
+
+    json_path = tmp_path / "faces.json"
+    cm = FaceClusterManager(json_path=json_path)
+    cm.groups = [{"id": "group_001", "name": "charlie", "display_name": "Charlie"}]
+    cm.file_groups = {str(img_file.resolve()): ["group_001"]}  # Only 1 face in library -> hidden!
+    pm = PeopleManager(cm)
+
+    face_data = pm.get_face_data_for_plan()
+    # Hidden group must be treated as no face
+    assert face_data[str(img_file.resolve())]["faces"] == []
+
+    plan = build_plan(src, dst, face_data=face_data)
+    assert len(plan) == 1
+    assert plan[0].status == "ready"
+    assert plan[0].folder == "paris"
+    assert plan[0].matched_by == "Name: paris"
+    assert plan[0].target == dst / "paris" / "paris_holiday.jpg"
+
+
+def test_one_named_face_plus_one_unnamed_face_goes_to_person_folder(tmp_path: Path):
+    """One named face + one unnamed face goes to the named person folder."""
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+
+    img_file = src / "vacation_photo.jpg"
+    _create_plain_image(img_file)
+
+    face_data = {
+        str(img_file.resolve()): {"faces": ["Alice", None]}  # One named, one unnamed
+    }
+
+    plan = build_plan(src, dst, face_data=face_data)
+    assert len(plan) == 1
+    assert plan[0].status == "ready"
+    assert plan[0].folder == "alice"
+    assert plan[0].matched_by == "Person: Alice"
+    assert plan[0].target == dst / "alice" / "vacation_photo.jpg"
+
+
+def test_two_named_faces_go_to_group_photos(tmp_path: Path):
+    """Two named faces go to Group photos/ even if file has a name."""
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+
+    img_file = src / "tokyo_outing.jpg"
+    _create_plain_image(img_file)
+
+    face_data = {
+        str(img_file.resolve()): {"faces": ["Alice", "Bob"]}
+    }
+
+    plan = build_plan(src, dst, face_data=face_data)
+    assert len(plan) == 1
+    assert plan[0].status == "ready"
+    assert plan[0].folder == "Group photos"
+    assert plan[0].matched_by == "Group photos"
+    assert plan[0].target == dst / "Group photos" / "tokyo_outing.jpg"
 
 
 def test_named_image_with_no_face_follows_name_rule(tmp_path: Path):

@@ -154,36 +154,36 @@ def build_plan(
                         folder_name = "Unsorted"
                         matched_by = "Unsorted"
             else:
-                # Image placement in Stage 4
+                # Image placement: Stage 4 / FIX 1
+                # 1. Exactly 1 face belonging to a visible named group -> <Person>/
+                # 2. 2+ faces belonging to different visible named groups -> Group photos/
+                # 3. Otherwise fall through: name in file name -> <name>/
+                # 4. Otherwise EXIF date -> <YYYY>/<YYYY-MM>/
+                # 5. Otherwise -> Unsorted/
                 faces_list = file_face_info.get("faces") if file_face_info else None
                 matched_face = False
                 folder_rel = Path("Unsorted")
                 folder_name = "Unsorted"
                 matched_by = "Unsorted"
 
-                if faces_list is not None and len(faces_list) > 0:
-                    # Check for unnamed faces first: unnamed faces go to Unsorted
-                    if None in faces_list:
-                        folder_rel = Path("Unsorted")
-                        folder_name = "Unsorted"
-                        matched_by = "Unsorted"
-                        matched_face = True
-                    else:
-                        named_set = set(faces_list)
-                        if len(named_set) >= 2:
-                            # 2 or more faces belonging to different named people
-                            folder_rel = Path("Group photos")
-                            folder_name = "Group photos"
-                            matched_by = "Group photos"
-                            matched_face = True
-                        elif len(faces_list) == 1 and faces_list[0]:
-                            # Exactly one face belonging to a named person
-                            p_name = faces_list[0]
-                            f_name = to_folder_name(p_name)
-                            folder_rel = Path(f_name)
-                            folder_name = f_name
-                            matched_by = f"Person: {p_name}"
-                            matched_face = True
+                # Filter for visible named faces (None represents unnamed visible faces)
+                named_faces = [f for f in (faces_list or []) if f is not None]
+                unique_named = set(named_faces)
+
+                if len(unique_named) >= 2:
+                    # 2 or more faces belonging to different visible named groups
+                    folder_rel = Path("Group photos")
+                    folder_name = "Group photos"
+                    matched_by = "Group photos"
+                    matched_face = True
+                elif len(unique_named) == 1:
+                    # Exactly one visible named group
+                    p_name = list(unique_named)[0]
+                    f_name = to_folder_name(p_name)
+                    folder_rel = Path(f_name)
+                    folder_name = f_name
+                    matched_by = f"Person: {p_name}"
+                    matched_face = True
 
                 if not matched_face:
                     # Fallback to name rule

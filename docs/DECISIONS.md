@@ -57,3 +57,12 @@
   - Clustering threshold kept at 0.363 (SFace cosine similarity unmeasured default).
   - Progress persistence: runs/faces.json saved atomically (.tmp then replace) every 50 images and upon stop/failure.
   - App startup displays "Found N people from M scanned images" immediately if runs/faces.json exists.
+- 2026-11-21: People accuracy and placement restoration (v0.5.2-dev):
+  - Placement order strictly restored so unnamed/hidden faces never block name or date rules:
+    Images: (a) Exactly 1 face in a visible named group -> <Person>/, (b) 2+ faces in different visible named groups -> Group photos/, (c) Otherwise name in file name -> <name>/, (d) Otherwise EXIF date -> <YYYY>/<YYYY-MM>/, (e) Otherwise -> Unsorted/.
+    Unnamed faces, hidden groups, and false faces never block rules c, d, or e.
+    Faces in hidden groups are treated as "no face" in get_face_data_for_plan.
+  - Agglomerative clustering: ALL faces across the library clustered in a single pass after scan using average-linkage agglomerative clustering on cosine distance (default threshold 0.363, configurable). Centroid comparisons use mean of L2-normalized embeddings. Canonical input sorting guarantees shuffle-invariance and deterministic cluster formation.
+  - Name persistence: Names stored by member face ({file}:{index}) in runs/faces.json rather than group ID, ensuring names survive re-clustering and scans are idempotent.
+  - People visibility: Clusters with >= 2 faces shown on People screen as "Unnamed person N". Clusters with 1 face stay hidden and are ignored by placement (MIN_VISIBLE_GROUP_SIZE = 2).
+  - Measurable accuracy: Added scripts/measure_faces.py to evaluate pairwise precision, recall, FPR, false merges, and false splits at thresholds 0.6, 0.7, 0.85 against tests/faces_labelled/expected_faces.csv. Accuracy not yet measured on real photos (owner review pending).
