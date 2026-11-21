@@ -465,6 +465,22 @@ class FaceClusterManager:
                     })
                     n_clusters += 1
 
+        # Record Pass 1 metrics before Pass 2 starts
+        self.clusters_count_before_pass2 = len(clusters)
+        for c in clusters:
+            c["pass1_count"] = c["count"]
+            c["enlarged_by_pass2"] = False
+            c["pass2_merged_count"] = 0
+
+        reps_p1 = [c["centroid"] for c in clusters]
+        if len(reps_p1) > 1:
+            mat_p1 = np.array(reps_p1, dtype=np.float32)
+            sims_p1 = mat_p1 @ mat_p1.T
+            triu_p1 = np.triu_indices(len(reps_p1), k=1)
+            self.inconsistent_pairs_before_pass2 = int(np.sum(sims_p1[triu_p1] >= threshold))
+        else:
+            self.inconsistent_pairs_before_pass2 = 0
+
         # Pass 2: Iterative merge pass on full centroids
         # Merge two clusters when their full-centroid similarity is at or above threshold (0.363),
         # repeating until nothing changes.
@@ -509,6 +525,8 @@ class FaceClusterManager:
             clusters[i]["members"].extend(clusters[j]["members"])
             clusters[i]["sum_emb"] += clusters[j]["sum_emb"]
             clusters[i]["count"] += clusters[j]["count"]
+            clusters[i]["enlarged_by_pass2"] = True
+            clusters[i]["pass2_merged_count"] += 1
 
             for rep in clusters[j]["representative_members"]:
                 if len(clusters[i]["representative_members"]) < MAX_REPRESENTATIVE_MEMBERS:
@@ -523,6 +541,9 @@ class FaceClusterManager:
                     clusters[i]["crop_paths"].append(cp)
 
             clusters.pop(j)
+
+        # Record Pass 2 cluster count
+        self.clusters_count_after_pass2 = len(clusters)
 
         # Sort clusters deterministically: size descending, tie-break by canonical key
         clusters.sort(key=lambda c: (-c["count"], c["canonical_key"]))
@@ -565,6 +586,9 @@ class FaceClusterManager:
                 "representative_embedding": [float(x) for x in c["centroid"]],
                 "member_faces": [f"{m_fk}:{m_idx}" for m_fk, m_idx in c["members"]],
                 "needs_review": (c["count"] > cluster_cap) and not assigned_display,
+                "enlarged_by_pass2": bool(c.get("enlarged_by_pass2", False)),
+                "pass1_count": c.get("pass1_count", c["count"]),
+                "final_count": c["count"],
             }
             new_groups.append(group_dict)
 
