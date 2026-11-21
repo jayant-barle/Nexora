@@ -630,3 +630,81 @@ def test_old_format_dismissal_entry_still_works(tmp_path: Path):
     assert is_pair_dismissed(group_a, group_c, old_dismissed_merges) is False
 
 
+def test_guard_small_cluster_cannot_absorb_cluster_more_than_twice_its_size(tmp_path: Path):
+    """Task 3: A cluster with 3 or fewer faces must not absorb a cluster more than twice its size.
+    
+    Synthetic test: assert that a 2-face cluster does not absorb a 45-face cluster.
+    """
+    cm = _create_mock_cluster_manager(tmp_path)
+    pm = PeopleManager(cm)
+
+    # Cluster A has 2 faces
+    group_a_members = ["file_a1.jpg:0", "file_a2.jpg:0"]
+    # Cluster B has 45 faces
+    group_b_members = [f"file_b_{i:03d}.jpg:0" for i in range(45)]
+
+    cm.groups = [
+        {
+            "id": "group_001",
+            "name": None,
+            "display_name": None,
+            "crop_paths": [],
+            "representative_embedding": [1.0] + [0.0] * 127,
+            "member_faces": group_a_members,
+        },
+        {
+            "id": "group_002",
+            "name": None,
+            "display_name": None,
+            "crop_paths": [],
+            "representative_embedding": [1.0] + [0.0] * 127,
+            "member_faces": group_b_members,
+        },
+    ]
+    cm.file_groups = {
+        "file_a1.jpg": ["group_001"],
+        "file_a2.jpg": ["group_001"],
+    }
+    for i in range(45):
+        cm.file_groups[f"file_b_{i:03d}.jpg"] = ["group_002"]
+
+    assert pm.get_group_size("group_001") == 2
+    assert pm.get_group_size("group_002") == 45
+
+    # 2-face cluster (group_001) attempts to absorb 45-face cluster (group_002)
+    merged = pm.merge_groups("group_001", "group_002")
+
+    # Assert that it does not absorb it
+    assert merged is False
+    assert pm.get_group_size("group_001") == 2
+    assert pm.get_group_size("group_002") == 45
+    assert len(pm.groups) == 2
+
+    # Also verify Pass 2 behavior: if pass2 is enabled on clusters where centroid cosine is 0.38 >= 0.363,
+    # the guard ensures the 2-face cluster does not absorb the 45-face cluster.
+    import math
+    v_a = [1.0, 0.0] + [0.0] * 126
+    v_b0 = [0.30, math.sqrt(1.0 - 0.30**2)] + [0.0] * 126
+    v_b = [0.38, math.sqrt(1.0 - 0.38**2)] + [0.0] * 126
+
+    cm2 = FaceClusterManager(json_path=tmp_path / "faces2.json")
+    cm2.cache = {
+        "fa1.jpg": {"size": 1, "sha256": "s1", "type": "image", "status": "ok", "faces": [{"box": [0, 0, 10, 10], "embedding": v_a}]},
+        "fa2.jpg": {"size": 1, "sha256": "s2", "type": "image", "status": "ok", "faces": [{"box": [0, 0, 10, 10], "embedding": v_a}]},
+        "fb_000.jpg": {"size": 1, "sha256": "sb_0", "type": "image", "status": "ok", "faces": [{"box": [0, 0, 10, 10], "embedding": v_b0}]},
+    }
+    for i in range(1, 45):
+        cm2.cache[f"fb_{i:03d}.jpg"] = {
+            "size": 1,
+            "sha256": f"sb_{i}",
+            "type": "image",
+            "status": "ok",
+            "faces": [{"box": [0, 0, 10, 10], "embedding": v_b}],
+        }
+    cm2.cluster_all_faces(threshold=0.363, pass2_enabled=True)
+    pm2 = PeopleManager(cm2)
+    sizes = [pm2.get_group_size(g["id"]) for g in pm2.groups]
+    assert 2 in sizes, f"Expected 2-face cluster to remain unabsorbed, got sizes: {sizes}"
+    assert 45 in sizes, f"Expected 45-face cluster to remain unabsorbed, got sizes: {sizes}"
+
+

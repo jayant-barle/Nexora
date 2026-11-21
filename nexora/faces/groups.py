@@ -43,6 +43,10 @@ CLUSTER_CAP_RATIO = 0.05        # Flag cluster as "needs review" if it exceeds 5
 CLUSTER_CAP_MAX = 200           # Flag cluster as "needs review" if it exceeds 200 faces
 CLUSTER_CAP_FLOOR = 20          # Floor threshold so small test clusters are not falsely flagged
 
+PASS2_ENABLED = False           # Turn pass 2 off by default; keep code for analysis and evaluation
+MERGE_GUARD_SMALL_CLUSTER_MAX = 3  # A cluster with <= 3 faces must not absorb a cluster > 2x its size
+MERGE_GUARD_MAX_RATIO = 2.0        # Max ratio of absorbed to absorber for small clusters
+
 
 def get_runs_dir() -> Path:
     """Get the runs directory path next to app.py or executable."""
@@ -253,6 +257,7 @@ class FaceClusterManager:
         self.dismissed_merges: list[Any] = []
         self.corrupt_backup_path: Path | None = None
         self.last_scan_log: Path | None = None
+        self.pass2_enabled: bool = PASS2_ENABLED
         self.load()
 
     def load(self) -> None:
@@ -341,7 +346,7 @@ class FaceClusterManager:
                 best_group = group
         return best_group
 
-    def cluster_all_faces(self, threshold: float = DEFAULT_THRESHOLD) -> None:
+    def cluster_all_faces(self, threshold: float = DEFAULT_THRESHOLD, pass2_enabled: bool | None = None) -> None:
         """Cluster all faces across self.cache in fixed canonical order.
         
         Incremental centroid clustering on cosine similarity (threshold 0.363 by default).
@@ -481,66 +486,74 @@ class FaceClusterManager:
         else:
             self.inconsistent_pairs_before_pass2 = 0
 
-        # Pass 2: Iterative merge pass on full centroids
+        # Pass 2: Iterative merge pass on full centroids (disabled by default via PASS2_ENABLED = False)
         # Merge two clusters when their full-centroid similarity is at or above threshold (0.363),
         # repeating until nothing changes.
         # Cap any merged cluster at the large-group limit (cluster_cap) to prevent collapse,
-        # and require that at least one cluster is a small/fragment group (<= MAX_REPRESENTATIVE_MEMBERS)
-        # so established multi-photo people are preserved for user review via merge suggestions.
-        while True:
-            k = len(clusters)
-            if k <= 1:
-                break
+        # require that at least one cluster is a small/fragment group (<= MAX_REPRESENTATIVE_MEMBERS),
+        # and guard against small clusters absorbing disproportionately large ones:
+        # a cluster with 3 or fewer faces must not absorb a cluster more than twice its size.
+        run_pass2 = self.pass2_enabled if pass2_enabled is None else pass2_enabled
+        if run_pass2:
+            while True:
+                k = len(clusters)
+                if k <= 1:
+                    break
 
-            full_centroids = np.zeros((k, 128), dtype=np.float32)
-            for i, c in enumerate(clusters):
-                s = c["sum_emb"]
-                norm_s = float(np.linalg.norm(s))
-                full_centroids[i] = (s / norm_s) if norm_s > 0 else s
+                full_centroids = np.zeros((k, 128), dtype=np.float32)
+                for i, c in enumerate(clusters):
+                    s = c["sum_emb"]
+                    norm_s = float(np.linalg.norm(s))
+                    full_centroids[i] = (s / norm_s) if norm_s > 0 else s
 
-            sim_matrix = full_centroids @ full_centroids.T
-            np.fill_diagonal(sim_matrix, -1.0)
+                sim_matrix = full_centroids @ full_centroids.T
+                np.fill_diagonal(sim_matrix, -1.0)
 
-            best_pair: tuple[int, int] | None = None
-            best_sim = threshold - 1e-6
+                best_pair: tuple[int, int] | None = None
+                best_sim = threshold - 1e-6
 
-            for i in range(k):
-                ci_cnt = clusters[i]["count"]
-                if ci_cnt >= cluster_cap:
-                    continue
-                for j in range(i + 1, k):
-                    cj_cnt = clusters[j]["count"]
-                    if (ci_cnt + cj_cnt <= cluster_cap) and (
-                        ci_cnt <= MAX_REPRESENTATIVE_MEMBERS or cj_cnt <= MAX_REPRESENTATIVE_MEMBERS
-                    ):
-                        val = float(sim_matrix[i, j])
-                        if val > best_sim:
-                            best_sim = val
-                            best_pair = (i, j)
+                for i in range(k):
+                    ci_cnt = clusters[i]["count"]
+                    if ci_cnt >= cluster_cap:
+                        continue
+                    for j in range(i + 1, k):
+                        cj_cnt = clusters[j]["count"]
+                        if (ci_cnt + cj_cnt <= cluster_cap) and (
+                            ci_cnt <= MAX_REPRESENTATIVE_MEMBERS or cj_cnt <= MAX_REPRESENTATIVE_MEMBERS
+                        ):
+                            # Guard: a cluster with 3 or fewer faces must not absorb a cluster more than twice its size
+                            if ci_cnt <= MERGE_GUARD_SMALL_CLUSTER_MAX and cj_cnt > MERGE_GUARD_MAX_RATIO * ci_cnt:
+                                continue
+                            if cj_cnt <= MERGE_GUARD_SMALL_CLUSTER_MAX and ci_cnt > MERGE_GUARD_MAX_RATIO * cj_cnt:
+                                continue
+                            val = float(sim_matrix[i, j])
+                            if val > best_sim:
+                                best_sim = val
+                                best_pair = (i, j)
 
-            if best_pair is None:
-                break
+                if best_pair is None:
+                    break
 
-            i, j = best_pair
-            clusters[i]["members"].extend(clusters[j]["members"])
-            clusters[i]["sum_emb"] += clusters[j]["sum_emb"]
-            clusters[i]["count"] += clusters[j]["count"]
-            clusters[i]["enlarged_by_pass2"] = True
-            clusters[i]["pass2_merged_count"] += 1
+                i, j = best_pair
+                clusters[i]["members"].extend(clusters[j]["members"])
+                clusters[i]["sum_emb"] += clusters[j]["sum_emb"]
+                clusters[i]["count"] += clusters[j]["count"]
+                clusters[i]["enlarged_by_pass2"] = True
+                clusters[i]["pass2_merged_count"] += 1
 
-            for rep in clusters[j]["representative_members"]:
-                if len(clusters[i]["representative_members"]) < MAX_REPRESENTATIVE_MEMBERS:
-                    clusters[i]["representative_members"].append(rep)
+                for rep in clusters[j]["representative_members"]:
+                    if len(clusters[i]["representative_members"]) < MAX_REPRESENTATIVE_MEMBERS:
+                        clusters[i]["representative_members"].append(rep)
 
-            mean_emb = np.mean(clusters[i]["representative_members"], axis=0)
-            norm_val = float(np.linalg.norm(mean_emb))
-            clusters[i]["centroid"] = (mean_emb / norm_val) if norm_val > 0 else mean_emb
+                mean_emb = np.mean(clusters[i]["representative_members"], axis=0)
+                norm_val = float(np.linalg.norm(mean_emb))
+                clusters[i]["centroid"] = (mean_emb / norm_val) if norm_val > 0 else mean_emb
 
-            for cp in clusters[j]["crop_paths"]:
-                if cp and cp not in clusters[i]["crop_paths"] and len(clusters[i]["crop_paths"]) < 6:
-                    clusters[i]["crop_paths"].append(cp)
+                for cp in clusters[j]["crop_paths"]:
+                    if cp and cp not in clusters[i]["crop_paths"] and len(clusters[i]["crop_paths"]) < 6:
+                        clusters[i]["crop_paths"].append(cp)
 
-            clusters.pop(j)
+                clusters.pop(j)
 
         # Record Pass 2 cluster count
         self.clusters_count_after_pass2 = len(clusters)
@@ -643,6 +656,7 @@ class FaceClusterManager:
         progress_callback: Callable[[int, int, int], None] | None = None,
         stop_event: threading.Event | None = None,
         max_workers: int | None = None,
+        pass2_enabled: bool | None = None,
     ) -> dict[str, Any]:
         """Scan source folder for all images and videos and cluster faces.
         
@@ -976,7 +990,7 @@ class FaceClusterManager:
                                     progress_callback(scanned_count, total_items, total_faces_found)
 
             if not (stop_event and stop_event.is_set()):
-                self.cluster_all_faces(threshold=threshold)
+                self.cluster_all_faces(threshold=threshold, pass2_enabled=pass2_enabled)
 
         finally:
             elapsed = time.perf_counter() - start_time

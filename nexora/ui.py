@@ -635,8 +635,11 @@ class NexoraApp:
                             target_id, source_id = gb_id, ga_id
                         else:
                             target_id, source_id = ga_id, gb_id
-                        self.people_manager.merge_groups(target_id, source_id)
-                        messagebox.showinfo("Merged", f"Group merged into {target_id}.")
+                        merged_ok = self.people_manager.merge_groups(target_id, source_id)
+                        if merged_ok:
+                            messagebox.showinfo("Merged", f"Group merged into {target_id}.")
+                        else:
+                            messagebox.showwarning("Merge Refused", f"Merge refused: a cluster with 3 or fewer faces cannot absorb a cluster more than twice its size.")
                         self.render_people_cards()
                     return merge_action
 
@@ -889,8 +892,11 @@ class NexoraApp:
                     def merge_action():
                         target_id = target_id_var.get()
                         if target_id and target_id != src_id:
-                            self.people_manager.merge_groups(target_id, src_id)
-                            messagebox.showinfo("Merged", f"Group {src_id} merged into {target_id}.")
+                            merged_ok = self.people_manager.merge_groups(target_id, src_id)
+                            if merged_ok:
+                                messagebox.showinfo("Merged", f"Group {src_id} merged into {target_id}.")
+                            else:
+                                messagebox.showwarning("Merge Refused", "Merge refused: a cluster with 3 or fewer faces cannot absorb a cluster more than twice its size.")
                             self.render_people_cards()
                     return merge_action
 

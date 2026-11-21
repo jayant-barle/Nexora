@@ -19,6 +19,9 @@ from nexora.faces.suggestions import (
     find_merge_suggestions,
 )
 
+MERGE_GUARD_SMALL_CLUSTER_MAX = 3  # A cluster with <= 3 faces must not absorb a cluster > 2x its size
+MERGE_GUARD_MAX_RATIO = 2.0        # Max ratio of absorbed to absorber for small clusters
+
 
 def validate_person_name(name: str) -> str:
     """Validate a person's display name.
@@ -254,10 +257,20 @@ class PeopleManager:
         self.cm.save()
         return (group_id, new_gid)
 
-    def merge_groups(self, target_group_id: str, source_group_id: str) -> None:
-        """Merge source_group into target_group."""
+    def merge_groups(self, target_group_id: str, source_group_id: str) -> bool:
+        """Merge source_group into target_group.
+        
+        Guard: a cluster with 3 or fewer faces must not absorb a cluster
+        more than twice its size.
+        Returns False if refused, True if merged.
+        """
         if target_group_id == source_group_id:
-            return
+            return False
+
+        target_size = self.get_group_size(target_group_id)
+        source_size = self.get_group_size(source_group_id)
+        if target_size <= MERGE_GUARD_SMALL_CLUSTER_MAX and source_size > MERGE_GUARD_MAX_RATIO * target_size:
+            return False
 
         # Reassign in file_groups
         for file_key, gids in self.file_groups.items():
@@ -276,6 +289,10 @@ class PeopleManager:
 
         if target_group is not None and source_idx is not None:
             source_group = self.groups[source_idx]
+            target_members = target_group.setdefault("member_faces", [])
+            for mf in source_group.get("member_faces", []):
+                if mf not in target_members:
+                    target_members.append(mf)
             crops = target_group.get("crop_paths", [])
             for c in source_group.get("crop_paths", []):
                 if c not in crops:
@@ -284,6 +301,7 @@ class PeopleManager:
             self.groups.pop(source_idx)
 
         self.cm.save()
+        return True
 
     def get_merge_suggestions(
         self, threshold: float = MERGE_SUGGEST_THRESHOLD, max_suggestions: int = MAX_MERGE_SUGGESTIONS

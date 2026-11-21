@@ -73,6 +73,7 @@ def run_real_library_report(
     source_dir: Path,
     runs_dir: Path | None = None,
     max_workers: int | None = None,
+    pass2: bool = False,
 ) -> dict[str, Any]:
     """Generate complete real-library diagnostic report."""
     if not source_dir.exists() or not source_dir.is_dir():
@@ -80,14 +81,15 @@ def run_real_library_report(
 
     runs_dir = runs_dir or get_runs_dir()
     runs_dir.mkdir(parents=True, exist_ok=True)
-    report_txt = runs_dir / "real_library_report.txt"
-    report_json = runs_dir / "real_library_report.json"
+    report_txt = runs_dir / ("real_library_report_pass2_on.txt" if pass2 else "real_library_report.txt")
+    report_json = runs_dir / ("real_library_report_pass2_on.json" if pass2 else "real_library_report.json")
     labels_csv = runs_dir / "chulmati_labels_template.csv"
 
     print("=" * 80)
     print("NEXORA REAL LIBRARY TELEMETRY & DIAGNOSTICS")
     print(f"Source Directory: {source_dir.resolve()}")
     print(f"Runs Directory:   {runs_dir.resolve()}")
+    print(f"Pass 2 Status:    {'ENABLED (--pass2)' if pass2 else 'DISABLED (PASS2_ENABLED = False)'}")
     print("=" * 80)
 
     all_files = sorted([p for p in source_dir.iterdir() if p.is_file()], key=lambda p: p.name.lower())
@@ -176,7 +178,8 @@ def run_real_library_report(
     t0_scan = time.perf_counter()
     json_path = runs_dir / "faces.json"
     cm = FaceClusterManager(json_path=json_path)
-    cm.scan_source(source_dir, threshold=DEFAULT_THRESHOLD, max_workers=max_workers)
+    cm.pass2_enabled = pass2
+    cm.scan_source(source_dir, threshold=DEFAULT_THRESHOLD, max_workers=max_workers, pass2_enabled=pass2)
     t1_scan = time.perf_counter()
     scan_elapsed = t1_scan - t0_scan
 
@@ -413,6 +416,7 @@ def run_real_library_report(
 
     report_data = {
         "git_commit": commit_hash,
+        "pass2_enabled": pass2,
         "source_dir": str(source_dir.resolve()),
         "total_files": total_file_count,
         "total_volume_mb": round(total_volume_bytes / (1024 * 1024), 2),
@@ -487,6 +491,7 @@ def run_real_library_report(
         f.write("NEXORA REAL LIBRARY TELEMETRY REPORT\n")
         f.write("=" * 70 + "\n")
         f.write(f"Commit Hash:   {commit_hash}\n")
+        f.write(f"Pass 2 Status: {'ENABLED (--pass2)' if pass2 else 'DISABLED (PASS2_ENABLED = False)'}\n")
         f.write(f"Source Folder: {source_dir.resolve()}\n")
         f.write(f"Total Files:   {total_file_count} ({total_volume_bytes / (1024 * 1024):.2f} MB)\n")
         f.write(f"Extensions:    {dict(ext_counts)}\n\n")
@@ -520,12 +525,15 @@ def run_real_library_report(
         f.write(f"Faces Detected: {total_faces_detected} (in {images_with_faces} images, {videos_with_faces} videos)\n")
         f.write(f"Unreadable Files: {len(cm.unreadable)}\n\n")
 
-        f.write("STAGE 5: CLUSTERING & CONSISTENCY CHECK\n")
+        f.write(f"STAGE 5: CLUSTERING & CONSISTENCY CHECK ({'PASS 2 ENABLED' if pass2 else 'PASS 2 DISABLED'})\n")
         f.write("-" * 70 + "\n")
         f.write(f"Total Clusters: {total_clusters} ({len(visible_groups)} visible, {len(hidden_groups)} singletons)\n")
         f.write(f"Safeguard Cap: {cluster_cap} faces | Groups needing review: {len(needs_review_groups)}\n")
-        f.write(f"Consistency check (single run): before Pass 2: {inconsistent_before} pairs (across {clusters_before} clusters) -> after Pass 2: {inconsistent_pairs} pairs (across {total_clusters} clusters)\n")
-        f.write(f"Inconsistent pairs resolved by Pass 2: {inconsistent_before - inconsistent_pairs} (50.2% reduction)\n")
+        if pass2:
+            f.write(f"Consistency check (single run): before Pass 2: {inconsistent_before} pairs (across {clusters_before} clusters) -> after Pass 2: {inconsistent_pairs} pairs (across {total_clusters} clusters)\n")
+            f.write(f"Inconsistent pairs resolved by Pass 2: {inconsistent_before - inconsistent_pairs}\n")
+        else:
+            f.write(f"Consistency check: {inconsistent_pairs} group pairs have similarity >= {MERGE_SUGGEST_THRESHOLD}\n")
         f.write("\nCluster size breakdown:\n")
         for k, v in size_bins.items():
             f.write(f"  - {k}: {v}\n")
@@ -598,6 +606,12 @@ if __name__ == "__main__":
         default=None,
         help="Number of worker processes",
     )
+    parser.add_argument(
+        "--pass2",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable or disable Pass 2 iterative merge pass (default: False)",
+    )
     args = parser.parse_args()
 
-    run_real_library_report(args.dir, runs_dir=args.runs_dir, max_workers=args.workers)
+    run_real_library_report(args.dir, runs_dir=args.runs_dir, max_workers=args.workers, pass2=args.pass2)
