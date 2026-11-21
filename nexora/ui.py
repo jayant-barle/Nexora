@@ -518,6 +518,161 @@ class NexoraApp:
         for widget in self.people_scroll_frame.winfo_children():
             widget.destroy()
 
+        # Suggested merges section above group cards
+        suggestions_box = tk.Frame(
+            self.people_scroll_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=14,
+            pady=12,
+        )
+        suggestions_box.pack(fill=tk.X, expand=True, pady=(0, 14))
+        self.suggestions_frame = suggestions_box
+
+        tk.Label(
+            suggestions_box,
+            text="Suggested Merges",
+            font=theme.FONT_SECTION,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(anchor=tk.W, pady=(0, 4))
+
+        suggestions, total_suggestions = self.people_manager.get_merge_suggestions()
+        if not suggestions:
+            tk.Label(
+                suggestions_box,
+                text="No suggested merges.",
+                font=theme.FONT_BODY,
+                fg=theme.COLOR_MUTED,
+                bg=theme.COLOR_CARD_BG,
+            ).pack(anchor=tk.W, pady=(2, 2))
+        else:
+            if total_suggestions > len(suggestions):
+                tk.Label(
+                    suggestions_box,
+                    text=f"Showing top {len(suggestions)} of {total_suggestions} suggestions (cap of 50 reached).",
+                    font=theme.FONT_BODY,
+                    fg="#D97706",
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(anchor=tk.W, pady=(0, 6))
+
+            for s in suggestions:
+                s_card = tk.Frame(
+                    suggestions_box,
+                    bg=theme.COLOR_BG,
+                    highlightbackground=theme.COLOR_CARD_BORDER,
+                    highlightthickness=1,
+                    padx=10,
+                    pady=8,
+                )
+                s_card.pack(fill=tk.X, expand=True, pady=(4, 6))
+
+                content_row = tk.Frame(s_card, bg=theme.COLOR_BG)
+                content_row.pack(fill=tk.X, expand=True)
+
+                # Group A
+                grp_a_frame = tk.Frame(content_row, bg=theme.COLOR_BG)
+                grp_a_frame.pack(side=tk.LEFT)
+
+                crop_a_path = s["group_a_crop"]
+                if crop_a_path and os.path.exists(crop_a_path):
+                    try:
+                        img_a = Image.open(crop_a_path).resize((56, 56))
+                        tk_img_a = ImageTk.PhotoImage(img_a)
+                        self.crop_photo_cache.append(tk_img_a)
+                        tk.Label(grp_a_frame, image=tk_img_a, bg="#E5E7EB", width=56, height=56).pack(side=tk.LEFT, padx=(0, 8))
+                    except Exception:
+                        pass
+
+                info_a = tk.Frame(grp_a_frame, bg=theme.COLOR_BG)
+                info_a.pack(side=tk.LEFT)
+                tk.Label(info_a, text=s["group_a_name"], font=theme.FONT_BODY_BOLD, fg=theme.COLOR_TEXT, bg=theme.COLOR_BG).pack(anchor=tk.W)
+                tk.Label(info_a, text=f"{s['group_a_photos']} photos", font=theme.FONT_BODY, fg=theme.COLOR_MUTED, bg=theme.COLOR_BG).pack(anchor=tk.W)
+
+                # Similarity in middle
+                sim_frame = tk.Frame(content_row, bg=theme.COLOR_BG)
+                sim_frame.pack(side=tk.LEFT, padx=16)
+                tk.Label(
+                    sim_frame,
+                    text=f"↔ {s['similarity']:.2f} similarity",
+                    font=theme.FONT_BODY_BOLD,
+                    fg="#2563EB",
+                    bg=theme.COLOR_BG,
+                ).pack()
+
+                # Group B
+                grp_b_frame = tk.Frame(content_row, bg=theme.COLOR_BG)
+                grp_b_frame.pack(side=tk.LEFT)
+
+                crop_b_path = s["group_b_crop"]
+                if crop_b_path and os.path.exists(crop_b_path):
+                    try:
+                        img_b = Image.open(crop_b_path).resize((56, 56))
+                        tk_img_b = ImageTk.PhotoImage(img_b)
+                        self.crop_photo_cache.append(tk_img_b)
+                        tk.Label(grp_b_frame, image=tk_img_b, bg="#E5E7EB", width=56, height=56).pack(side=tk.LEFT, padx=(0, 8))
+                    except Exception:
+                        pass
+
+                info_b = tk.Frame(grp_b_frame, bg=theme.COLOR_BG)
+                info_b.pack(side=tk.LEFT)
+                tk.Label(info_b, text=s["group_b_name"], font=theme.FONT_BODY_BOLD, fg=theme.COLOR_TEXT, bg=theme.COLOR_BG).pack(anchor=tk.W)
+                tk.Label(info_b, text=f"{s['group_b_photos']} photos", font=theme.FONT_BODY, fg=theme.COLOR_MUTED, bg=theme.COLOR_BG).pack(anchor=tk.W)
+
+                # Action buttons on right
+                btns_frame = tk.Frame(content_row, bg=theme.COLOR_BG)
+                btns_frame.pack(side=tk.RIGHT)
+
+                gid_a = s["group_a_id"]
+                gid_b = s["group_b_id"]
+
+                def make_suggested_merge_cmd(ga_id=gid_a, gb_id=gid_b):
+                    def merge_action():
+                        g_a_obj = next((g for g in self.people_manager.groups if g["id"] == ga_id), {})
+                        g_b_obj = next((g for g in self.people_manager.groups if g["id"] == gb_id), {})
+                        if (g_b_obj.get("name") or g_b_obj.get("display_name")) and not (g_a_obj.get("name") or g_a_obj.get("display_name")):
+                            target_id, source_id = gb_id, ga_id
+                        else:
+                            target_id, source_id = ga_id, gb_id
+                        self.people_manager.merge_groups(target_id, source_id)
+                        messagebox.showinfo("Merged", f"Group merged into {target_id}.")
+                        self.render_people_cards()
+                    return merge_action
+
+                def make_dismiss_cmd(ga_id=gid_a, gb_id=gid_b):
+                    def dismiss_action():
+                        self.people_manager.dismiss_merge(ga_id, gb_id)
+                        self.render_people_cards()
+                    return dismiss_action
+
+                tk.Button(
+                    btns_frame,
+                    text="Merge",
+                    command=make_suggested_merge_cmd(),
+                    font=theme.FONT_BODY,
+                    bg=theme.COLOR_PRIMARY_BG,
+                    fg=theme.COLOR_PRIMARY_TEXT,
+                    relief=tk.FLAT,
+                    padx=10,
+                    pady=3,
+                    cursor="hand2",
+                ).pack(side=tk.LEFT, padx=(0, 6))
+
+                tk.Button(
+                    btns_frame,
+                    text="Not the same person",
+                    command=make_dismiss_cmd(),
+                    font=theme.FONT_BODY,
+                    bg=theme.COLOR_SECONDARY_BG,
+                    fg=theme.COLOR_SECONDARY_TEXT,
+                    relief=tk.SOLID,
+                    bd=1,
+                    padx=8,
+                    pady=3,
+                    cursor="hand2",
+                ).pack(side=tk.LEFT)
+
         groups = self.people_manager.get_visible_groups()
         if not groups:
             tk.Label(

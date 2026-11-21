@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4-dev (2026-11-22)
+- Merge suggestions on People screen: suggests pairs of visible groups with cosine similarity >= 0.363 (MERGE_SUGGEST_THRESHOLD, unmeasured default). Suggestions are sorted by similarity descending and capped at 50 (MAX_MERGE_SUGGESTIONS). Pairs already sharing the same name or previously dismissed are excluded.
+- Stable dismissal tracking: dismissed pairs are stored in runs/faces.json under "dismissed_merges" using a deterministic SHA-256 hash of the lexicographically sorted, combined top-5 member face IDs of each group, ensuring dismissals survive rescans and group renumbering.
+- People screen UI: added "Suggested merges" section above group cards with side-by-side preview crops, names, photo counts, similarity scores, "Merge" button (invokes existing merge_groups), and "Not the same person" button (persists dismissal). Displays "No suggested merges." when empty and indicates when the 50-suggestion cap is reached.
+- Safety: suggestions never merge or alter files automatically; user-approved merges follow existing plan placement rules.
+- Accuracy not yet measured on real photos. Owner review pending.
+
 ## 0.5.3-dev (2026-11-22)
 - Progress file versioning: schema_version 2 in runs/faces.json with automatic in-place migration preserving cache and names. Corrupt files are backed up to runs/faces.corrupt-<timestamp>.json, reported in the status bar, and scan starts clean. Atomic writes (.tmp -> fsync -> os.replace) preserved every 50 files and on stop/error/finish.
 - Per-scan log: each scan writes runs/scan-<YYYYMMDD-HHMMSS>.log recording one line per file (status, file name, faces found, reason if not ok) and an end summary line (total files, ok, cached, could-not-read, no-faces, errors, elapsed seconds).

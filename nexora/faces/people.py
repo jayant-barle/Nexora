@@ -9,6 +9,12 @@ import numpy as np
 
 from nexora.names import WINDOWS_RESERVED_NAMES
 from nexora.faces.recognize import cosine_similarity
+from nexora.faces.suggestions import (
+    MERGE_SUGGEST_THRESHOLD,
+    MAX_MERGE_SUGGESTIONS,
+    compute_pair_dismissal_key,
+    find_merge_suggestions,
+)
 
 
 def validate_person_name(name: str) -> str:
@@ -274,6 +280,36 @@ class PeopleManager:
             target_group["crop_paths"] = crops[:6]
             self.groups.pop(source_idx)
 
+        self.cm.save()
+
+    def get_merge_suggestions(
+        self, threshold: float = MERGE_SUGGEST_THRESHOLD, max_suggestions: int = MAX_MERGE_SUGGESTIONS
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Find suggested merges between pairs of visible groups with similarity >= threshold.
+        
+        Returns (capped_suggestions, total_count).
+        """
+        unnamed = self.get_unnamed_numbering()
+        dismissed = getattr(self.cm, "dismissed_merges", set())
+        return find_merge_suggestions(
+            groups=self.get_visible_groups(),
+            file_groups=self.file_groups,
+            dismissed_keys=dismissed,
+            threshold=threshold,
+            unnamed_numbering=unnamed,
+            max_suggestions=max_suggestions,
+        )
+
+    def dismiss_merge(self, group_id_a: str, group_id_b: str) -> None:
+        """Mark a suggested pair of groups as not the same person so it will not be suggested again."""
+        g_a = next((g for g in self.groups if g["id"] == group_id_a), None)
+        g_b = next((g for g in self.groups if g["id"] == group_id_b), None)
+        if not g_a or not g_b:
+            return
+        key = compute_pair_dismissal_key(g_a, g_b, self.file_groups)
+        if not hasattr(self.cm, "dismissed_merges"):
+            self.cm.dismissed_merges = set()
+        self.cm.dismissed_merges.add(key)
         self.cm.save()
 
     def get_face_data_for_plan(self) -> dict[str, dict[str, Any]]:
