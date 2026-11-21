@@ -496,3 +496,74 @@ def test_giant_cluster_safeguard_needs_review_and_withheld_from_plan(tmp_path: P
     face_data_after = pm.get_face_data_for_plan()
     assert face_data_after["giant_00.jpg"]["faces"] == ["Charlie"]
 
+
+def test_prolific_person_cap_behavior(tmp_path: Path):
+    """A prolific person with 3,000 faces among 10,000 is not silently hidden, is marked for review, and can be named."""
+    def _unit_vec(rng: np.random.Generator, dim: int = 128) -> np.ndarray:
+        v = rng.standard_normal(dim).astype(np.float32)
+        return v / np.linalg.norm(v)
+
+    rng = np.random.default_rng(42)
+    cache: dict[str, dict] = {}
+
+    # Prolific person: 3,000 faces
+    c_prolific = _unit_vec(rng)
+    for i in range(3000):
+        noise = 0.2 * _unit_vec(rng)
+        emb = (c_prolific + noise) / np.linalg.norm(c_prolific + noise)
+        cache[f"prolific_{i:04d}.jpg"] = {
+            "size": 1024,
+            "sha256": f"sha_prolific_{i}",
+            "type": "image",
+            "faces": [{"box": [10, 10, 50, 50], "score": 0.95, "embedding": [float(x) for x in emb]}],
+        }
+
+    # 700 other people with 10 faces each (7,000 faces)
+    for p in range(700):
+        cp = _unit_vec(rng)
+        for i in range(10):
+            noise = 0.2 * _unit_vec(rng)
+            emb = (cp + noise) / np.linalg.norm(cp + noise)
+            cache[f"other_{p:03d}_{i:02d}.jpg"] = {
+                "size": 1024,
+                "sha256": f"sha_{p}_{i}",
+                "type": "image",
+                "faces": [{"box": [10, 10, 50, 50], "score": 0.95, "embedding": [float(x) for x in emb]}],
+            }
+
+    cm = FaceClusterManager(json_path=tmp_path / "faces.json")
+    cm.cache = cache
+    cm.cluster_all_faces(threshold=0.363)
+
+    pm = PeopleManager(cm)
+
+    # Find the prolific group
+    prolific_group = None
+    for g in cm.groups:
+        if pm.get_group_size(g["id"]) >= 3000:
+            prolific_group = g
+            break
+
+    assert prolific_group is not None, "Prolific person group must exist"
+    # Cap is min(max(20, 10000 * 0.05), 200) = 200. Prolific person exceeds cap
+    assert prolific_group["needs_review"] is True, "Prolific group exceeding cap must have needs_review=True"
+
+    visible_groups = pm.get_visible_groups()
+    visible_ids = {g["id"] for g in visible_groups}
+    # Must NOT be silently hidden from the People screen
+    assert prolific_group["id"] in visible_ids, "Prolific person must not be silently hidden on People screen"
+
+    # Before naming: plan treats prolific person as HIDDEN so photos fall through to name/date/unsorted
+    face_data_before = pm.get_face_data_for_plan()
+    assert face_data_before["prolific_0000.jpg"]["faces"] == [], "Before naming, prolific faces must not auto-place"
+
+    # Owner names the group on the People screen
+    pm.name_group(prolific_group["id"], "Jayant")
+    assert prolific_group["needs_review"] is False
+    assert prolific_group["display_name"] == "Jayant"
+
+    # After naming: photos now route to Jayant
+    face_data_after = pm.get_face_data_for_plan()
+    assert face_data_after["prolific_0000.jpg"]["faces"] == ["Jayant"]
+
+

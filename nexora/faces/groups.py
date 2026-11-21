@@ -36,6 +36,7 @@ from nexora.faces.recognize import (
 # Named constants for drift mitigation and giant cluster safeguard
 MAX_REPRESENTATIVE_MEMBERS = 5  # M: freeze comparison representative after first M members to stop centroid drift
 REPRESENTATIVE_M = MAX_REPRESENTATIVE_MEMBERS
+MIN_MEMBER_MATCHES = 2          # Require a face to match at least 2 members of an established cluster
 CLUSTER_CAP_RATIO = 0.05        # Flag cluster as "needs review" if it exceeds 5% of scanned faces
 CLUSTER_CAP_MAX = 200           # Flag cluster as "needs review" if it exceeds 200 faces
 CLUSTER_CAP_FLOOR = 20          # Floor threshold so small test clusters are not falsely flagged
@@ -362,10 +363,30 @@ class FaceClusterManager:
             else:
                 # Compare against all current cluster centroids via matrix-vector product
                 sims = centroids_buffer[:n_clusters] @ emb
-                best_idx = int(np.argmax(sims))
-                best_sim = float(sims[best_idx])
+                candidate_indices = np.where(sims >= threshold)[0]
 
-                if best_sim >= threshold:
+                best_idx = -1
+                best_sim = -1.0
+
+                if len(candidate_indices) > 0:
+                    for c_idx in candidate_indices:
+                        c = clusters[c_idx]
+                        reps = c["representative_members"]
+                        if len(reps) < MIN_MEMBER_MATCHES:
+                            # 1-member cluster: candidate matches if centroid/member sim >= threshold
+                            if sims[c_idx] > best_sim:
+                                best_sim = float(sims[c_idx])
+                                best_idx = int(c_idx)
+                        else:
+                            # Established cluster: must match at least MIN_MEMBER_MATCHES members at threshold
+                            reps_mat = np.array(reps)
+                            matches = int(np.sum(reps_mat @ emb >= threshold))
+                            if matches >= MIN_MEMBER_MATCHES:
+                                if sims[c_idx] > best_sim:
+                                    best_sim = float(sims[c_idx])
+                                    best_idx = int(c_idx)
+
+                if best_idx >= 0:
                     # Join best cluster; update representative centroid only for first M members to stop drift
                     c = clusters[best_idx]
                     c["members"].append((fk, idx))

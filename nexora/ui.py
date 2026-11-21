@@ -548,7 +548,7 @@ class NexoraApp:
             if group.get("needs_review"):
                 tk.Label(
                     header_frame,
-                    text="needs review",
+                    text="large group: name it to use it",
                     font=theme.FONT_BODY,
                     fg="#DC2626",
                     bg=theme.COLOR_BG,
