@@ -1420,15 +1420,11 @@ class NexoraApp:
         messagebox.showerror("Undo Error", err_msg)
 
 
-def main(source_dir: str | None = None, auto_scan: bool = False) -> None:
+def main() -> None:
     if multiprocessing.current_process().name != "MainProcess":
         return
     root = tk.Tk()
-    app = NexoraApp(root)
-    if source_dir:
-        app.source_dir.set(source_dir)
-        if auto_scan:
-            root.after(300, app._on_scan_people_click)
+    NexoraApp(root)
     root.mainloop()
 
 
