@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.5.5-dev (2026-11-24)
+- Label evaluation support for per-face ground-truth templates (scripts/measure_faces.py): added `--labels <path>` supporting the 4-column template (file, face_index, crop_path, person). Non-empty person rows serve as ground truth; blank rows are ignored and reported. Faces map by file and face_index with identical scan detection settings, reporting labelled faces, unlabelled rows ignored, distinct people, pairwise precision/recall/FPR across thresholds (0.6, 0.7, 0.85), and false merge file names. Full compatibility with legacy 2-column `--csv` preserved.
 - People screen search and filter: added a search entry above group cards that filters dynamically by display name, folder name, "unnamed", or "large group" / "needs review" (case-insensitive). Keywords match whole words or phrases on queries with 2+ characters; single-character queries match assigned names only to prevent loose keyword false-positives. Empty query displays all groups; non-matching queries display an informative message.
 - People screen sort options: added a dropdown with four sorting modes: "Largest first" (default), "Smallest first", "Name A-Z", and "Needs review first".
 - Large group workflow: naming a `needs_review` group through the standard `PeopleManager.name_group` path clears its review flag, saves the update to `faces.json`, and activates its placement in subsequent Preview plans.
