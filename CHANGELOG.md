@@ -1,6 +1,9 @@
 # Changelog
 
 ## 0.5.5-dev (2026-11-24)
+- People screen search and filter: added a search entry above group cards that filters dynamically by display name, folder name, "unnamed", or "large group" / "needs review" (case-insensitive substring match). Empty query displays all groups; non-matching queries display an informative message.
+- People screen sort options: added a dropdown with four sorting modes: "Largest first" (default), "Smallest first", "Name A-Z", and "Needs review first".
+- Large group workflow: naming a `needs_review` group through the standard `PeopleManager.name_group` path clears its review flag, saves the update to `faces.json`, and activates its placement in subsequent Preview plans.
 - Worker process multiprocessing safety: added `multiprocessing.freeze_support()` at the very top of `if __name__ == "__main__":` in `app.py` and `nexora/ui.py`. In PyInstaller packaged executables on Windows, worker processes spawned by `ProcessPoolExecutor` now properly initialize in worker mode rather than re-running the GUI and opening multiple windows.
 - Worker process Tk window guard: added an explicit process check (`multiprocessing.current_process().name != "MainProcess"`) in `nexora/ui.py` (`main()` returns immediately, `NexoraApp` raises `RuntimeError`) and `_worker_init` explicitly names scan workers (`NexoraScanWorker-<pid>`), ensuring a worker process can never create a Tk window or UI components.
 - Scan exception logging robustness (item_name fix): in `nexora/faces/groups.py`, `item_name` is computed from the file task path before the `try:` block begins. If a worker task or future raises an exception during execution, the exception handler accesses `item_name` safely, logging the exact error message and file name without raising `UnboundLocalError`.

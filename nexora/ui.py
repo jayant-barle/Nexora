@@ -91,6 +91,8 @@ class NexoraApp:
         self.scan_stop_event: threading.Event | None = None
 
         self.crop_photo_cache: list[ImageTk.PhotoImage] = []
+        self.people_search_var = tk.StringVar(value="")
+        self.people_sort_var = tk.StringVar(value="Largest first")
 
         self._init_theme()
         self._build_ui()
@@ -473,6 +475,48 @@ class NexoraApp:
         )
         self.unreadable_btn.pack(side=tk.RIGHT, padx=(0, 8))
 
+        # Controls / Filter Bar: Search box & Sort dropdown
+        controls_bar = tk.Frame(self.tab_people, bg=theme.COLOR_BG)
+        controls_bar.pack(fill=tk.X, pady=(0, 8))
+
+        # Search
+        tk.Label(
+            controls_bar,
+            text="Search:",
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_BG,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        self.people_search_entry = ttk.Entry(
+            controls_bar,
+            textvariable=self.people_search_var,
+            font=theme.FONT_BODY,
+            width=22,
+        )
+        self.people_search_entry.pack(side=tk.LEFT, padx=(0, 16))
+        self.people_search_var.trace_add("write", lambda *_: self.render_people_cards())
+
+        # Sort
+        tk.Label(
+            controls_bar,
+            text="Sort:",
+            font=theme.FONT_BODY,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_BG,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        self.people_sort_dropdown = ttk.Combobox(
+            controls_bar,
+            textvariable=self.people_sort_var,
+            values=["Largest first", "Smallest first", "Name A-Z", "Needs review first"],
+            font=theme.FONT_BODY,
+            width=18,
+            state="readonly",
+        )
+        self.people_sort_dropdown.pack(side=tk.LEFT)
+        self.people_sort_dropdown.bind("<<ComboboxSelected>>", lambda e: self.render_people_cards())
+
         # Scrollable container for cards
         card_container = tk.Frame(
             self.tab_people,
@@ -699,8 +743,26 @@ class NexoraApp:
 
         unnamed_numbering = self.people_manager.get_unnamed_numbering()
 
+        # Apply search filtering
+        search_query = self.people_search_var.get() if hasattr(self, "people_search_var") else ""
+        filtered_groups = self.people_manager.filter_groups(groups, search_query)
+
+        # Apply sorting
+        sort_by = self.people_sort_var.get() if hasattr(self, "people_sort_var") else "Largest first"
+        display_groups = self.people_manager.sort_groups(filtered_groups, sort_by)
+
+        if not display_groups:
+            tk.Label(
+                self.people_scroll_frame,
+                text=f"No people match '{search_query.strip()}'.",
+                font=theme.FONT_BODY,
+                fg=theme.COLOR_MUTED,
+                bg=theme.COLOR_CARD_BG,
+            ).pack(pady=30)
+            return
+
         # Render one card per group
-        for group in groups:
+        for group in display_groups:
             gid = group["id"]
             card = tk.Frame(
                 self.people_scroll_frame,

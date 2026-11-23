@@ -116,6 +116,68 @@ class PeopleManager:
         numbering = self.get_unnamed_numbering()
         return numbering.get(group_id, "Unnamed person")
 
+    def filter_groups(self, groups: list[dict], query: str) -> list[dict]:
+        """Filter group cards by name or by 'unnamed' / 'large group' / 'needs review' (case-insensitive)."""
+        q = (query or "").strip().lower()
+        if not q:
+            return list(groups)
+
+        unnamed_numbering = self.get_unnamed_numbering()
+        filtered: list[dict] = []
+        for g in groups:
+            gid = g["id"]
+            display_name = (
+                g.get("display_name")
+                or g.get("name")
+                or unnamed_numbering.get(gid, "Unnamed person")
+            ).lower()
+            folder_name = (g.get("name") or "").lower()
+            is_unnamed = not bool((g.get("display_name") or g.get("name") or "").strip())
+            is_large = bool(g.get("needs_review", False))
+
+            matched = False
+            # Name substring match
+            if q in display_name or q in folder_name:
+                matched = True
+            # General unnamed match
+            elif is_unnamed and (q in "unnamed" or q in "unnamed person" or q == "unnamed group"):
+                matched = True
+            # Large group / needs review match
+            elif is_large:
+                large_tokens = ["large group", "large groups", "large", "needs review", "needs_review", "review"]
+                if any(q in tok or tok in q for tok in large_tokens):
+                    matched = True
+
+            if matched:
+                filtered.append(g)
+        return filtered
+
+    def sort_groups(self, groups: list[dict], sort_by: str = "Largest first") -> list[dict]:
+        """Sort groups by: 'Largest first', 'Smallest first', 'Name A-Z', or 'Needs review first'."""
+        unnamed_numbering = self.get_unnamed_numbering()
+
+        def sort_key(g: dict) -> tuple:
+            gid = g["id"]
+            size = self.get_group_size(gid)
+            display_name = (
+                g.get("display_name")
+                or g.get("name")
+                or unnamed_numbering.get(gid, "Unnamed person")
+            ).lower()
+            needs_review = bool(g.get("needs_review", False))
+
+            if sort_by == "Smallest first":
+                return (size, display_name, gid)
+            elif sort_by == "Name A-Z":
+                return (display_name, -size, gid)
+            elif sort_by == "Needs review first":
+                # needs_review=True (0) before needs_review=False (1), then largest first
+                return (0 if needs_review else 1, -size, display_name, gid)
+            else:  # "Largest first"
+                return (-size, display_name, gid)
+
+        return sorted(groups, key=sort_key)
+
     def name_group(self, group_id: str, raw_name: str) -> str:
         """Assign a name to a group, validating and merging under same name."""
         clean_name = validate_person_name(raw_name)
