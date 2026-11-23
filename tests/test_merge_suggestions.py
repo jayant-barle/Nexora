@@ -885,7 +885,7 @@ def test_ui_card_dropdown_merge_confirmation_and_unrestricted_paths(tmp_path: Pa
                 if isinstance(child, tk.Frame) and child != app.suggestions_frame
             ]
             # There are 2 group cards and 1 withheld frame
-            group_cards = [c for c in cards if any(isinstance(w, tk.Label) and "faces)" in getattr(w, "cget", lambda x: "")("text") for w in c.winfo_children() for w in w.winfo_children())]
+            group_cards = [c for c in cards if any(isinstance(w, tk.Label) and "faces" in getattr(w, "cget", lambda x: "")("text") for w in c.winfo_children() for w in w.winfo_children())]
 
             # Find the card for group_002 (45 faces)
             card_002 = None

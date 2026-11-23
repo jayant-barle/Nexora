@@ -122,5 +122,29 @@
   - Automatic merge restriction: The merge size ratio guard (a cluster with <= 3 faces must not absorb a cluster > 2x its size, `MERGE_GUARD_SMALL_CLUSTER_MAX = 3`, `MERGE_GUARD_MAX_RATIO = 2.0`) is enforced exclusively on automatic merges (`is_automatic=True`, e.g., in automated clustering passes such as Pass 2).
   - Manual merge override with confirmation: Manual merges initiated by the owner from the People screen (both via Suggested Merges and the card dropdown) are permitted (`is_automatic=False`). If the owner initiates a manual merge where the target cluster has <= 3 faces and the source cluster has > 2x its faces, a confirmation dialog is presented: "This merges N faces into a group of M faces. Continue?" (where N is the source group size and M is the target group size). If confirmed, the merge proceeds; if cancelled, the merge is aborted.
   - Safe exclusion policy: Nexora never deletes user files. Where a file should be excluded from a run, the owner should move it to a separate folder outside the source directory.
+- 2026-11-23: People screen usability - search, sort, large-group naming, and photo counts (v0.5.5-dev):
+  - People screen search rules:
+    - Search box positioned above group cards in a dedicated toolbar.
+    - Matches display name via case-insensitive substring search.
+    - Unnamed groups match "unnamed person N" according to their assigned size rank.
+    - Empty or whitespace-only search displays all visible groups.
+    - When no groups match the query, displays the message: "No people match '<text>'."
+    - Display-only: searching never mutates group data, group IDs, or `runs/faces.json`.
+  - People screen sort rules:
+    - Sort dropdown positioned in the toolbar with three options: "Most photos" (default), "Fewest photos", and "Name A–Z".
+    - "Most photos" (default): sorted descending by total photo/file count (unique files containing faces from this group), tie-broken by face count descending, then group ID ascending.
+    - "Fewest photos": sorted ascending by total photo/file count, tie-broken by face count ascending, then group ID ascending.
+    - "Name A–Z": named groups sorted alphabetically case-insensitive (A-Z) first; unnamed groups are placed after all named groups, sorted by assigned rank ("Unnamed person N").
+    - Display-only: sorting never reorders stored group arrays, renumbers IDs, or alters `runs/faces.json`.
+  - Large-group naming and card counts:
+    - Groups flagged `needs_review` show a "Name this group" action button at the top of their card header.
+    - Naming uses the standard `set_group_name` routine (`name_group`), validating names, clearing the `needs_review` flag, updating member face mapping, and activating automatic folder placement for that person.
+    - Each card header displays both face count and file count (e.g. `(N faces, M files)`).
+  - Section layout preservation:
+    - "Suggested merges" section remains above the group cards toolbar.
+    - "Photos Withheld From Placement" section remains at the bottom of the screen.
+    - Neither section is altered or filtered by search or sort.
+  - Accuracy on real photos: unmeasured, pending owner's labelled folder.
+
 
 

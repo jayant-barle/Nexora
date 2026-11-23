@@ -82,6 +82,10 @@ class PeopleManager:
             count += gids.count(group_id)
         return count
 
+    def get_group_file_count(self, group_id: str) -> int:
+        """Count total files containing at least one face assigned to this group."""
+        return sum(1 for gids in self.file_groups.values() if group_id in gids)
+
     def get_visible_groups(self) -> list[dict]:
         """Return only groups that contain at least 2 faces (clusters with 1 face are hidden)."""
         return [g for g in self.groups if self.get_group_size(g["id"]) >= MIN_VISIBLE_GROUP_SIZE]
@@ -118,6 +122,10 @@ class PeopleManager:
 
     def name_group(self, group_id: str, raw_name: str) -> str:
         """Assign a name to a group, validating and merging under same name."""
+        return self.set_group_name(group_id, raw_name)
+
+    def set_group_name(self, group_id: str, raw_name: str) -> str:
+        """Assign a name to a group, validating and merging under same name."""
         clean_name = validate_person_name(raw_name)
         folder_name = to_folder_name(clean_name)
 
@@ -147,6 +155,82 @@ class PeopleManager:
 
         self.cm.save()
         return clean_name
+
+    def filter_and_sort_groups(
+        self,
+        groups: list[dict] | None = None,
+        search_query: str = "",
+        sort_by: str = "Most photos",
+    ) -> list[dict]:
+        """Filter and sort a list of group dictionaries for display.
+        
+        Filter rules:
+        - Case-insensitive substring match against display name.
+        - Unnamed groups match against 'Unnamed person N'.
+        - Empty or whitespace-only query returns all groups.
+        
+        Sort rules:
+        - 'Most photos' (default): descending by total files, tie-break by total faces descending, then group ID.
+        - 'Fewest photos': ascending by total files, tie-break by total faces ascending, then group ID.
+        - 'Name A–Z': named groups sorted alphabetically (case-insensitive A-Z), followed
+          by unnamed groups sorted after named groups.
+          
+        Returns a new list without modifying the input list or underlying data.
+        """
+        if groups is None:
+            groups = self.get_visible_groups()
+        else:
+            groups = list(groups)
+
+        unnamed_numbering = self.get_unnamed_numbering()
+
+        # 1. Filter
+        query = search_query.strip().lower()
+        if query:
+            filtered = []
+            for g in groups:
+                gid = g["id"]
+                display_name = g.get("display_name") or g.get("name")
+                if not display_name:
+                    display_name = unnamed_numbering.get(gid, "Unnamed person")
+                if query in display_name.lower():
+                    filtered.append(g)
+            groups = filtered
+
+        # 2. Sort
+        if sort_by == "Fewest photos":
+            groups.sort(
+                key=lambda g: (
+                    self.get_group_file_count(g["id"]),
+                    self.get_group_size(g["id"]),
+                    g["id"],
+                )
+            )
+        elif sort_by == "Name A–Z":
+            def name_sort_key(g: dict) -> tuple[int, str, int, str]:
+                gid = g["id"]
+                is_named = bool(g.get("display_name") or g.get("name"))
+                if is_named:
+                    dname = (g.get("display_name") or g.get("name") or "").lower()
+                    return (0, dname, 0, gid)
+                else:
+                    dname = unnamed_numbering.get(gid, "Unnamed person")
+                    match = re.search(r"\d+", dname)
+                    num = int(match.group(0)) if match else 999999
+                    return (1, "", num, gid)
+
+            groups.sort(key=name_sort_key)
+        else:
+            # Default: "Most photos"
+            groups.sort(
+                key=lambda g: (
+                    -self.get_group_file_count(g["id"]),
+                    -self.get_group_size(g["id"]),
+                    g["id"],
+                )
+            )
+
+        return groups
 
     def split_group(self, group_id: str) -> tuple[str, str]:
         """Split a group into two groups based on face embedding distance.

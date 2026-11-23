@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Any
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, simpledialog
 from PIL import Image, ImageTk
 
 from nexora.plan import PlannedMove, build_plan
@@ -85,6 +85,8 @@ class NexoraApp:
             self.status_var.set(f"Found {len(visible)} people from {m_scanned} scanned images")
         self.current_plan: list[PlannedMove] = []
         self.is_running = False
+        self.people_search_var = tk.StringVar(value="")
+        self.people_sort_var = tk.StringVar(value="Most photos")
         self.scan_stop_event: threading.Event | None = None
 
         self.crop_photo_cache: list[ImageTk.PhotoImage] = []
@@ -683,8 +685,79 @@ class NexoraApp:
                     cursor="hand2",
                 ).pack(side=tk.LEFT)
 
-        groups = self.people_manager.get_visible_groups()
-        if not groups:
+        # Toolbar for Search and Sort above group cards
+        toolbar_frame = tk.Frame(
+            self.people_scroll_frame,
+            bg=theme.COLOR_CARD_BG,
+            highlightbackground=theme.COLOR_CARD_BORDER,
+            highlightthickness=1,
+            padx=12,
+            pady=8,
+        )
+        toolbar_frame.pack(fill=tk.X, expand=True, pady=(0, 12))
+        self.people_toolbar_frame = toolbar_frame
+
+        search_subframe = tk.Frame(toolbar_frame, bg=theme.COLOR_CARD_BG)
+        search_subframe.pack(side=tk.LEFT)
+
+        tk.Label(
+            search_subframe,
+            text="Search:",
+            font=theme.FONT_BODY_BOLD,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        self.people_search_entry = ttk.Entry(
+            search_subframe,
+            textvariable=self.people_search_var,
+            font=theme.FONT_BODY,
+            width=22,
+        )
+        self.people_search_entry.pack(side=tk.LEFT, padx=(0, 8))
+
+        def on_search_key(event: Any = None) -> None:
+            pos = self.people_search_entry.index(tk.INSERT)
+            self.render_people_cards()
+            try:
+                self.people_search_entry.focus_set()
+                self.people_search_entry.icursor(pos)
+            except Exception:
+                pass
+
+        self.people_search_entry.bind("<KeyRelease>", on_search_key)
+
+        sort_subframe = tk.Frame(toolbar_frame, bg=theme.COLOR_CARD_BG)
+        sort_subframe.pack(side=tk.RIGHT)
+
+        tk.Label(
+            sort_subframe,
+            text="Sort by:",
+            font=theme.FONT_BODY_BOLD,
+            fg=theme.COLOR_TEXT,
+            bg=theme.COLOR_CARD_BG,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        sort_options = ["Most photos", "Fewest photos", "Name A–Z"]
+        if self.people_sort_var.get() not in sort_options:
+            self.people_sort_var.set("Most photos")
+
+        self.people_sort_combobox = ttk.Combobox(
+            sort_subframe,
+            textvariable=self.people_sort_var,
+            values=sort_options,
+            state="readonly",
+            width=14,
+            font=theme.FONT_BODY,
+        )
+        self.people_sort_combobox.pack(side=tk.LEFT)
+        self.people_sort_combobox.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.render_people_cards(),
+        )
+
+        visible_groups = self.people_manager.get_visible_groups()
+        if not visible_groups:
             tk.Label(
                 self.people_scroll_frame,
                 text="No face groups scanned yet. Run 'Scan people' on the Sort & Move tab.",
@@ -692,242 +765,285 @@ class NexoraApp:
                 fg=theme.COLOR_MUTED,
                 bg=theme.COLOR_CARD_BG,
             ).pack(pady=30)
-            return
-
-        unnamed_numbering = self.people_manager.get_unnamed_numbering()
-
-        # Render one card per group
-        for group in groups:
-            gid = group["id"]
-            card = tk.Frame(
-                self.people_scroll_frame,
-                bg=theme.COLOR_BG,
-                highlightbackground=theme.COLOR_CARD_BORDER,
-                highlightthickness=1,
-                padx=12,
-                pady=10,
+        else:
+            search_text = self.people_search_var.get()
+            sort_choice = self.people_sort_var.get()
+            groups = self.people_manager.filter_and_sort_groups(
+                groups=visible_groups,
+                search_query=search_text,
+                sort_by=sort_choice,
             )
-            card.pack(fill=tk.X, expand=True, pady=(0, 10))
 
-            # Header row: display name & size
-            display_name = group.get("display_name") or group.get("name")
-            if not display_name:
-                display_name = unnamed_numbering.get(gid, "Unnamed person")
-
-            size = self.people_manager.get_group_size(gid)
-
-            header_frame = tk.Frame(card, bg=theme.COLOR_BG)
-            header_frame.pack(fill=tk.X, pady=(0, 8))
-
-            tk.Label(
-                header_frame,
-                text=display_name,
-                font=theme.FONT_SECTION,
-                fg=theme.COLOR_TEXT,
-                bg=theme.COLOR_BG,
-            ).pack(side=tk.LEFT)
-
-            tk.Label(
-                header_frame,
-                text=f"({size} faces)",
-                font=theme.FONT_BODY,
-                fg=theme.COLOR_MUTED,
-                bg=theme.COLOR_BG,
-            ).pack(side=tk.LEFT, padx=(8, 0))
-
-            if group.get("needs_review"):
+            if not groups and search_text.strip():
                 tk.Label(
-                    header_frame,
-                    text="large group: name it to use it",
-                    font=theme.FONT_BODY,
-                    fg="#DC2626",
-                    bg=theme.COLOR_BG,
-                ).pack(side=tk.LEFT, padx=(8, 0))
-
-            # Status row: placement status & associated photos
-            status_row = tk.Frame(card, bg=theme.COLOR_BG)
-            status_row.pack(fill=tk.X, pady=(0, 4))
-
-            folder_name = (group.get("name") or "").strip().lower()
-            needs_review = group.get("needs_review", False)
-
-            if needs_review and not folder_name:
-                status_text = "Placement: Withheld (needs review - large group: name it to use it)"
-                status_fg = "#DC2626"
-            elif not folder_name:
-                status_text = "Placement: Withheld (unnamed - name it to use it)"
-                status_fg = "#D97706"
-            else:
-                status_text = f"Placement: Active -> folder '{folder_name}/'"
-                status_fg = "#059669"
-
-            tk.Label(
-                status_row,
-                text=status_text,
-                font=theme.FONT_BODY_BOLD,
-                fg=status_fg,
-                bg=theme.COLOR_BG,
-            ).pack(side=tk.LEFT)
-
-            group_files = [Path(fk).name for fk, gids in self.people_manager.file_groups.items() if gid in gids]
-            if group_files:
-                sample_files = group_files[:3]
-                extra = f" (+{len(group_files) - 3} more)" if len(group_files) > 3 else ""
-                files_text = f"Photos ({len(group_files)}): {', '.join(sample_files)}{extra}"
-                tk.Label(
-                    status_row,
-                    text=f"  |  {files_text}",
+                    self.people_scroll_frame,
+                    text=f"No people match '{search_text}'.",
                     font=theme.FONT_BODY,
                     fg=theme.COLOR_MUTED,
-                    bg=theme.COLOR_BG,
-                ).pack(side=tk.LEFT)
-
-            # Crops strip: up to 6 sample face crops
-            crops_strip = tk.Frame(card, bg=theme.COLOR_BG)
-            crops_strip.pack(fill=tk.X, pady=(0, 8))
-
-            crop_paths = group.get("crop_paths", [])
-            if not crop_paths and group.get("crop_path"):
-                crop_paths = [group["crop_path"]]
-
-            crops_to_show = crop_paths[:6]
-            if crops_to_show:
-                for c_path in crops_to_show:
-                    if os.path.exists(c_path):
-                        try:
-                            pil_img = Image.open(c_path).resize((56, 56))
-                            tk_img = ImageTk.PhotoImage(pil_img)
-                            self.crop_photo_cache.append(tk_img)
-                            lbl = tk.Label(crops_strip, image=tk_img, bg="#E5E7EB", width=56, height=56)
-                            lbl.pack(side=tk.LEFT, padx=(0, 6))
-                        except Exception:
-                            pass
+                    bg=theme.COLOR_CARD_BG,
+                ).pack(pady=30)
             else:
-                tk.Label(
-                    crops_strip,
-                    text="[No preview crops]",
-                    font=theme.FONT_BODY,
-                    fg=theme.COLOR_MUTED,
-                    bg=theme.COLOR_BG,
-                ).pack(side=tk.LEFT)
+                unnamed_numbering = self.people_manager.get_unnamed_numbering()
 
-            # Controls row: Name box, Save name, Split, Merge
-            controls_row = tk.Frame(card, bg=theme.COLOR_BG)
-            controls_row.pack(fill=tk.X)
+                # Render one card per group
+                for group in groups:
+                    gid = group["id"]
+                    card = tk.Frame(
+                        self.people_scroll_frame,
+                        bg=theme.COLOR_BG,
+                        highlightbackground=theme.COLOR_CARD_BORDER,
+                        highlightthickness=1,
+                        padx=12,
+                        pady=10,
+                    )
+                    card.pack(fill=tk.X, expand=True, pady=(0, 10))
 
-            tk.Label(
-                controls_row,
-                text="Name:",
-                font=theme.FONT_BODY,
-                fg=theme.COLOR_TEXT,
-                bg=theme.COLOR_BG,
-            ).pack(side=tk.LEFT, padx=(0, 6))
+                    # Header row: display name & counts
+                    display_name = group.get("display_name") or group.get("name")
+                    if not display_name:
+                        display_name = unnamed_numbering.get(gid, "Unnamed person")
 
-            current_name = group.get("display_name") or group.get("name") or ""
-            name_var = tk.StringVar(value=current_name)
-            name_entry = ttk.Entry(controls_row, textvariable=name_var, font=theme.FONT_BODY, width=20)
-            name_entry.pack(side=tk.LEFT, padx=(0, 8))
+                    size = self.people_manager.get_group_size(gid)
+                    file_count = self.people_manager.get_group_file_count(gid)
 
-            def make_save_cmd(g_id=gid, v=name_var):
-                def save_action():
-                    raw = v.get().strip()
-                    try:
-                        clean_saved = self.people_manager.name_group(g_id, raw)
-                        messagebox.showinfo("Saved", f"Group updated as '{clean_saved}'.")
-                        self.render_people_cards()
-                    except ValueError as err:
-                        messagebox.showerror("Invalid Name", str(err))
-                return save_action
+                    header_frame = tk.Frame(card, bg=theme.COLOR_BG)
+                    header_frame.pack(fill=tk.X, pady=(0, 8))
 
-            save_btn = tk.Button(
-                controls_row,
-                text="Save name",
-                command=make_save_cmd(),
-                font=theme.FONT_BODY,
-                bg=theme.COLOR_SECONDARY_BG,
-                fg=theme.COLOR_SECONDARY_TEXT,
-                relief=tk.SOLID,
-                bd=1,
-                padx=10,
-                pady=3,
-                cursor="hand2",
-            )
-            save_btn.pack(side=tk.LEFT, padx=(0, 10))
+                    tk.Label(
+                        header_frame,
+                        text=display_name,
+                        font=theme.FONT_SECTION,
+                        fg=theme.COLOR_TEXT,
+                        bg=theme.COLOR_BG,
+                    ).pack(side=tk.LEFT)
 
-            # Split control
-            def make_split_cmd(g_id=gid):
-                def split_action():
-                    try:
-                        orig_id, new_id = self.people_manager.split_group(g_id)
-                        messagebox.showinfo("Split", f"Group split into {orig_id} and {new_id}.")
-                        self.render_people_cards()
-                    except ValueError as err:
-                        messagebox.showerror("Cannot Split", str(err))
-                return split_action
+                    tk.Label(
+                        header_frame,
+                        text=f"({size} faces, {file_count} files)",
+                        font=theme.FONT_BODY,
+                        fg=theme.COLOR_MUTED,
+                        bg=theme.COLOR_BG,
+                    ).pack(side=tk.LEFT, padx=(8, 0))
 
-            split_btn = tk.Button(
-                controls_row,
-                text="Split",
-                command=make_split_cmd(),
-                font=theme.FONT_BODY,
-                bg=theme.COLOR_SECONDARY_BG,
-                fg=theme.COLOR_SECONDARY_TEXT,
-                relief=tk.SOLID,
-                bd=1,
-                padx=10,
-                pady=3,
-                cursor="hand2",
-            )
-            split_btn.pack(side=tk.LEFT, padx=(0, 10))
+                    if group.get("needs_review"):
+                        tk.Label(
+                            header_frame,
+                            text="large group: name it to use it",
+                            font=theme.FONT_BODY,
+                            fg="#DC2626",
+                            bg=theme.COLOR_BG,
+                        ).pack(side=tk.LEFT, padx=(8, 0))
 
-            # Merge control: dropdown of other groups
-            other_groups = [g["id"] for g in groups if g["id"] != gid]
-            if other_groups:
-                tk.Label(
-                    controls_row,
-                    text="Merge into:",
-                    font=theme.FONT_BODY,
-                    fg=theme.COLOR_TEXT,
-                    bg=theme.COLOR_BG,
-                ).pack(side=tk.LEFT, padx=(8, 4))
+                        def make_name_group_cmd(g_id=gid):
+                            def name_action():
+                                name = simpledialog.askstring("Name this group", f"Enter name for {g_id}:")
+                                if name:
+                                    try:
+                                        clean_name = self.people_manager.set_group_name(g_id, name)
+                                        messagebox.showinfo("Saved", f"Group updated as '{clean_name}'.")
+                                        self.render_people_cards()
+                                    except ValueError as err:
+                                        messagebox.showerror("Invalid Name", str(err))
+                            return name_action
 
-                merge_var = tk.StringVar(value=other_groups[0])
-                merge_dropdown = ttk.Combobox(controls_row, textvariable=merge_var, values=other_groups, width=12, state="readonly")
-                merge_dropdown.pack(side=tk.LEFT, padx=(0, 6))
+                        name_btn = tk.Button(
+                            header_frame,
+                            text="Name this group",
+                            command=make_name_group_cmd(),
+                            font=theme.FONT_BODY,
+                            bg=theme.COLOR_PRIMARY,
+                            fg=theme.COLOR_PRIMARY_TEXT,
+                            relief=tk.FLAT,
+                            padx=10,
+                            pady=2,
+                            cursor="hand2",
+                        )
+                        name_btn.pack(side=tk.RIGHT)
 
-                def make_merge_cmd(target_id_var=merge_var, src_id=gid):
-                    def merge_action():
-                        target_id = target_id_var.get()
-                        if target_id and target_id != src_id:
-                            if self.people_manager.would_guard_refuse_merge(target_id, src_id):
-                                n_faces = self.people_manager.get_group_size(src_id)
-                                m_faces = self.people_manager.get_group_size(target_id)
-                                confirmed = messagebox.askyesno(
-                                    "Confirm Merge",
-                                    f"This merges {n_faces} faces into a group of {m_faces} faces. Continue?",
-                                )
-                                if not confirmed:
-                                    return
-                            merged_ok = self.people_manager.merge_groups(target_id, src_id, is_automatic=False)
-                            if merged_ok:
-                                messagebox.showinfo("Merged", f"Group {src_id} merged into {target_id}.")
-                            self.render_people_cards()
-                    return merge_action
+                    # Status row: placement status & associated photos
+                    status_row = tk.Frame(card, bg=theme.COLOR_BG)
+                    status_row.pack(fill=tk.X, pady=(0, 4))
 
-                merge_btn = tk.Button(
-                    controls_row,
-                    text="Merge",
-                    command=make_merge_cmd(),
-                    font=theme.FONT_BODY,
-                    bg=theme.COLOR_SECONDARY_BG,
-                    fg=theme.COLOR_SECONDARY_TEXT,
-                    relief=tk.SOLID,
-                    bd=1,
-                    padx=8,
-                    pady=3,
-                    cursor="hand2",
-                )
-                merge_btn.pack(side=tk.LEFT)
+                    folder_name = (group.get("name") or "").strip().lower()
+                    needs_review = group.get("needs_review", False)
+
+                    if needs_review and not folder_name:
+                        status_text = "Placement: Withheld (needs review - large group: name it to use it)"
+                        status_fg = "#DC2626"
+                    elif not folder_name:
+                        status_text = "Placement: Withheld (unnamed - name it to use it)"
+                        status_fg = "#D97706"
+                    else:
+                        status_text = f"Placement: Active -> folder '{folder_name}/'"
+                        status_fg = "#059669"
+
+                    tk.Label(
+                        status_row,
+                        text=status_text,
+                        font=theme.FONT_BODY_BOLD,
+                        fg=status_fg,
+                        bg=theme.COLOR_BG,
+                    ).pack(side=tk.LEFT)
+
+                    group_files = [Path(fk).name for fk, gids in self.people_manager.file_groups.items() if gid in gids]
+                    if group_files:
+                        sample_files = group_files[:3]
+                        extra = f" (+{len(group_files) - 3} more)" if len(group_files) > 3 else ""
+                        files_text = f"Photos ({len(group_files)}): {', '.join(sample_files)}{extra}"
+                        tk.Label(
+                            status_row,
+                            text=f"  |  {files_text}",
+                            font=theme.FONT_BODY,
+                            fg=theme.COLOR_MUTED,
+                            bg=theme.COLOR_BG,
+                        ).pack(side=tk.LEFT)
+
+                    # Crops strip: up to 6 sample face crops
+                    crops_strip = tk.Frame(card, bg=theme.COLOR_BG)
+                    crops_strip.pack(fill=tk.X, pady=(0, 8))
+
+                    crop_paths = group.get("crop_paths", [])
+                    if not crop_paths and group.get("crop_path"):
+                        crop_paths = [group["crop_path"]]
+
+                    crops_to_show = crop_paths[:6]
+                    if crops_to_show:
+                        for c_path in crops_to_show:
+                            if os.path.exists(c_path):
+                                try:
+                                    pil_img = Image.open(c_path).resize((56, 56))
+                                    tk_img = ImageTk.PhotoImage(pil_img)
+                                    self.crop_photo_cache.append(tk_img)
+                                    lbl = tk.Label(crops_strip, image=tk_img, bg="#E5E7EB", width=56, height=56)
+                                    lbl.pack(side=tk.LEFT, padx=(0, 6))
+                                except Exception:
+                                    pass
+                    else:
+                        tk.Label(
+                            crops_strip,
+                            text="[No preview crops]",
+                            font=theme.FONT_BODY,
+                            fg=theme.COLOR_MUTED,
+                            bg=theme.COLOR_BG,
+                        ).pack(side=tk.LEFT)
+
+                    # Controls row: Name box, Save name, Split, Merge
+                    controls_row = tk.Frame(card, bg=theme.COLOR_BG)
+                    controls_row.pack(fill=tk.X)
+
+                    tk.Label(
+                        controls_row,
+                        text="Name:",
+                        font=theme.FONT_BODY,
+                        fg=theme.COLOR_TEXT,
+                        bg=theme.COLOR_BG,
+                    ).pack(side=tk.LEFT, padx=(0, 6))
+
+                    current_name = group.get("display_name") or group.get("name") or ""
+                    name_var = tk.StringVar(value=current_name)
+                    name_entry = ttk.Entry(controls_row, textvariable=name_var, font=theme.FONT_BODY, width=20)
+                    name_entry.pack(side=tk.LEFT, padx=(0, 8))
+
+                    def make_save_cmd(g_id=gid, v=name_var):
+                        def save_action():
+                            raw = v.get().strip()
+                            try:
+                                clean_saved = self.people_manager.set_group_name(g_id, raw)
+                                messagebox.showinfo("Saved", f"Group updated as '{clean_saved}'.")
+                                self.render_people_cards()
+                            except ValueError as err:
+                                messagebox.showerror("Invalid Name", str(err))
+                        return save_action
+
+                    save_btn = tk.Button(
+                        controls_row,
+                        text="Save name",
+                        command=make_save_cmd(),
+                        font=theme.FONT_BODY,
+                        bg=theme.COLOR_SECONDARY_BG,
+                        fg=theme.COLOR_SECONDARY_TEXT,
+                        relief=tk.SOLID,
+                        bd=1,
+                        padx=10,
+                        pady=3,
+                        cursor="hand2",
+                    )
+                    save_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+                    # Split control
+                    def make_split_cmd(g_id=gid):
+                        def split_action():
+                            try:
+                                orig_id, new_id = self.people_manager.split_group(g_id)
+                                messagebox.showinfo("Split", f"Group split into {orig_id} and {new_id}.")
+                                self.render_people_cards()
+                            except ValueError as err:
+                                messagebox.showerror("Cannot Split", str(err))
+                        return split_action
+
+                    split_btn = tk.Button(
+                        controls_row,
+                        text="Split",
+                        command=make_split_cmd(),
+                        font=theme.FONT_BODY,
+                        bg=theme.COLOR_SECONDARY_BG,
+                        fg=theme.COLOR_SECONDARY_TEXT,
+                        relief=tk.SOLID,
+                        bd=1,
+                        padx=10,
+                        pady=3,
+                        cursor="hand2",
+                    )
+                    split_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+                    # Merge control: dropdown of other groups
+                    other_groups = [g["id"] for g in groups if g["id"] != gid]
+                    if other_groups:
+                        tk.Label(
+                            controls_row,
+                            text="Merge into:",
+                            font=theme.FONT_BODY,
+                            fg=theme.COLOR_TEXT,
+                            bg=theme.COLOR_BG,
+                        ).pack(side=tk.LEFT, padx=(8, 4))
+
+                        merge_var = tk.StringVar(value=other_groups[0])
+                        merge_dropdown = ttk.Combobox(controls_row, textvariable=merge_var, values=other_groups, width=12, state="readonly")
+                        merge_dropdown.pack(side=tk.LEFT, padx=(0, 6))
+
+                        def make_merge_cmd(target_id_var=merge_var, src_id=gid):
+                            def merge_action():
+                                target_id = target_id_var.get()
+                                if target_id and target_id != src_id:
+                                    if self.people_manager.would_guard_refuse_merge(target_id, src_id):
+                                        n_faces = self.people_manager.get_group_size(src_id)
+                                        m_faces = self.people_manager.get_group_size(target_id)
+                                        confirmed = messagebox.askyesno(
+                                            "Confirm Merge",
+                                            f"This merges {n_faces} faces into a group of {m_faces} faces. Continue?",
+                                        )
+                                        if not confirmed:
+                                            return
+                                    merged_ok = self.people_manager.merge_groups(target_id, src_id, is_automatic=False)
+                                    if merged_ok:
+                                        messagebox.showinfo("Merged", f"Group {src_id} merged into {target_id}.")
+                                    self.render_people_cards()
+                            return merge_action
+
+                        merge_btn = tk.Button(
+                            controls_row,
+                            text="Merge",
+                            command=make_merge_cmd(),
+                            font=theme.FONT_BODY,
+                            bg=theme.COLOR_SECONDARY_BG,
+                            fg=theme.COLOR_SECONDARY_TEXT,
+                            relief=tk.SOLID,
+                            bd=1,
+                            padx=8,
+                            pady=3,
+                            cursor="hand2",
+                        )
+                        merge_btn.pack(side=tk.LEFT)
 
         # Withheld photos section at bottom of People screen
         withheld_frame = tk.Frame(

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.5-dev (2026-11-23)
+- People screen large-group naming: groups flagged `needs_review` display a "Name this group" action button at the top of their card header. Naming a group via `set_group_name` (or the card name entry) clears the `needs_review` flag and activates automatic folder placement for that person.
+- People screen card counts: group cards now display both the total face count and the total photo/file count in the card header (e.g. `(45 faces, 12 files)`).
+- People screen search box: added a search input above group cards filtering visible groups by display name (case-insensitive substring match). Unnamed groups match their assigned numbering (e.g. "unnamed person N"). An empty or whitespace-only search shows all groups; searches with no matching groups display "No people match '<text>'." Searching affects only display rendering and does not mutate group IDs or stored data in `runs/faces.json`.
+- People screen sort dropdown: added a sort dropdown with three options: "Most photos" (default, sorts descending by unique file count), "Fewest photos" (sorts ascending by unique file count), and "Name A–Z" (named groups sorted alphabetically A–Z case-insensitively, followed by unnamed groups sorted after named groups). Sorting is display-only and does not alter stored data or group IDs.
+- Preserved sections: "Suggested merges" section remains anchored above the group cards and "Photos Withheld From Placement" remains anchored at the bottom; neither section is affected or filtered by search or sort.
+- Accuracy on real photos: unmeasured, pending owner's labelled folder.
+
 ## 0.5.4-dev (2026-11-22)
 - Merge suggestions on People screen: suggests pairs of visible groups with cosine similarity >= 0.363 (MERGE_SUGGEST_THRESHOLD, unmeasured default). Suggestions are sorted by similarity descending and capped at 50 (MAX_MERGE_SUGGESTIONS). Pairs already sharing the same name or previously dismissed are excluded.
 - Stable dismissal tracking with overlap rule: fixed dismissal resilience so dismissed pairs remain dismissed after rescans even when groups gain or lose faces (e.g. earlier file names joining). Stored dismissals record up to 10 member IDs per group and match when more than half (> 50%, DISMISSAL_OVERLAP_MIN = 0.5 unmeasured default) of stored members persist in the current groups. Old exact-key dismissal records remain supported for backwards compatibility.
