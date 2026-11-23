@@ -135,6 +135,14 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: Per-face labelling template evaluation (scripts/measure_faces.py):
+  - Made scripts/measure_faces.py accept per-face labelling template CSVs via `--labels <path>` (columns: file, face_index, crop_path, person), such as runs/chulmati_labels_template.csv.
+  - Rows with non-empty person are treated as ground-truth faces; blank rows (empty or whitespace) are ignored from evaluation and counted as unlabelled rows ignored in the report.
+  - Faces are mapped by file and face_index using the same detection settings as the scan without using cluster IDs.
+  - Reports count of labelled faces, unlabelled rows ignored, distinct people, pairwise precision/recall/FPR at detection thresholds 0.6, 0.7, 0.85, and specific file names involved in false merges.
+  - Retained full backwards compatibility with legacy expected_faces.csv format (columns: file, person) via `--csv`.
+  - Exits cleanly without error when --labels points at a missing file.
+
 
 
 
