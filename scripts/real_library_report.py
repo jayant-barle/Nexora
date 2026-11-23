@@ -362,7 +362,7 @@ def run_real_library_report(
     # Stage 9: Generate Labelling Template (Task 3: Neutral crops & No cluster leak)
     # ---------------------------------------------------------
     print(f"\n[Stage 9] Generating Ground-Truth Template at {labels_csv.name}...")
-    print("  Columns: file, face_index, crop_path, person (blank) - NO cluster IDs or suggested names.")
+    print("  Columns: file, face_index, crop_path, box_w, box_h, det_score, person (blank) - NO cluster IDs or suggested names.")
     crop_mapping_json = runs_dir / "crop_mapping.json"
     crop_mapping: dict[str, Any] = {}
     neutral_crops_dir = runs_dir / "face_crops"
@@ -374,7 +374,7 @@ def run_real_library_report(
     import shutil
     with open(labels_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["file", "face_index", "crop_path", "person"])
+        writer.writerow(["file", "face_index", "crop_path", "box_w", "box_h", "det_score", "person"])
         for p in all_files:
             rel_k = str(p.resolve())
             c_entry = cm.cache.get(rel_k, {})
@@ -392,15 +392,24 @@ def run_real_library_report(
                         except Exception:
                             pass
 
+                box = f_rec.get("box", [0, 0, 0, 0])
+                box_w = f_rec.get("box_w", box[2] if len(box) > 2 else 0)
+                box_h = f_rec.get("box_h", box[3] if len(box) > 3 else 0)
+                score = f_rec.get("det_score", f_rec.get("score", 1.0))
+                det_score = f"{float(score):.4f}"
+
                 crop_mapping[neutral_crop_name] = {
                     "file": p.name,
                     "file_path": rel_k,
                     "face_index": f_idx,
-                    "box": f_rec.get("box"),
+                    "box": box,
+                    "box_w": box_w,
+                    "box_h": box_h,
+                    "det_score": float(score),
                     "original_crop": orig_crop,
                 }
 
-                writer.writerow([p.name, f_idx, str(neutral_crop_path), ""])
+                writer.writerow([p.name, f_idx, str(neutral_crop_path), box_w, box_h, det_score, ""])
                 template_rows += 1
 
     with open(crop_mapping_json, "w", encoding="utf-8") as f:

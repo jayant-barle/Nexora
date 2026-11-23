@@ -142,6 +142,12 @@
   - Reports count of labelled faces, unlabelled rows ignored, distinct people, pairwise precision/recall/FPR at detection thresholds 0.6, 0.7, 0.85, and specific file names involved in false merges.
   - Retained full backwards compatibility with legacy expected_faces.csv format (columns: file, person) via `--csv`.
   - Exits cleanly without error when --labels points at a missing file.
+- 2026-11-24: Face quality metrics in detection, template, and evaluation:
+  - Stored face quality metrics (`box_w`, `box_h` in original image pixels, and `det_score`) for each detected face in `nexora/faces/detect.py` and `nexora/faces/groups.py`.
+  - Bumped `runs/faces.json` `schema_version` to 3; `FaceClusterManager.load()` automatically migrates older schemas (schema 1 and 2) in place, loading existing entries cleanly with the new fields missing.
+  - Added `box_w`, `box_h`, `det_score` columns to `runs/chulmati_labels_template.csv` in `scripts/real_library_report.py`, preserving existing columns and keeping template free of cluster IDs.
+  - Enhanced `scripts/measure_faces.py` when `--labels` is used to include breakdown tables of wrong merges (FP pairs) and wrong splits (FN pairs) categorized by face size bucket (under 60px, 60–100px, over 100px) and detection score bucket (<0.70, 0.70–0.85, 0.85–0.95, >0.95).
+
 
 
 

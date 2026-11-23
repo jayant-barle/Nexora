@@ -1,7 +1,7 @@
 """Script to measure face recognition and clustering accuracy on a labelled dataset.
 
 Supports both:
-- Per-face labelling template (columns: file, face_index, crop_path, person) via --labels.
+- Per-face labelling template (columns: file, face_index, crop_path, box_w, box_h, det_score, person) via --labels.
 - Legacy dataset format (columns: file, person) via --csv.
 
 Evaluates:
@@ -10,6 +10,8 @@ Evaluates:
 - Pairwise precision, recall, and false-positive rate at each detection threshold (0.6, 0.7, 0.85).
 - The number of clusters found.
 - The list of specific file names and faces involved in false merges.
+- When --labels is used: a breakdown table of wrong merges and wrong splits by face size bucket
+  (under 60px, 60–100px, over 100px) and by detection score bucket (<0.70, 0.70–0.85, 0.85–0.95, >0.95).
 
 Writes formatted report to runs/measure_report.txt and runs/measure_faces_report.json.
 If no labelled data is found or the specified file is missing, prints a clear message and exits cleanly.
@@ -32,7 +34,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from nexora.faces.detect import detect_faces, read_image_bgr
+from nexora.faces.detect import detect_faces, read_image_bgr, get_face_box_and_score
 from nexora.faces.recognize import embed_face, cosine_similarity, DEFAULT_THRESHOLD
 from nexora.faces.groups import FaceClusterManager, get_runs_dir
 
@@ -51,6 +53,32 @@ HISTOGRAM_BINS = [
     (0.8, 0.9),
     (0.9, 1.0001),
 ]
+
+SIZE_BUCKET_KEYS = ["<60px", "60–100px", ">100px"]
+SCORE_BUCKET_KEYS = ["<0.70", "0.70–0.85", "0.85–0.95", ">0.95"]
+
+
+def classify_face_size(w: float, h: float) -> str:
+    """Classify face size into under 60px, 60–100px, or over 100px."""
+    size = min(w, h) if (w > 0 and h > 0) else max(w, h)
+    if size < 60:
+        return "<60px"
+    elif size <= 100:
+        return "60–100px"
+    else:
+        return ">100px"
+
+
+def classify_detection_score(score: float) -> str:
+    """Classify detection score into standard confidence buckets."""
+    if score < 0.70:
+        return "<0.70"
+    elif score < 0.85:
+        return "0.70–0.85"
+    elif score < 0.95:
+        return "0.85–0.95"
+    else:
+        return ">0.95"
 
 
 def compute_similarity_histogram(
@@ -106,6 +134,7 @@ def evaluate_dataset(
     clustering_threshold: float = DEFAULT_THRESHOLD,
     txt_report_output: Path | None = None,
     json_report_output: Path | None = None,
+    is_labels: bool = False,
 ) -> dict[str, Any]:
     """Run detection, recognition, histogram calculation, and clustering on a labelled dataset."""
     runs_dir = txt_report_output.parent if txt_report_output else get_runs_dir()
@@ -138,7 +167,7 @@ def evaluate_dataset(
     if "file" not in rows[0] or "person" not in rows[0]:
         raise ValueError(f"CSV must contain 'file' and 'person' columns, found: {list(rows[0].keys())}")
 
-    is_per_face_template = "face_index" in rows[0]
+    is_per_face_template = is_labels or ("face_index" in rows[0])
 
     labelled_faces: list[dict[str, Any]] = []
     unlabelled_rows_count = 0
@@ -154,12 +183,29 @@ def evaluate_dataset(
         except (ValueError, TypeError):
             f_idx = 0
         crop_path = r.get("crop_path", "").strip()
+
+        try:
+            box_w = float(r.get("box_w", 0))
+        except (ValueError, TypeError):
+            box_w = 0.0
+        try:
+            box_h = float(r.get("box_h", 0))
+        except (ValueError, TypeError):
+            box_h = 0.0
+        try:
+            det_score = float(r.get("det_score", 0.0))
+        except (ValueError, TypeError):
+            det_score = 0.0
+
         face_id = f"{f_name}:{f_idx}"
         labelled_faces.append({
             "face_id": face_id,
             "file": f_name,
             "face_index": f_idx,
             "crop_path": crop_path,
+            "box_w": box_w,
+            "box_h": box_h,
+            "det_score": det_score,
             "person": person,
         })
 
@@ -244,6 +290,15 @@ def evaluate_dataset(
                 norm_v = float(np.linalg.norm(emb))
                 embeddings_by_face[(f_name, f_idx)] = (emb / norm_v) if norm_v > 0 else emb
 
+            # Fallback quality metadata if not provided in CSV
+            for lf in labelled_faces:
+                if lf["file"] == f_name and lf["face_index"] == f_idx:
+                    if lf["box_w"] == 0 or lf["box_h"] == 0:
+                        lf["box_w"] = int(round(float(face[2]))) if len(face) > 2 else 0
+                        lf["box_h"] = int(round(float(face[3]))) if len(face) > 3 else 0
+                    if lf["det_score"] == 0.0:
+                        lf["det_score"] = float(face[14]) if len(face) > 14 else 1.0
+
     same_sims: list[float] = []
     diff_sims: list[float] = []
     for f_i, f_j in gt_same_pairs:
@@ -267,6 +322,16 @@ def evaluate_dataset(
     report_lines.append("-" * 92)
 
     all_false_merges_by_threshold: dict[float, list[dict[str, Any]]] = {}
+    quality_breakdown_by_threshold: dict[float, dict[str, Any]] = {}
+
+    # Pre-calculate counts of labelled faces in each size and score bucket
+    faces_by_size: dict[str, int] = {k: 0 for k in SIZE_BUCKET_KEYS}
+    faces_by_score: dict[str, int] = {k: 0 for k in SCORE_BUCKET_KEYS}
+    for lf in labelled_faces:
+        sb = classify_face_size(lf["box_w"], lf["box_h"])
+        scb = classify_detection_score(lf["det_score"])
+        faces_by_size[sb] = faces_by_size.get(sb, 0) + 1
+        faces_by_score[scb] = faces_by_score.get(scb, 0) + 1
 
     for score_thresh in score_thresholds:
         cm = FaceClusterManager(json_path=temp_json)
@@ -290,9 +355,14 @@ def evaluate_dataset(
                 if emb is not None:
                     box = [int(v) for v in face[0:4]]
                     score = float(face[14]) if len(face) > 14 else 1.0
+                    box_w = int(round(float(face[2]))) if len(face) > 2 else (box[2] if len(box) > 2 else 0)
+                    box_h = int(round(float(face[3]))) if len(face) > 3 else (box[3] if len(box) > 3 else 0)
                     face_records.append({
                         "box": box,
+                        "box_w": box_w,
+                        "box_h": box_h,
                         "score": score,
+                        "det_score": score,
                         "embedding": [float(x) for x in emb],
                     })
 
@@ -327,27 +397,67 @@ def evaluate_dataset(
         tn = 0
         false_merge_details: list[dict[str, Any]] = []
 
+        # Quality bucket counters for wrong merges (FP) and wrong splits (FN)
+        wm_by_size = {k: 0 for k in SIZE_BUCKET_KEYS}
+        ws_by_size = {k: 0 for k in SIZE_BUCKET_KEYS}
+        wm_by_score = {k: 0 for k in SCORE_BUCKET_KEYS}
+        ws_by_score = {k: 0 for k in SCORE_BUCKET_KEYS}
+
         for f_i, f_j in gt_same_pairs:
             c_i = face_predicted_cluster.get((f_i["file"], f_i["face_index"]))
             c_j = face_predicted_cluster.get((f_j["file"], f_j["face_index"]))
+
+            # Pair limiting quality metrics (lowest quality in pair)
+            s_i = min(f_i["box_w"], f_i["box_h"]) if (f_i["box_w"] > 0 and f_i["box_h"] > 0) else max(f_i["box_w"], f_i["box_h"])
+            s_j = min(f_j["box_w"], f_j["box_h"]) if (f_j["box_w"] > 0 and f_j["box_h"] > 0) else max(f_j["box_w"], f_j["box_h"])
+            pair_size = min(s_i, s_j)
+            pair_size_bucket = classify_face_size(pair_size, pair_size)
+
+            pair_score = min(f_i["det_score"], f_j["det_score"])
+            pair_score_bucket = classify_detection_score(pair_score)
+
             if c_i is not None and c_j is not None and c_i == c_j:
                 tp += 1
             else:
                 fn += 1
+                ws_by_size[pair_size_bucket] = ws_by_size.get(pair_size_bucket, 0) + 1
+                ws_by_score[pair_score_bucket] = ws_by_score.get(pair_score_bucket, 0) + 1
 
         for f_i, f_j in gt_diff_pairs:
             c_i = face_predicted_cluster.get((f_i["file"], f_i["face_index"]))
             c_j = face_predicted_cluster.get((f_j["file"], f_j["face_index"]))
+
+            # Pair limiting quality metrics (lowest quality in pair)
+            s_i = min(f_i["box_w"], f_i["box_h"]) if (f_i["box_w"] > 0 and f_i["box_h"] > 0) else max(f_i["box_w"], f_i["box_h"])
+            s_j = min(f_j["box_w"], f_j["box_h"]) if (f_j["box_w"] > 0 and f_j["box_h"] > 0) else max(f_j["box_w"], f_j["box_h"])
+            pair_size = min(s_i, s_j)
+            pair_size_bucket = classify_face_size(pair_size, pair_size)
+
+            pair_score = min(f_i["det_score"], f_j["det_score"])
+            pair_score_bucket = classify_detection_score(pair_score)
+
             if c_i is not None and c_j is not None and c_i == c_j:
                 fp += 1
+                wm_by_size[pair_size_bucket] = wm_by_size.get(pair_size_bucket, 0) + 1
+                wm_by_score[pair_score_bucket] = wm_by_score.get(pair_score_bucket, 0) + 1
                 false_merge_details.append({
                     "file_a": f_i["file"],
                     "face_index_a": f_i["face_index"],
                     "person_a": f_i["person"],
+                    "box_w_a": f_i["box_w"],
+                    "box_h_a": f_i["box_h"],
+                    "det_score_a": f_i["det_score"],
                     "file_b": f_j["file"],
                     "face_index_b": f_j["face_index"],
                     "person_b": f_j["person"],
+                    "box_w_b": f_j["box_w"],
+                    "box_h_b": f_j["box_h"],
+                    "det_score_b": f_j["det_score"],
                     "cluster_id": c_i,
+                    "limiting_size": pair_size,
+                    "size_bucket": pair_size_bucket,
+                    "limiting_score": pair_score,
+                    "score_bucket": pair_score_bucket,
                 })
             else:
                 tn += 1
@@ -361,6 +471,43 @@ def evaluate_dataset(
         line = f"{score_thresh:<14} | {recall:<8.4f} | {precision:<10.4f} | {fpr:<8.4f} | {len(cm.groups):<9} | {fp:<13} | {fn:<13}"
         report_lines.append(line)
 
+        # Build quality summary structures
+        size_quality_dict = {}
+        for sb in SIZE_BUCKET_KEYS:
+            entry = {
+                "labelled_faces": faces_by_size.get(sb, 0),
+                "wrong_merges": wm_by_size.get(sb, 0),
+                "wrong_merges_fp": wm_by_size.get(sb, 0),
+                "wrong_splits": ws_by_size.get(sb, 0),
+                "wrong_splits_fn": ws_by_size.get(sb, 0),
+            }
+            size_quality_dict[sb] = entry
+            # Convenient aliases
+            if sb == "60–100px":
+                size_quality_dict["60-100px"] = entry
+            elif sb == "<60px":
+                size_quality_dict["under 60px"] = entry
+            elif sb == ">100px":
+                size_quality_dict["over 100px"] = entry
+
+        score_quality_dict = {}
+        for scb in SCORE_BUCKET_KEYS:
+            entry = {
+                "labelled_faces": faces_by_score.get(scb, 0),
+                "wrong_merges": wm_by_score.get(scb, 0),
+                "wrong_merges_fp": wm_by_score.get(scb, 0),
+                "wrong_splits": ws_by_score.get(scb, 0),
+                "wrong_splits_fn": ws_by_score.get(scb, 0),
+            }
+            score_quality_dict[scb] = entry
+            if "–" in scb:
+                score_quality_dict[scb.replace("–", "-")] = entry
+
+        quality_breakdown_by_threshold[score_thresh] = {
+            "by_size_bucket": size_quality_dict,
+            "by_score_bucket": score_quality_dict,
+        }
+
         results_by_threshold[f"score_{score_thresh}"] = {
             "score_threshold": score_thresh,
             "clustering_threshold": clustering_threshold,
@@ -373,6 +520,8 @@ def evaluate_dataset(
             "true_positives_tp": tp,
             "true_negatives_tn": tn,
             "false_merges": false_merge_details,
+            "quality_by_size": size_quality_dict,
+            "quality_by_score": score_quality_dict,
         }
 
     report_lines.append("")
@@ -389,6 +538,32 @@ def evaluate_dataset(
                     f"in cluster '{fm['cluster_id']}'"
                 )
     report_lines.append("")
+
+    # Add Quality Metrics Table when --labels is used
+    primary_quality = quality_breakdown_by_threshold.get(0.85, quality_breakdown_by_threshold.get(score_thresholds[-1]))
+    if is_per_face_template and primary_quality:
+        report_lines.append("--- 4. WRONG MERGES AND WRONG SPLITS BY FACE QUALITY ---")
+        report_lines.append("[By Face Size Bucket (default threshold 0.85)]")
+        report_lines.append(f"{'Size Bucket':<18} | {'Labelled Faces':<15} | {'Wrong Merges (FP)':<18} | {'Wrong Splits (FN)':<18}")
+        report_lines.append("-" * 76)
+        for sb in SIZE_BUCKET_KEYS:
+            l_cnt = faces_by_size.get(sb, 0)
+            wm = primary_quality["by_size_bucket"][sb]["wrong_merges"]
+            ws = primary_quality["by_size_bucket"][sb]["wrong_splits"]
+            report_lines.append(f"{sb:<18} | {l_cnt:<15} | {wm:<18} | {ws:<18}")
+        report_lines.append("-" * 76)
+        report_lines.append("")
+
+        report_lines.append("[By Detection Score Bucket (default threshold 0.85)]")
+        report_lines.append(f"{'Score Bucket':<18} | {'Labelled Faces':<15} | {'Wrong Merges (FP)':<18} | {'Wrong Splits (FN)':<18}")
+        report_lines.append("-" * 76)
+        for scb in SCORE_BUCKET_KEYS:
+            l_cnt = faces_by_score.get(scb, 0)
+            wm = primary_quality["by_score_bucket"][scb]["wrong_merges"]
+            ws = primary_quality["by_score_bucket"][scb]["wrong_splits"]
+            report_lines.append(f"{scb:<18} | {l_cnt:<15} | {wm:<18} | {ws:<18}")
+        report_lines.append("-" * 76)
+        report_lines.append("")
 
     if temp_json.exists():
         try:
@@ -413,7 +588,10 @@ def evaluate_dataset(
             "total_files": len(unique_files),
             "same_person_pairs": len(gt_same_pairs),
             "diff_person_pairs": len(gt_diff_pairs),
+            "quality_by_size": primary_quality["by_size_bucket"] if primary_quality else {},
+            "quality_by_score": primary_quality["by_score_bucket"] if primary_quality else {},
         },
+        "quality_metrics": primary_quality if primary_quality else {},
         **results_by_threshold,
     }
 
@@ -438,8 +616,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-json", type=Path, default=PROJECT_ROOT / "runs" / "measure_faces_report.json", help="Path to write report JSON")
     args = parser.parse_args(argv)
 
+    is_labels = False
     if args.labels is not None:
         target_csv = args.labels
+        is_labels = True
     elif args.csv is not None:
         target_csv = args.csv
     else:
@@ -460,6 +640,7 @@ def main(argv: list[str] | None = None) -> int:
         clustering_threshold=args.clustering_threshold,
         txt_report_output=args.output_txt,
         json_report_output=args.output_json,
+        is_labels=is_labels,
     )
     return 0
 

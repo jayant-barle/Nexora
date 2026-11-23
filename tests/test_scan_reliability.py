@@ -54,7 +54,7 @@ def test_migration_from_schema_1_keeps_cached_entries_and_names(tmp_path: Path):
     with open(json_path, "r", encoding="utf-8") as f:
         migrated = json.load(f)
 
-    assert migrated.get("schema_version") == 2
+    assert migrated.get("schema_version") == 3
     assert file_key in migrated["cache"]
     assert migrated["face_names"][f"{file_key}:0"] == "Alice"
     assert migrated["groups"][0]["name"] == "alice"
@@ -85,12 +85,12 @@ def test_corrupt_faces_json_moved_aside_and_starts_clean(tmp_path: Path):
     assert cm.face_names == {}
     assert cm.unreadable == set()
 
-    # Next save creates clean schema_version 2 file
+    # Next save creates clean schema_version 3 file
     cm.save()
     assert json_path.exists()
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    assert data.get("schema_version") == 2
+    assert data.get("schema_version") == 3
 
 
 def test_forced_stop_mid_scan_restart_rescans_nothing_cached(tmp_path: Path):
