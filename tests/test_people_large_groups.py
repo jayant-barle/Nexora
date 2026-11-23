@@ -152,7 +152,20 @@ def test_people_search_filters(tmp_path: Path):
     needs_review_matches = pm.filter_groups(groups, "needs review")
     assert {g["id"] for g in needs_review_matches} == {"group_002", "group_003"}
 
-    # 5. Non-matching search shows empty list
+    # 5. Single-character queries: match assigned names only, not keywords
+    # Single letter "a" returns only groups whose name contains "a" (Alice), not all large groups or unnamed groups
+    a_matches = pm.filter_groups(groups, "a")
+    assert [g["id"] for g in a_matches] == ["group_001"]
+
+    # Single letter "n" does not return all unnamed groups (returns empty since neither Alice nor Bob contains 'n')
+    n_matches = pm.filter_groups(groups, "n")
+    assert n_matches == []
+
+    # Single letter "o" matches Bob, not unnamed or non-'o' groups
+    o_matches = pm.filter_groups(groups, "o")
+    assert [g["id"] for g in o_matches] == ["group_002"]
+
+    # 6. Non-matching search shows empty list
     no_matches = pm.filter_groups(groups, "Charlie")
     assert no_matches == []
 

@@ -1,7 +1,7 @@
 # Changelog
 
 ## 0.5.5-dev (2026-11-24)
-- People screen search and filter: added a search entry above group cards that filters dynamically by display name, folder name, "unnamed", or "large group" / "needs review" (case-insensitive substring match). Empty query displays all groups; non-matching queries display an informative message.
+- People screen search and filter: added a search entry above group cards that filters dynamically by display name, folder name, "unnamed", or "large group" / "needs review" (case-insensitive). Keywords match whole words or phrases on queries with 2+ characters; single-character queries match assigned names only to prevent loose keyword false-positives. Empty query displays all groups; non-matching queries display an informative message.
 - People screen sort options: added a dropdown with four sorting modes: "Largest first" (default), "Smallest first", "Name A-Z", and "Needs review first".
 - Large group workflow: naming a `needs_review` group through the standard `PeopleManager.name_group` path clears its review flag, saves the update to `faces.json`, and activates its placement in subsequent Preview plans.
 - Worker process multiprocessing safety: added `multiprocessing.freeze_support()` at the very top of `if __name__ == "__main__":` in `app.py` and `nexora/ui.py`. In PyInstaller packaged executables on Windows, worker processes spawned by `ProcessPoolExecutor` now properly initialize in worker mode rather than re-running the GUI and opening multiple windows.

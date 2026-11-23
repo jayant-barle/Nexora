@@ -117,39 +117,45 @@ class PeopleManager:
         return numbering.get(group_id, "Unnamed person")
 
     def filter_groups(self, groups: list[dict], query: str) -> list[dict]:
-        """Filter group cards by name or by 'unnamed' / 'large group' / 'needs review' (case-insensitive)."""
+        """Filter group cards by name or by keywords ('unnamed', 'large group', 'needs review')."""
         q = (query or "").strip().lower()
         if not q:
             return list(groups)
 
         unnamed_numbering = self.get_unnamed_numbering()
         filtered: list[dict] = []
+
+        keyword_unnamed = {"unnamed", "unnamed person", "unnamed group"}
+        keyword_large = {"large", "large group", "large groups", "needs review", "needs_review"}
+
         for g in groups:
             gid = g["id"]
-            display_name = (
-                g.get("display_name")
-                or g.get("name")
-                or unnamed_numbering.get(gid, "Unnamed person")
-            ).lower()
-            folder_name = (g.get("name") or "").lower()
-            is_unnamed = not bool((g.get("display_name") or g.get("name") or "").strip())
+            has_assigned_name = bool((g.get("display_name") or g.get("name") or "").strip())
+            display_name = (g.get("display_name") or g.get("name") or "").strip().lower()
+            folder_name = (g.get("name") or "").strip().lower()
+            is_unnamed = not has_assigned_name
             is_large = bool(g.get("needs_review", False))
 
             matched = False
-            # Name substring match
-            if q in display_name or q in folder_name:
-                matched = True
-            # General unnamed match
-            elif is_unnamed and (q in "unnamed" or q in "unnamed person" or q == "unnamed group"):
-                matched = True
-            # Large group / needs review match
-            elif is_large:
-                large_tokens = ["large group", "large groups", "large", "needs review", "needs_review", "review"]
-                if any(q in tok or tok in q for tok in large_tokens):
+
+            # Name matching: case-insensitive substring of assigned display name or folder name
+            if has_assigned_name:
+                if q in display_name or q in folder_name:
                     matched = True
+
+            # Keyword matching: whole words or phrases only; single-character queries match names only, not keywords
+            if len(q) >= 2:
+                if is_unnamed:
+                    unnamed_label = unnamed_numbering.get(gid, "").lower()
+                    if q in keyword_unnamed or q == unnamed_label:
+                        matched = True
+                if is_large:
+                    if q in keyword_large:
+                        matched = True
 
             if matched:
                 filtered.append(g)
+
         return filtered
 
     def sort_groups(self, groups: list[dict], sort_by: str = "Largest first") -> list[dict]:
