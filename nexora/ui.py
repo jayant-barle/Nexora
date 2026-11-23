@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import multiprocessing
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -58,6 +59,8 @@ class NexoraApp:
     """Nexora main desktop application window with tabs for Sorting and People."""
 
     def __init__(self, root: tk.Tk) -> None:
+        if multiprocessing.current_process().name != "MainProcess":
+            raise RuntimeError("Worker process must never create a UI window.")
         self.root = root
         self.root.title("Nexora")
         self.root.geometry("1020x720")
@@ -1417,11 +1420,18 @@ class NexoraApp:
         messagebox.showerror("Undo Error", err_msg)
 
 
-def main() -> None:
+def main(source_dir: str | None = None, auto_scan: bool = False) -> None:
+    if multiprocessing.current_process().name != "MainProcess":
+        return
     root = tk.Tk()
-    NexoraApp(root)
+    app = NexoraApp(root)
+    if source_dir:
+        app.source_dir.set(source_dir)
+        if auto_scan:
+            root.after(300, app._on_scan_people_click)
     root.mainloop()
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

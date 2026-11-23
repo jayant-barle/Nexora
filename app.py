@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import multiprocessing
 import sys
 import tempfile
 from pathlib import Path
@@ -79,6 +80,19 @@ def run_selftest() -> int:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    if multiprocessing.current_process().name != "MainProcess":
+        sys.exit(0)
     if "--selftest" in sys.argv:
         sys.exit(run_selftest())
-    main()
+
+    source_arg = None
+    auto_scan_arg = False
+    if "--source" in sys.argv:
+        idx = sys.argv.index("--source")
+        if idx + 1 < len(sys.argv):
+            source_arg = sys.argv[idx + 1]
+    if "--auto-scan" in sys.argv:
+        auto_scan_arg = True
+
+    main(source_dir=source_arg, auto_scan=auto_scan_arg)

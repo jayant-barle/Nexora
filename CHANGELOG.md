@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5-dev (2026-11-24)
+- Worker process multiprocessing safety: added `multiprocessing.freeze_support()` at the very top of `if __name__ == "__main__":` in `app.py` and `nexora/ui.py`. In PyInstaller packaged executables on Windows, worker processes spawned by `ProcessPoolExecutor` now properly initialize in worker mode rather than re-running the GUI and opening multiple windows.
+- Worker process Tk window guard: added an explicit process check (`multiprocessing.current_process().name != "MainProcess"`) in `nexora/ui.py` (`main()` returns immediately, `NexoraApp` raises `RuntimeError`) and `_worker_init` explicitly names scan workers (`NexoraScanWorker-<pid>`), ensuring a worker process can never create a Tk window or UI components.
+- Scan exception logging robustness (item_name fix): in `nexora/faces/groups.py`, `item_name` is computed from the file task path before the `try:` block begins. If a worker task or future raises an exception during execution, the exception handler accesses `item_name` safely, logging the exact error message and file name without raising `UnboundLocalError`.
+- Accuracy on real photos: unmeasured, pending owner's labelled folder.
+
 ## 0.5.4-dev (2026-11-22)
 - Merge suggestions on People screen: suggests pairs of visible groups with cosine similarity >= 0.363 (MERGE_SUGGEST_THRESHOLD, unmeasured default). Suggestions are sorted by similarity descending and capped at 50 (MAX_MERGE_SUGGESTIONS). Pairs already sharing the same name or previously dismissed are excluded.
 - Stable dismissal tracking with overlap rule: fixed dismissal resilience so dismissed pairs remain dismissed after rescans even when groups gain or lose faces (e.g. earlier file names joining). Stored dismissals record up to 10 member IDs per group and match when more than half (> 50%, DISMISSAL_OVERLAP_MIN = 0.5 unmeasured default) of stored members persist in the current groups. Old exact-key dismissal records remain supported for backwards compatibility.

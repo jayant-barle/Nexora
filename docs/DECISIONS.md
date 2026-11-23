@@ -122,5 +122,14 @@
   - Automatic merge restriction: The merge size ratio guard (a cluster with <= 3 faces must not absorb a cluster > 2x its size, `MERGE_GUARD_SMALL_CLUSTER_MAX = 3`, `MERGE_GUARD_MAX_RATIO = 2.0`) is enforced exclusively on automatic merges (`is_automatic=True`, e.g., in automated clustering passes such as Pass 2).
   - Manual merge override with confirmation: Manual merges initiated by the owner from the People screen (both via Suggested Merges and the card dropdown) are permitted (`is_automatic=False`). If the owner initiates a manual merge where the target cluster has <= 3 faces and the source cluster has > 2x its faces, a confirmation dialog is presented: "This merges N faces into a group of M faces. Continue?" (where N is the source group size and M is the target group size). If confirmed, the merge proceeds; if cancelled, the merge is aborted.
   - Safe exclusion policy: Nexora never deletes user files. Where a file should be excluded from a run, the owner should move it to a separate folder outside the source directory.
+- 2026-11-24: Worker multiprocessing freeze support and robust error logging (v0.5.5-dev):
+  - Packaged executable worker initialization (BUG 1 fix):
+    - `app.py` and `nexora/ui.py` call `multiprocessing.freeze_support()` as the first statement in `if __name__ == "__main__":`. On Windows, PyInstaller `--onefile` worker processes spawned via `ProcessPoolExecutor` re-enter the executable with internal fork arguments; `freeze_support()` intercepts these arguments and runs the worker loop instead of launching redundant application GUI windows.
+    - Worker process Tk window guard: `main()` checks `multiprocessing.current_process().name != "MainProcess"` and returns immediately; `NexoraApp.__init__` raises `RuntimeError` if invoked from any non-main process; `_worker_init` explicitly sets `multiprocessing.current_process().name = f"NexoraScanWorker-{pid}"`. Worker processes can never instantiate a Tk window.
+    - All worker tasks (`_worker_init`, `_worker_process_file`) are defined at module top-level in `nexora/faces/groups.py` to ensure clean pickling.
+  - Robust scan exception logging (BUG 2 fix):
+    - In `nexora/faces/groups.py`, `item_name` is bound to the file name (`Path(task_args[0]).name`) prior to entering the `try:` block. If `fut.result()` raises an exception or result extraction fails, the exception handler logs the real error with the file name to `runs/scan-<timestamp>.log` without raising `UnboundLocalError`.
+  - Accuracy on real photos: unmeasured, pending owner's labelled folder.
+
 
 

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sys
+import multiprocessing
 import threading
 import time
 from datetime import datetime
@@ -71,6 +72,7 @@ _worker_recognizer = None
 def _worker_init(yunet_path_str: str | None, sface_path_str: str | None, score_threshold: float) -> None:
     """Initialize detector and recognizer models once per worker process."""
     global _worker_detector, _worker_recognizer
+    multiprocessing.current_process().name = f"NexoraScanWorker-{multiprocessing.current_process().pid}"
     y_path = Path(yunet_path_str) if yunet_path_str else None
     s_path = Path(sface_path_str) if sface_path_str else None
     _worker_detector = get_detector(y_path, score_threshold=score_threshold)
@@ -845,11 +847,15 @@ class FaceClusterManager:
                             break
 
                         chunk_tasks = task_args_list[i : i + batch_size]
-                        futures = [executor.submit(_worker_process_file, t) for t in chunk_tasks]
+                        future_to_task = {executor.submit(_worker_process_file, t): t for t in chunk_tasks}
 
-                        for fut in as_completed(futures):
+                        for fut in as_completed(future_to_task):
                             if stop_event and stop_event.is_set():
                                 break
+
+                            task_args = future_to_task.get(fut)
+                            task_p_str = task_args[0] if task_args else ""
+                            item_name = Path(task_p_str).name if task_p_str else "unknown"
 
                             try:
                                 result = fut.result()
@@ -978,7 +984,8 @@ class FaceClusterManager:
                                         log_line = f"ok, {item_name}, {num_f} faces"
                             except Exception as err:
                                 count_errors += 1
-                                log_line = f"error, {item_name}, 0 faces, {err}"
+                                safe_name = item_name or (Path(task_p_str).name if task_p_str else "unknown")
+                                log_line = f"error, {safe_name}, 0 faces, {err}"
 
                             log_f.write(log_line + "\n")
                             log_f.flush()
