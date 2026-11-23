@@ -2,7 +2,7 @@
 
 A Windows desktop app that sorts a large library of images and videos into folders. It finds people in your photos, lets you name them, and moves files only after you approve a preview. Nothing is copied or deleted.
 
-> **Status:** test build. Name, date and undo features are tested on the owner's files. The people feature is built but its accuracy has not been measured yet.
+> **Status:** test build. Name, date, preview and undo accepted; reliability, merge suggestions and the merge guard built; accuracy on real photos unmeasured; pass 2 off by default.
 
 ## What it does
 
@@ -12,9 +12,12 @@ A Windows desktop app that sorts a large library of images and videos into folde
 | Sort images by the date stored in their metadata, including HEIC (`2023/2023-05/`) | Accepted |
 | Preview every move before anything happens | Accepted |
 | Undo the whole last run | Accepted |
-| Find faces and group them into people | Built, accuracy not yet measured |
-| People screen: name, merge and split people | Built, not yet tested on a full folder |
-| Person folders, group photos folder, approval step | Built, not yet tested on a full folder |
+| Scan reliability: progress checkpoints, per-scan logging, unreadable files dialog | Built |
+| Find faces and cluster them into people | Built (accuracy on real photos unmeasured) |
+| People screen: name, split, and merge with size guard confirmation | Built |
+| Merge suggestions with stable dismissals | Built |
+| Person folders, group photos folder, approval step | Built |
+| Second merge pass (iterative full-centroid clustering) | Built (disabled by default) |
 
 ## How it decides where each file goes
 
@@ -83,7 +86,7 @@ pytest -v
 
 Tests use temporary folders. No test reads or writes real photos. One test is skipped unless the owner's labelled folder is present in `tests/faces_labelled/`.
 
-## Face models
+## Face models and scripts
 
 Face detection and recognition use two OpenCV models, which are not stored in this repo:
 
@@ -97,6 +100,26 @@ python scripts\download_models.py
 ```
 
 The script checks each file's SHA-256 hash.
+
+### Measuring accuracy
+
+To measure face clustering accuracy against labelled data (when available in `tests/faces_labelled/`):
+
+```bat
+python scripts\measure_faces.py
+```
+
+Prints pairwise cosine similarity distributions and precision/recall metrics, or exits cleanly with status when no labelled dataset is present.
+
+### Real library telemetry
+
+To profile a real photo folder without modifying, moving, or deleting any files:
+
+```bat
+python scripts\real_library_report.py "C:\path\to\library"
+```
+
+Computes cryptographic SHA-256 checksums before and after the run to verify integrity, audits EXIF dates, scans and clusters faces, and prints merge suggestion diagnostics. Add `--pass2` to evaluate optional Pass 2 clustering.
 
 ## Project layout
 
@@ -115,7 +138,11 @@ nexora/
     recognize.py       Face embeddings and matching
     groups.py          Scanning and grouping
     people.py          Naming, merging, splitting
-scripts/               Model download and diagnostic tools
+    suggestions.py     Merge suggestions and stable dismissals
+scripts/               Model download, evaluation, and diagnostic tools
+  download_models.py   Download face models
+  measure_faces.py     Accuracy measurement script
+  real_library_report.py Real library profiling script
 tests/                 Tests
 docs/                  Test plan, architecture, decisions
 PRD.md                 Product requirements

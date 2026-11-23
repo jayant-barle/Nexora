@@ -4,9 +4,9 @@
 - 2026-11-03: Name comes from file names. No typed name list for the name rule (owner).
 - 2026-11-03: Camera prefixes are not names (owner).
 - 2026-11-03: Two names in one file: the first name wins (owner).
-- 2026-11-03: Photos showing several people go to Unsorted (owner).
-- 2026-11-03: Faces used only when a photo has no name and no metadata date (owner).
-- 2026-11-03: Videos use the name rule only (owner).
+- 2026-11-03: Photos showing several people go to Unsorted (owner). [superseded by 2026-11-21: photos with two or more known people go to Group photos/]
+- 2026-11-03: Faces used only when a photo has no name and no metadata date (owner). [superseded by 2026-11-21: faces come first]
+- 2026-11-03: Videos use the name rule only (owner). [superseded by 2026-11-21: videos check sampled frames for known person first]
 - 2026-11-03: Undo covers the whole last run (owner).
 - 2026-11-04: Folder names are lowercase (default, to confirm).
 - 2026-11-04: Date folders are YYYY/YYYY-MM (default, to confirm).
@@ -25,26 +25,26 @@
 - 2026-11-17: Stage 3 models downloaded from OpenCV Zoo (Apache 2.0 licence):
   - YuNet face detection (`face_detection_yunet_2023mar.onnx`): SHA-256 `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4`.
   - SFace face recognition (`face_recognition_sface_2021dec.onnx`): SHA-256 `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`.
-- 2026-11-17: Face cosine similarity default threshold is 0.363 (OpenCV's recommended cosine value for SFace). Unmeasured default, to be tuned on the owner's labelled folder.
+- 2026-11-17: Face cosine similarity default threshold is 0.363 (OpenCV's recommended cosine value for SFace). Unmeasured default, to be tuned on the owner's labelled folder (accuracy on real photos: unmeasured, pending owner's labelled folder).
 - 2026-11-17: Face recognition rules:
-  - Faces evaluated only for images with no name and no EXIF metadata date.
+  - Faces evaluated only for images with no name and no EXIF metadata date. [superseded by 2026-11-21: faces come first]
   - Faces from one named person only: image goes to that person's folder (`Face: <name>`).
-  - Faces from two or more different named people: Unsorted/.
+  - Faces from two or more different named people: Unsorted/. [superseded by 2026-11-21: photos with two or more known people go to Group photos/]
   - Faces only from unnamed groups: Unsorted/.
   - No faces: Unsorted/.
-  - Videos never use faces (name rule only).
+  - Videos never use faces (name rule only). [superseded by 2026-11-21: videos check sampled frames for known person first]
   - The owner names each group once; saving the same name for two groups merges them.
-- 2026-11-17: Face detection improvements: YuNet score threshold lowered from 0.8 to 0.6 (NMS 0.3), minimum face size set to 20 pixels, EXIF orientation transposed, multi-scale detection (original, downscale >1280px, upscale <640px), and 90°/270° rotation retry. Stage 3 is still not accepted until the labelled folder is measured.
+- 2026-11-17: Face detection improvements: YuNet score threshold lowered from 0.8 to 0.6 (NMS 0.3), minimum face size set to 20 pixels, EXIF orientation transposed, multi-scale detection (original, downscale >1280px, upscale <640px), and 90°/270° rotation retry. Stage 3 is still not accepted until the labelled folder is measured. [threshold 0.6 and minimum size 20px superseded by 2026-11-21: threshold 0.85, minimum face size 48px on 1280px image]
 - 2026-11-21: Stage 4 placement order (Section 4 of PRD v2.0):
   - Images: (1) Exactly one face belonging to a named person -> `<dest>/<Person>/<filename>`, (2) Two or more faces belonging to different named people -> `<dest>/Group photos/<filename>`, (3) Name in file name -> `<dest>/<name>/<filename>`, (4) Metadata date -> `<dest>/<YYYY>/<YYYY-MM>/<filename>`, (5) Otherwise -> `<dest>/Unsorted/<filename>`.
   - Videos: (1) Named person appears in >= 2 of 5 sampled frames -> `<dest>/<Person>/<filename>`, (2) Name in file name -> `<dest>/<name>/<filename>`, (3) Otherwise -> `<dest>/Unsorted/<filename>`.
 - 2026-11-21: Video frame sampling rule: 5 frames spaced evenly through the video using OpenCV VideoCapture. A face/person counts for a video only if it appears in at least 2 of the 5 sampled frames. Videos never use dates. Unreadable videos are marked "could not read" and continue.
 - 2026-11-21: "Group photos" folder used for images with two or more faces belonging to different named people.
-- 2026-11-21: Face matching threshold is recorded as an unmeasured default (0.363 cosine similarity for SFace) until accuracy is tested on the owner's labelled library.
+- 2026-11-21: Face matching threshold is recorded as an unmeasured default (0.363 cosine similarity for SFace) until accuracy is tested on the owner's labelled library (accuracy on real photos: unmeasured, pending owner's labelled folder).
 - 2026-11-21: People screen is implemented as a dedicated second tab in ttk.Notebook within the main application window, displaying up to 6 sample face crops per group, name editing, splitting, and merging.
 - 2026-11-21: Faster scan (1280px, parallel workers) and fewer false faces:
   - Target: accuracy first. Speed is secondary and depends on the number of files.
-  - Accuracy not yet measured. Owner review pending.
+  - Accuracy on real photos: unmeasured, pending owner's labelled folder.
   - Longest side normalized to 1280 pixels for image and video frame analysis (with upscale for small images).
   - EXIF orientation applied first; rotation fallback at 90° and 270° if no faces are detected on the upright pass.
   - Video analysis: 5 frames sampled, each normalized to 1280px longest side.
@@ -53,7 +53,7 @@
   - Minimum face size: 48 pixels measured on the 1280-pixel analysis image.
   - Shape filter: drop face boxes with aspect ratio > 2.5 (h/w > 2.5 or w/h > 2.5).
   - Face embedding computed only for detected faces that pass the quality filter.
-  - Face groups must contain at least 3 faces before being shown on the People screen; groups with 1 or 2 faces remain in runs/faces.json but hidden until more faces join.
+  - Face groups must contain at least 3 faces before being shown on the People screen; groups with 1 or 2 faces remain in runs/faces.json but hidden until more faces join. [superseded by 2026-11-21 v0.5.2-dev: minimum visible group size changed from 3 to 2, MIN_VISIBLE_GROUP_SIZE = 2]
   - Clustering threshold kept at 0.363 (SFace cosine similarity unmeasured default).
   - Progress persistence: runs/faces.json saved atomically (.tmp then replace) every 50 images and upon stop/failure.
   - App startup displays "Found N people from M scanned images" immediately if runs/faces.json exists.
@@ -65,7 +65,7 @@
   - Clustering: Incremental centroid clustering on cosine similarity (default threshold 0.363, configurable). Faces are sorted canonically by (file_key, face_idx) and compared against normalized cluster centroids using matrix-vector products. Matching faces (similarity >= 0.363) join the best cluster and update its centroid incrementally; otherwise a new cluster is created. Deterministic, shuffle-invariant, idempotent on re-run, and near-linear in time.
   - Name persistence: Names stored by member face ({file}:{index}) in runs/faces.json rather than group ID, ensuring names survive re-clustering and scans are idempotent.
   - People visibility: Clusters with >= 2 faces shown on People screen as "Unnamed person N". Clusters with 1 face stay hidden and are ignored by placement (MIN_VISIBLE_GROUP_SIZE = 2). This threshold is an unmeasured default pending owner review on real photos.
-  - Measurable accuracy: Added scripts/measure_faces.py to evaluate pairwise precision, recall, FPR, false merges, and false splits at thresholds 0.6, 0.7, 0.85 against tests/faces_labelled/expected_faces.csv. Accuracy not yet measured on real photos (owner review pending).
+  - Measurable accuracy: Added scripts/measure_faces.py to evaluate pairwise precision, recall, FPR, false merges, and false splits at thresholds 0.6, 0.7, 0.85 against tests/faces_labelled/expected_faces.csv. Accuracy on real photos: unmeasured, pending owner's labelled folder.
 - 2026-11-22: Clustering collapse safeguard and centroid drift fix:
   - Stop centroid drift: In FaceClusterManager.cluster_all_faces, comparison representatives are built strictly from the first M members (MAX_REPRESENTATIVE_MEMBERS = 5). Centroids are frozen after M members, eliminating chaining drift across people while preserving deterministic fixed-order matrix-vector performance.
   - Multi-member match safeguard (Option B): Require a new face to match at least 2 members of an established cluster (MIN_MEMBER_MATCHES = 2) at threshold 0.363 before joining, preventing a single stranger face from chaining distinct individuals together.
@@ -73,7 +73,7 @@
   - Failure point on sweep: On 3,000 faces across 300 people (noise 0.4), precision drops below 0.90 between inter-person cosine rho = 0.15 and rho = 0.20 (at rho = 0.10: 0.9885, rho = 0.15: 0.9170, rho = 0.20: 0.6737). This number defines the inter-person similarity limit before false merges occur, informing the owner's labelled measurement criteria.
   - Giant cluster safeguard and label: If a cluster grows past a cap (CLUSTER_CAP_RATIO = 0.05 or 5% of faces, CLUSTER_CAP_MAX = 200, CLUSTER_CAP_FLOOR = 20), it is displayed on the People screen with the text "large group: name it to use it". It is withheld from automatic placement until the owner explicitly names or splits it.
   - Synthetic regression benchmarks: Added tests for the collapse case (3,000 faces, 300 people, base + spread 0.5, noise 0.4: pair precision >= 0.9), well-separated case (10,000 faces, 1,000 people, noise 0.3: pair precision >= 0.95, recall >= 0.95, time < 5 s), and prolific person case (3,000 faces among 10,000).
-  - Accuracy not yet measured on real photos. Owner review pending.
+  - Accuracy on real photos: unmeasured, pending owner's labelled folder.
 - 2026-11-22: Stop synthetic sweeps, retain unmeasured defaults, and add withheld photo transparency:
   - Synthetic sweeps stopped: Synthetic data cannot substitute for real-world facial distributions (precision drops below 0.90 above rho ~0.16 under noise 0.4, and near zero above rho 0.3).
   - Defaults: MIN_MEMBER_MATCHES = 2 at threshold 0.363 cosine similarity retained as the unmeasured default, pending owner testing on tests/faces_labelled/.
@@ -84,14 +84,14 @@
   - Progress file versioning: schema_version 2 added to runs/faces.json. Older schema 1 files are migrated in place preserving all cached entries and group names. Unreadable/corrupt JSON files are safely moved aside to runs/faces.corrupt-<timestamp>.json, reported in the UI status bar, and a clean scan is initialized. Atomic write (.tmp -> fsync -> os.replace) is preserved every 50 files, on stop, error, and finish.
   - Per-scan logging: Each scan creates a timestamped log in runs/scan-<YYYYMMDD-HHMMSS>.log with one line per candidate file recording status (ok / skipped-cached / could-not-read / no-faces / error), file name, faces found, and reason if not ok. Concludes with a summary line reporting total files, ok, cached, could-not-read, no-faces, errors, and elapsed seconds.
   - Unreadable files list: Files that cannot be opened or decoded are recorded under "unreadable" in runs/faces.json and displayed in a read-only dialog accessed via "Unreadable files (N)" button on the People screen. When an unreadable file is subsequently fixed and scanned, its entry is automatically cleared.
-  - Accuracy not yet measured on real photos. Owner review pending.
+  - Accuracy on real photos: unmeasured, pending owner's labelled folder.
 - 2026-11-22: Group merge suggestions and stable dismissals (v0.5.4-dev):
   - Merge suggestion threshold: MERGE_SUGGEST_THRESHOLD = 0.363 (OpenCV recommended cosine similarity for SFace). Recorded as an unmeasured default pending owner evaluation on labelled photos.
   - Suggestion cap: MAX_MERGE_SUGGESTIONS = 50. Suggestions are sorted by similarity descending; when more than 50 candidate pairs qualify, the top 50 are displayed and the UI reports that the cap has been reached.
   - Stable dismissal tracking via overlap rule: A stored dismissal records the member face IDs of both groups at the time of dismissal (up to 10 per group, sorted) along with a legacy pair key for fast lookup. A current candidate pair counts as dismissed when, for each group, strictly more than half (> 50%) of the stored member IDs for that group are still members of the current group (DISMISSAL_OVERLAP_MIN = 0.5, unmeasured default), in either group orientation. This ensures dismissals survive when groups gain or lose members across rescans (e.g. adding a new face with an earlier file name). Old string-only entries remain supported via exact key lookup. Stored under "dismissed_merges" in runs/faces.json.
   - People screen UI: "Suggested merges" section placed above group cards showing side-by-side sample crops, group display names or "Unnamed person N", photo counts, similarity score, "Merge" button (delegating directly to `PeopleManager.merge_groups`), and "Not the same person" button (recording dismissal). When no suggestions exist, shows "No suggested merges."
   - Safety: Suggestions never perform automatic merges or modify files. Merges occur only upon explicit user action, and subsequent file placement strictly follows existing plan rules.
-  - Accuracy not yet measured on real photos. Owner review pending.
+  - Accuracy on real photos: unmeasured, pending owner's labelled folder.
 - 2026-11-22: Real photo and video library profiling and consistency alignment (F:\local send files\chulmati):
   - Safe, read-only profiling completed across 313 files (303 JPEGs, 6 HEICs, 3 MP4 videos, 1 PNG; 4.28 GB total volume).
   - Source integrity: Full cryptographic SHA-256 verification across all 313 files before and after the run confirmed 0 files modified, moved, renamed, or deleted (all 313 files checked, 0 mismatches).
@@ -102,7 +102,7 @@
   - Labelling confidentiality: Labelling template (runs/chulmati_labels_template.csv) contains only file, face_index, crop_path, person (blank), ensuring the owner labels strictly from the photos without leakage of cluster IDs or names.
   - Crop thumbnail persistence: Multi-process worker serialization saves face crop thumbnails directly to disk (runs/face_crops/crop_<sha[:10]>_<idx>.jpg) and links crop_path into cache and clusters, ensuring People cards display image thumbnails.
   - Dry-run placement simulation: 289 files placed by 2026-04 EXIF date, 7 by other dates, 12 by name rule, 5 unsorted in unlabelled state; when naming the top 2 groups, 100 files correctly rerouted to Person folders according to PRD precedence.
-  - Accuracy note: Accuracy metrics (precision/recall) await ground-truth labels. Owner labels from photos, not from cluster IDs.
+  - Accuracy note: Accuracy on real photos: unmeasured, pending owner's labelled folder. Owner labels from photos, not from cluster IDs.
 - 2026-11-22: Second merge pass, recall cost of Option 2, error direction analysis, and known limitations:
   - Sweep table recall cost of Option 2: In the adversarial sweep (3,000 faces, 300 people, noise 0.4), Option 2 (frozen M=5) with Pass 2 trades recall to prevent centroid drift and collapse:
     - rho = 0.1: Precision 0.9885, Recall 0.9909, Clusters 300, Inconsistent Pairs 22 (vs Option 1 Recall 0.9887)
@@ -112,13 +112,15 @@
     - rho = 0.5: Precision 0.0062, Recall 0.7088, Clusters 3, Inconsistent Pairs 3 (vs Option 1 Recall 0.8704, 16.2% lower)
   - Error direction: Option 2 strictly prioritizes precision over recall to eliminate false merges and drift chaining across people. The threshold therefore errs on the side of **under-merging** (splitting a person into multiple clusters or singletons) rather than **over-merging** (collapsing distinct individuals into a single group).
   - Second merge pass: An iterative second merge pass on full centroids was introduced after initial clustering to recover recall and reduce under-merged fragments. Two clusters merge when their full-centroid similarity is >= 0.363, repeated until convergence. Any merged cluster is capped at the large-group limit (cluster_cap) to prevent collapse, and requires at least one cluster to be a small/fragment group (<= MAX_REPRESENTATIVE_MEMBERS = 5) so established multi-photo groups are preserved for user review via merge suggestions. On the real library, this reduced inconsistent pairs from 203 down to 102 in a single run (50% reduction, merging 38 clusters into 16 enlarged clusters) while keeping both collapse case (precision >= 0.9, clusters >= 290) and well-separated regression benchmarks passing.
-  - Known limitation: Precision falls below 0.9 at inter-person similarity around 0.12 (baseline) and around 0.16 (current), and drops sharply above 0.3. Results on real photos depend on the owner's labels.
+  - Known limitation: Precision falls below 0.9 at inter-person similarity around 0.12 (baseline) and around 0.16 (current), and drops sharply above 0.3. Accuracy on real photos: unmeasured, pending owner's labelled folder.
   - Neutral crop naming and template confidentiality: Crop files in runs/face_crops/ are renamed to neutral sequential identifiers (crop_000123.jpg) and the mapping is stored separately in runs/crop_mapping.json. runs/chulmati_labels_template.csv lists every detected face (one row per detected face) with a blank person column, completely free of 'group_' or any cluster IDs, enforced by automated tests.
   - Strict Rule 4 automated test: Added AST-based safety test verifying that any automated test function in tests/ calling open(), read_text(), read_bytes(), or os.scandir operates strictly on paths derived from pytest's tmp_path fixture.
 - 2026-11-22: Pass 2 disabled by default and merge size ratio guard:
   - Pass 2 turned off by default: Defined named constant `PASS2_ENABLED = False` in `nexora/faces/groups.py`. The iterative full-centroid merge code is fully preserved for benchmarking, diagnostics, and optional evaluation via `--pass2` in `scripts/real_library_report.py`, but default production clustering runs initial single-pass centroid clustering (Pass 1) to avoid unintended small-cluster absorptions.
-  - Merge size ratio guard: Any future merge (manual via `PeopleManager.merge_groups` or automated in Pass 2) enforces the rule that a cluster with 3 or fewer faces must not absorb a cluster more than twice its size (`MERGE_GUARD_SMALL_CLUSTER_MAX = 3`, `MERGE_GUARD_MAX_RATIO = 2.0`). Attempted merges violating this rule are refused (`merge_groups` returns False) to prevent small/singleton noise fragments from capturing large, well-established identity clusters. Verified with synthetic unit test asserting a 2-face cluster cannot absorb a 45-face cluster.
+  - Merge size ratio guard: Any future merge (manual via `PeopleManager.merge_groups` or automated in Pass 2) enforces the rule that a cluster with 3 or fewer faces must not absorb a cluster more than twice its size (`MERGE_GUARD_SMALL_CLUSTER_MAX = 3`, `MERGE_GUARD_MAX_RATIO = 2.0`). Attempted merges violating this rule are refused (`merge_groups` returns False) to prevent small/singleton noise fragments from capturing large, well-established identity clusters. Verified with synthetic unit test asserting a 2-face cluster cannot absorb a 45-face cluster. [manual merge refusal superseded by 2026-11-23: guard restricted to automatic merges; manual merges allowed with confirmation dialog]
 - 2026-11-23: Merge size ratio guard restricted to automatic merges with manual confirmation prompt:
   - Automatic merge restriction: The merge size ratio guard (a cluster with <= 3 faces must not absorb a cluster > 2x its size, `MERGE_GUARD_SMALL_CLUSTER_MAX = 3`, `MERGE_GUARD_MAX_RATIO = 2.0`) is enforced exclusively on automatic merges (`is_automatic=True`, e.g., in automated clustering passes such as Pass 2).
   - Manual merge override with confirmation: Manual merges initiated by the owner from the People screen (both via Suggested Merges and the card dropdown) are permitted (`is_automatic=False`). If the owner initiates a manual merge where the target cluster has <= 3 faces and the source cluster has > 2x its faces, a confirmation dialog is presented: "This merges N faces into a group of M faces. Continue?" (where N is the source group size and M is the target group size). If confirmed, the merge proceeds; if cancelled, the merge is aborted.
   - Safe exclusion policy: Nexora never deletes user files. Where a file should be excluded from a run, the owner should move it to a separate folder outside the source directory.
+
+

@@ -1,47 +1,44 @@
 # Changelog
 
 ## 0.5.4-dev (2026-11-22)
-- Merge size guard restricted to automatic merges: Automatic merges (such as Pass 2) strictly enforce the merge size ratio guard (`is_automatic=True`), refusing absorption of a cluster > 2x its size by a <= 3-face cluster. Manual merges from the People screen (`is_automatic=False`) are allowed, and prompt confirmation ("This merges N faces into a group of M faces. Continue?") when the guard condition is met.
-- Pass 2 disabled by default (`PASS2_ENABLED = False`): Full-centroid iterative merge pass is disabled by default in production clustering while preserving all code for diagnostic and research runs (`--pass2` in `scripts/real_library_report.py`).
-- Merge size ratio guard: Enforced rule that a cluster with 3 or fewer faces must not absorb a cluster more than twice its size (`MERGE_GUARD_SMALL_CLUSTER_MAX = 3`, `MERGE_GUARD_MAX_RATIO = 2.0`), preventing small fragments from capturing large groups during manual or automated merges. Covered by synthetic unit test.
-- Second merge pass after clustering: iterative full-centroid merge pass at threshold 0.363 capped at the large-group limit (cluster_cap) and requiring at least one small/fragment cluster (<= MAX_REPRESENTATIVE_MEMBERS = 5), reducing inconsistent pairs on the real library by 50% (from 203 down to 102 in a single run across 313 files, merging 38 clusters into 16 enlarged clusters). Synthetic recall across the sweep table (Option 2 + Pass 2, noise 0.4): 0.9909 at rho=0.1, 0.8373 at rho=0.2, 0.4636 at rho=0.3, 0.5733 at rho=0.4, 0.7088 at rho=0.5; passes collapse case (pair precision >= 0.9) and well-separated regression benchmarks.
-- Error direction analysis & known limitations: documented in DECISIONS.md that Option 2 (frozen M=5) errs on the side of under-merging rather than over-merging to prevent drift and collapse across people, with recall cost evaluated across the adversarial sweep (recall 0.8373 at rho=0.2, 0.4636 at rho=0.3). Known limitation documented: precision falls below 0.9 at inter-person similarity around 0.12 (baseline) and around 0.16 (current), and drops sharply above 0.3. Results on real photos depend on the owner's labels.
-- Neutral crop naming and template confidentiality: face crops in runs/face_crops/ renamed to neutral sequential names (crop_000123.jpg) with mapping stored separately in runs/crop_mapping.json. Ground-truth template (runs/chulmati_labels_template.csv) lists every detected face (one row per face) with blank person column, completely free of 'group_' or any cluster IDs, enforced by automated tests.
-- Strict Rule 4 automated enforcement: added AST test in tests/test_safety.py asserting that any automated test function accessing files via open(), read_text(), read_bytes(), or os.scandir operates strictly on paths rooted in pytest's tmp_path fixture.
 - Merge suggestions on People screen: suggests pairs of visible groups with cosine similarity >= 0.363 (MERGE_SUGGEST_THRESHOLD, unmeasured default). Suggestions are sorted by similarity descending and capped at 50 (MAX_MERGE_SUGGESTIONS). Pairs already sharing the same name or previously dismissed are excluded.
 - Stable dismissal tracking with overlap rule: fixed dismissal resilience so dismissed pairs remain dismissed after rescans even when groups gain or lose faces (e.g. earlier file names joining). Stored dismissals record up to 10 member IDs per group and match when more than half (> 50%, DISMISSAL_OVERLAP_MIN = 0.5 unmeasured default) of stored members persist in the current groups. Old exact-key dismissal records remain supported for backwards compatibility.
+- People screen UI: added "Suggested merges" section above group cards with side-by-side preview crops, names, photo counts, similarity scores, "Merge" button, and "Not the same person" button (persists dismissal). Displays "No suggested merges." when empty and indicates when the 50-suggestion cap is reached.
+- Merge size ratio guard: restricted to automatic merges (such as Pass 2) via `is_automatic=True`, preventing a cluster with 3 or fewer faces from absorbing a cluster more than twice its size (`MERGE_GUARD_SMALL_CLUSTER_MAX = 3`, `MERGE_GUARD_MAX_RATIO = 2.0`). Manual merges from the People screen (`is_automatic=False`) are allowed, and prompt confirmation ("This merges N faces into a group of M faces. Continue?") when the guard condition is met.
+- Pass 2 disabled by default (`PASS2_ENABLED = False`): full-centroid iterative merge pass is disabled by default in production clustering while preserving all code for diagnostic and research runs (`--pass2` in `scripts/real_library_report.py`).
 - Consistency alignment between clustering and merge suggestions: both clustering and merge suggestions compare against the same representative frozen after the first M=5 members (MAX_REPRESENTATIVE_MEMBERS = 5), eliminating drift while maintaining 1.0 precision and recall on varied poses. Added post-clustering consistency check (count_inconsistent_pairs) asserting 0 inconsistent pairs on well-separated synthetic benchmarks.
+- Second merge pass evaluation: optional iterative full-centroid merge pass at threshold 0.363 capped at large-group limit and requiring at least one small cluster (<= 5 members). Synthetic recall across sweep table (Option 2 + Pass 2, noise 0.4): 0.9909 at rho=0.1, 0.8373 at rho=0.2, 0.4636 at rho=0.3, 0.5733 at rho=0.4, 0.7088 at rho=0.5; passes collapse case (pair precision >= 0.9) and well-separated regression benchmarks.
+- Error direction analysis & known limitations: documented in DECISIONS.md that Option 2 (frozen M=5) errs on the side of under-merging rather than over-merging to prevent drift and collapse across people, with recall cost evaluated across the adversarial sweep (recall 0.8373 at rho=0.2, 0.4636 at rho=0.3). Known limitation documented: precision falls below 0.9 at inter-person similarity around 0.12 (baseline) and around 0.16 (current), and drops sharply above 0.3.
 - Real library diagnostic runner (scripts/real_library_report.py): manual standalone script outside pytest that performs non-destructive profiling, cryptographic SHA-256 verification across all files, EXIF date diagnostics vs file mtime, review views for large groups, and ground-truth template generation.
-- Enforced AGENTS.md Rule 4: automated test in tests/test_safety.py fails if any test under tests/ attempts to read external or real photo paths.
-- Labelling template confidentiality: runs/chulmati_labels_template.csv outputs file, face_index, crop_path, person (blank) without leaking cluster IDs or suggested names.
-- People screen UI: added "Suggested merges" section above group cards with side-by-side preview crops, names, photo counts, similarity scores, "Merge" button (invokes existing merge_groups), and "Not the same person" button (persists dismissal). Displays "No suggested merges." when empty and indicates when the 50-suggestion cap is reached.
+- Neutral crop naming and template confidentiality: face crops in runs/face_crops/ renamed to neutral sequential names (crop_000123.jpg) with mapping stored separately in runs/crop_mapping.json. Ground-truth template (runs/chulmati_labels_template.csv) lists every detected face (one row per face) with blank person column, completely free of 'group_' or any cluster IDs, enforced by automated tests.
+- Strict Rule 4 automated enforcement: added AST test in tests/test_safety.py asserting that any automated test function accessing files via open(), read_text(), read_bytes(), or os.scandir operates strictly on paths rooted in pytest's tmp_path fixture.
 - Large group review view: groups flagged needs_review report sample crop paths and file counts in real-library reports for owner review.
 - Safety: suggestions never merge or alter files automatically; user-approved merges follow existing plan placement rules.
-- Accuracy not yet measured on real photos. Owner review pending.
+- Accuracy on real photos: unmeasured, pending owner's labelled folder.
 
 ## 0.5.3-dev (2026-11-22)
 - Progress file versioning: schema_version 2 in runs/faces.json with automatic in-place migration preserving cache and names. Corrupt files are backed up to runs/faces.corrupt-<timestamp>.json, reported in the status bar, and scan starts clean. Atomic writes (.tmp -> fsync -> os.replace) preserved every 50 files and on stop/error/finish.
 - Per-scan log: each scan writes runs/scan-<YYYYMMDD-HHMMSS>.log recording one line per file (status, file name, faces found, reason if not ok) and an end summary line (total files, ok, cached, could-not-read, no-faces, errors, elapsed seconds).
 - Unreadable files tracking: unreadable files tracked in runs/faces.json under "unreadable", cleared when later successfully read. People screen includes read-only "Unreadable files (N)" viewer.
-- Accuracy not yet measured on real photos. Owner review pending.
+- Accuracy on real photos: unmeasured, pending owner's labelled folder.
 
 ## 0.5.2-dev (2026-11-22)
-- Labelled evaluation script scripts/measure_faces.py enhanced with cosine similarity histograms (same-person vs different-person), accuracy/recall/precision/FPR tables, and false merge file lists; outputs formatted runs/measure_report.txt and exits cleanly without fake numbers when no dataset exists.
-- Stopped synthetic sweeps; retained MIN_MEMBER_MATCHES = 2 at threshold 0.363 as unmeasured default pending owner review on real photos.
-- People screen transparency: shows placement status on group cards and displays a dedicated section showing photos withheld from placement and why (needs review, unnamed, or hidden group). Placement rules remain unchanged.
-- Restored placement order so unnamed faces, hidden 1-face groups, and false faces never block name or date rules.
+- Placement order strictly restored so unnamed faces, hidden 1-face groups, and false faces never block name or date rules.
 - Incremental centroid clustering on cosine similarity (threshold 0.363 default) comparing against normalized cluster centroids via matrix-vector dot products; deterministic, shuffle-invariant, and near-linear.
 - Centroid drift mitigation: cluster comparison representatives frozen after first M=5 members (MAX_REPRESENTATIVE_MEMBERS = 5), eliminating chaining collapse across faces.
 - Multi-member match safeguard (Option B): require a new face to match at least 2 members of an established cluster (MIN_MEMBER_MATCHES = 2) at threshold 0.363 before joining, preventing stranger faces from merging clusters.
 - Giant cluster safeguard: clusters exceeding cap (min(5% of faces, 200)) labeled "large group: name it to use it" on the People screen and withheld from automatic placement until named or split.
+- People screen transparency: shows placement status on group cards and displays a dedicated section showing photos withheld from placement and why (needs review, unnamed, or hidden group). Placement rules remain unchanged.
 - Name persistence across re-clustering: names stored by member face in runs/faces.json.
-- Visibility threshold set to 2: clusters with 2+ faces visible as "Unnamed person N"; 1-face clusters stay hidden and ignored by placement (unmeasured default, owner review pending).
-- Accuracy measurement script scripts/measure_faces.py added for pairwise precision/recall/FPR evaluation across thresholds 0.6, 0.7, 0.85.
+- Visibility threshold set to 2: clusters with 2+ faces visible as "Unnamed person N"; 1-face clusters stay hidden and ignored by placement (MIN_VISIBLE_GROUP_SIZE = 2, unmeasured default).
+- Labelled evaluation script scripts/measure_faces.py enhanced with cosine similarity histograms (same-person vs different-person), accuracy/recall/precision/FPR tables, and false merge file lists; outputs formatted runs/measure_report.txt and exits cleanly without fake numbers when no dataset exists.
 - Clustering benchmark scripts scripts/benchmark_cluster.py and scripts/adversarial_cluster.py added to measure time, peak memory, and accuracy sweeps across inter-person cosines 0.1 to 0.5.
-- Accuracy not yet measured. Owner review pending.
+- Stopped synthetic sweeps; retained MIN_MEMBER_MATCHES = 2 at threshold 0.363 as unmeasured default.
+- Accuracy on real photos: unmeasured, pending owner's labelled folder.
 
 ## 0.5.1-dev (2026-11-21)
-- Faster scan (1280px, parallel workers), fewer false faces (score 0.85, min size 48px on 1280px, shape filter, min group size 3), progress saved during scan. Accuracy not yet measured. Owner review pending.
+- Faster scan (1280px, parallel workers), fewer false faces (score 0.85, min size 48px on 1280px, shape filter, min group size 3), progress saved during scan.
+- Accuracy on real photos: unmeasured, pending owner's labelled folder.
 
 ## 0.5.0-dev (2026-11-21)
 - People screen, person and group-photo folders, scan across all images and video frames, Approve step.
@@ -50,7 +47,7 @@
 - Face detection: orientation fix, multi-scale, rotation, lower threshold and minimum size.
 
 ## 0.4.0-dev (2026-11-17)
-- Face recognition code. Not accepted until accuracy is measured.
+- Face recognition code. Not accepted until accuracy on real photos is measured, pending owner's labelled folder.
 
 ## 0.3.2 (2026-11-17)
 - UI polish: Windows theme, cards, colour-coded counts, table styling. No behaviour change.
