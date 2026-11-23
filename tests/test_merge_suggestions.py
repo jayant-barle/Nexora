@@ -633,7 +633,8 @@ def test_old_format_dismissal_entry_still_works(tmp_path: Path):
 def test_guard_small_cluster_cannot_absorb_cluster_more_than_twice_its_size(tmp_path: Path):
     """Task 3: A cluster with 3 or fewer faces must not absorb a cluster more than twice its size.
     
-    Synthetic test: assert that a 2-face cluster does not absorb a 45-face cluster.
+    Automatic merge path: assert that a 2-face cluster does not absorb a 45-face cluster when is_automatic=True.
+    Manual merge path: assert that manual merges (is_automatic=False) are allowed.
     """
     cm = _create_mock_cluster_manager(tmp_path)
     pm = PeopleManager(cm)
@@ -650,7 +651,7 @@ def test_guard_small_cluster_cannot_absorb_cluster_more_than_twice_its_size(tmp_
             "display_name": None,
             "crop_paths": [],
             "representative_embedding": [1.0] + [0.0] * 127,
-            "member_faces": group_a_members,
+            "member_faces": list(group_a_members),
         },
         {
             "id": "group_002",
@@ -658,7 +659,7 @@ def test_guard_small_cluster_cannot_absorb_cluster_more_than_twice_its_size(tmp_
             "display_name": None,
             "crop_paths": [],
             "representative_embedding": [1.0] + [0.0] * 127,
-            "member_faces": group_b_members,
+            "member_faces": list(group_b_members),
         },
     ]
     cm.file_groups = {
@@ -671,14 +672,19 @@ def test_guard_small_cluster_cannot_absorb_cluster_more_than_twice_its_size(tmp_
     assert pm.get_group_size("group_001") == 2
     assert pm.get_group_size("group_002") == 45
 
-    # 2-face cluster (group_001) attempts to absorb 45-face cluster (group_002)
-    merged = pm.merge_groups("group_001", "group_002")
-
-    # Assert that it does not absorb it
-    assert merged is False
+    # Path 1: Automatic merge is refused by guard
+    merged_auto = pm.merge_groups("group_001", "group_002", is_automatic=True)
+    assert merged_auto is False
     assert pm.get_group_size("group_001") == 2
     assert pm.get_group_size("group_002") == 45
     assert len(pm.groups) == 2
+
+    # Path 2: Manual merge is allowed
+    merged_manual = pm.merge_groups("group_001", "group_002", is_automatic=False)
+    assert merged_manual is True
+    assert pm.get_group_size("group_001") == 47
+    assert len(pm.groups) == 1
+    assert "group_002" not in [g["id"] for g in pm.groups]
 
     # Also verify Pass 2 behavior: if pass2 is enabled on clusters where centroid cosine is 0.38 >= 0.363,
     # the guard ensures the 2-face cluster does not absorb the 45-face cluster.
@@ -706,5 +712,233 @@ def test_guard_small_cluster_cannot_absorb_cluster_more_than_twice_its_size(tmp_
     sizes = [pm2.get_group_size(g["id"]) for g in pm2.groups]
     assert 2 in sizes, f"Expected 2-face cluster to remain unabsorbed, got sizes: {sizes}"
     assert 45 in sizes, f"Expected 45-face cluster to remain unabsorbed, got sizes: {sizes}"
+
+
+def test_ui_manual_merge_confirmation_dialog_paths(tmp_path: Path):
+    """UI confirmation test:
+    For a manual merge that the guard would refuse, prompt:
+    'This merges N faces into a group of M faces. Continue?'
+    Test both user confirmation paths (accepted and declined).
+    """
+    try:
+        root = tk.Tk()
+    except Exception as e:
+        pytest.skip(f"Tkinter unavailable in environment: {e}")
+
+    try:
+        root.withdraw()
+        runs_dir = tmp_path / "runs"
+        runs_dir.mkdir(parents=True)
+        (runs_dir / "faces.json").write_text("{}", encoding="utf-8")
+
+        with patch("nexora.faces.groups.get_runs_dir", return_value=runs_dir):
+            app = NexoraApp(root)
+
+            # Setup 2 groups: group_001 (2 faces), group_002 (45 faces)
+            cm = app.cluster_manager
+            pm = app.people_manager
+
+            group_a_members = ["file_a1.jpg:0", "file_a2.jpg:0"]
+            group_b_members = [f"file_b_{i:03d}.jpg:0" for i in range(45)]
+
+            cm.groups = [
+                {
+                    "id": "group_001",
+                    "name": None,
+                    "display_name": None,
+                    "crop_paths": [],
+                    "representative_embedding": [1.0] + [0.0] * 127,
+                    "member_faces": list(group_a_members),
+                },
+                {
+                    "id": "group_002",
+                    "name": None,
+                    "display_name": None,
+                    "crop_paths": [],
+                    "representative_embedding": [1.0] + [0.0] * 127,
+                    "member_faces": list(group_b_members),
+                },
+            ]
+            cm.file_groups = {
+                "file_a1.jpg": ["group_001"],
+                "file_a2.jpg": ["group_001"],
+            }
+            for i in range(45):
+                cm.file_groups[f"file_b_{i:03d}.jpg"] = ["group_002"]
+
+            cm.save()
+            app.notebook.select(1)
+            app.render_people_cards()
+
+            # Guard check: would refuse if automatic
+            assert pm.would_guard_refuse_merge("group_001", "group_002") is True
+
+            # Find the "Merge" button in the Suggested Merges section
+            # The suggestions_frame contains the suggested merge card
+            merge_btn = None
+            for child in app.suggestions_frame.winfo_children():
+                if isinstance(child, tk.Frame):
+                    # Card frame
+                    for sub in child.winfo_children():
+                        if isinstance(sub, tk.Frame):
+                            # Content row
+                            for btn_box in sub.winfo_children():
+                                if isinstance(btn_box, tk.Frame):
+                                    for b in btn_box.winfo_children():
+                                        if isinstance(b, tk.Button) and b.cget("text") == "Merge":
+                                            merge_btn = b
+                                            break
+
+            assert merge_btn is not None, "Suggested merge 'Merge' button should be rendered in UI"
+
+            # 1. User declines confirmation dialog
+            with patch("tkinter.messagebox.askyesno", return_value=False) as mock_ask, \
+                 patch("tkinter.messagebox.showinfo") as mock_info:
+                merge_btn.invoke()
+
+                mock_ask.assert_called_once_with(
+                    "Confirm Merge",
+                    "This merges 45 faces into a group of 2 faces. Continue?",
+                )
+                assert mock_info.call_count == 0
+                assert pm.get_group_size("group_001") == 2
+                assert pm.get_group_size("group_002") == 45
+                assert len(pm.groups) == 2
+
+            # 2. User accepts confirmation dialog
+            with patch("tkinter.messagebox.askyesno", return_value=True) as mock_ask, \
+                 patch("tkinter.messagebox.showinfo") as mock_info:
+                merge_btn.invoke()
+
+                mock_ask.assert_called_once_with(
+                    "Confirm Merge",
+                    "This merges 45 faces into a group of 2 faces. Continue?",
+                )
+                assert mock_info.call_count == 1
+                assert pm.get_group_size("group_001") == 47
+                assert len(pm.groups) == 1
+                assert "group_002" not in [g["id"] for g in pm.groups]
+    finally:
+        try:
+            root.destroy()
+        except Exception:
+            pass
+
+
+def test_ui_card_dropdown_merge_confirmation_and_unrestricted_paths(tmp_path: Path):
+    """UI test for card dropdown merge:
+    - When guard would refuse (e.g. 45 faces merged into 2 faces), prompt confirmation.
+    - When guard does not trigger (e.g. 2 faces merged into 45 faces), merge directly without prompt.
+    """
+    try:
+        root = tk.Tk()
+    except Exception as e:
+        pytest.skip(f"Tkinter unavailable in environment: {e}")
+
+    try:
+        root.withdraw()
+        runs_dir = tmp_path / "runs"
+        runs_dir.mkdir(parents=True)
+        (runs_dir / "faces.json").write_text("{}", encoding="utf-8")
+
+        with patch("nexora.faces.groups.get_runs_dir", return_value=runs_dir):
+            app = NexoraApp(root)
+
+            cm = app.cluster_manager
+            pm = app.people_manager
+
+            group_a_members = ["file_a1.jpg:0", "file_a2.jpg:0"]
+            group_b_members = [f"file_b_{i:03d}.jpg:0" for i in range(45)]
+
+            cm.groups = [
+                {
+                    "id": "group_001",
+                    "name": None,
+                    "display_name": None,
+                    "crop_paths": [],
+                    "representative_embedding": [1.0] + [0.0] * 127,
+                    "member_faces": list(group_a_members),
+                },
+                {
+                    "id": "group_002",
+                    "name": None,
+                    "display_name": None,
+                    "crop_paths": [],
+                    "representative_embedding": [0.0, 1.0] + [0.0] * 126,  # dissimilar so no suggested merge
+                    "member_faces": list(group_b_members),
+                },
+            ]
+            cm.file_groups = {
+                "file_a1.jpg": ["group_001"],
+                "file_a2.jpg": ["group_001"],
+            }
+            for i in range(45):
+                cm.file_groups[f"file_b_{i:03d}.jpg"] = ["group_002"]
+
+            cm.save()
+            app.notebook.select(1)
+            app.render_people_cards()
+
+            # Find cards in people_scroll_frame (skip suggestions_frame and withheld_frame)
+            cards = [
+                child for child in app.people_scroll_frame.winfo_children()
+                if isinstance(child, tk.Frame) and child != app.suggestions_frame
+            ]
+            # There are 2 group cards and 1 withheld frame
+            group_cards = [c for c in cards if any(isinstance(w, tk.Label) and "faces)" in getattr(w, "cget", lambda x: "")("text") for w in c.winfo_children() for w in w.winfo_children())]
+
+            # Find the card for group_002 (45 faces)
+            card_002 = None
+            for gc in group_cards:
+                header = gc.winfo_children()[0]
+                for lbl in header.winfo_children():
+                    if isinstance(lbl, tk.Label) and "45 faces" in lbl.cget("text"):
+                        card_002 = gc
+                        break
+
+            assert card_002 is not None
+
+            # Controls row is the 4th child (header, status, crops, controls)
+            controls = card_002.winfo_children()[3]
+            merge_btn_002 = [w for w in controls.winfo_children() if isinstance(w, tk.Button) and w.cget("text") == "Merge"][0]
+
+            # 1. Merging group_002 (45 faces) into group_001 (2 faces) triggers guard confirmation
+            with patch("tkinter.messagebox.askyesno", return_value=False) as mock_ask, \
+                 patch("tkinter.messagebox.showinfo") as mock_info:
+                merge_btn_002.invoke()
+                mock_ask.assert_called_once_with(
+                    "Confirm Merge",
+                    "This merges 45 faces into a group of 2 faces. Continue?",
+                )
+                assert mock_info.call_count == 0
+                assert pm.get_group_size("group_001") == 2
+                assert pm.get_group_size("group_002") == 45
+
+            # 2. Merging group_001 (2 faces) into group_002 (45 faces) does NOT trigger guard confirmation
+            # Find card for group_001
+            card_001 = None
+            for gc in group_cards:
+                header = gc.winfo_children()[0]
+                for lbl in header.winfo_children():
+                    if isinstance(lbl, tk.Label) and "2 faces" in lbl.cget("text"):
+                        card_001 = gc
+                        break
+            assert card_001 is not None
+            controls_001 = card_001.winfo_children()[3]
+            merge_btn_001 = [w for w in controls_001.winfo_children() if isinstance(w, tk.Button) and w.cget("text") == "Merge"][0]
+
+            with patch("tkinter.messagebox.askyesno") as mock_ask, \
+                 patch("tkinter.messagebox.showinfo") as mock_info:
+                merge_btn_001.invoke()
+                # Should not prompt confirmation since target (group_002) has 45 faces (> 3)
+                assert mock_ask.call_count == 0
+                assert mock_info.call_count == 1
+                assert pm.get_group_size("group_002") == 47
+                assert len(pm.groups) == 1
+    finally:
+        try:
+            root.destroy()
+        except Exception:
+            pass
 
 

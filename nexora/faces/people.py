@@ -257,19 +257,38 @@ class PeopleManager:
         self.cm.save()
         return (group_id, new_gid)
 
-    def merge_groups(self, target_group_id: str, source_group_id: str) -> bool:
-        """Merge source_group into target_group.
+    def would_guard_refuse_merge(self, target_group_id: str, source_group_id: str) -> bool:
+        """Check whether the merge size guard would trigger on merging source into target.
         
         Guard: a cluster with 3 or fewer faces must not absorb a cluster
         more than twice its size.
+        """
+        if target_group_id == source_group_id:
+            return False
+        target_size = self.get_group_size(target_group_id)
+        source_size = self.get_group_size(source_group_id)
+        return (
+            target_size <= MERGE_GUARD_SMALL_CLUSTER_MAX
+            and source_size > MERGE_GUARD_MAX_RATIO * target_size
+        )
+
+    def merge_groups(
+        self,
+        target_group_id: str,
+        source_group_id: str,
+        is_automatic: bool = False,
+    ) -> bool:
+        """Merge source_group into target_group.
+        
+        Guard: a cluster with 3 or fewer faces must not absorb a cluster
+        more than twice its size. This guard applies only to automatic merges
+        (is_automatic=True). Manual merges from the People screen are allowed.
         Returns False if refused, True if merged.
         """
         if target_group_id == source_group_id:
             return False
 
-        target_size = self.get_group_size(target_group_id)
-        source_size = self.get_group_size(source_group_id)
-        if target_size <= MERGE_GUARD_SMALL_CLUSTER_MAX and source_size > MERGE_GUARD_MAX_RATIO * target_size:
+        if is_automatic and self.would_guard_refuse_merge(target_group_id, source_group_id):
             return False
 
         # Reassign in file_groups

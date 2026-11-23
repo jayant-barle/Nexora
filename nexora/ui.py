@@ -635,11 +635,18 @@ class NexoraApp:
                             target_id, source_id = gb_id, ga_id
                         else:
                             target_id, source_id = ga_id, gb_id
-                        merged_ok = self.people_manager.merge_groups(target_id, source_id)
+                        if self.people_manager.would_guard_refuse_merge(target_id, source_id):
+                            n_faces = self.people_manager.get_group_size(source_id)
+                            m_faces = self.people_manager.get_group_size(target_id)
+                            confirmed = messagebox.askyesno(
+                                "Confirm Merge",
+                                f"This merges {n_faces} faces into a group of {m_faces} faces. Continue?",
+                            )
+                            if not confirmed:
+                                return
+                        merged_ok = self.people_manager.merge_groups(target_id, source_id, is_automatic=False)
                         if merged_ok:
                             messagebox.showinfo("Merged", f"Group merged into {target_id}.")
-                        else:
-                            messagebox.showwarning("Merge Refused", f"Merge refused: a cluster with 3 or fewer faces cannot absorb a cluster more than twice its size.")
                         self.render_people_cards()
                     return merge_action
 
@@ -654,7 +661,7 @@ class NexoraApp:
                     text="Merge",
                     command=make_suggested_merge_cmd(),
                     font=theme.FONT_BODY,
-                    bg=theme.COLOR_PRIMARY_BG,
+                    bg=theme.COLOR_PRIMARY,
                     fg=theme.COLOR_PRIMARY_TEXT,
                     relief=tk.FLAT,
                     padx=10,
@@ -892,11 +899,18 @@ class NexoraApp:
                     def merge_action():
                         target_id = target_id_var.get()
                         if target_id and target_id != src_id:
-                            merged_ok = self.people_manager.merge_groups(target_id, src_id)
+                            if self.people_manager.would_guard_refuse_merge(target_id, src_id):
+                                n_faces = self.people_manager.get_group_size(src_id)
+                                m_faces = self.people_manager.get_group_size(target_id)
+                                confirmed = messagebox.askyesno(
+                                    "Confirm Merge",
+                                    f"This merges {n_faces} faces into a group of {m_faces} faces. Continue?",
+                                )
+                                if not confirmed:
+                                    return
+                            merged_ok = self.people_manager.merge_groups(target_id, src_id, is_automatic=False)
                             if merged_ok:
                                 messagebox.showinfo("Merged", f"Group {src_id} merged into {target_id}.")
-                            else:
-                                messagebox.showwarning("Merge Refused", "Merge refused: a cluster with 3 or fewer faces cannot absorb a cluster more than twice its size.")
                             self.render_people_cards()
                     return merge_action
 
