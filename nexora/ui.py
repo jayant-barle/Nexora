@@ -730,7 +730,8 @@ class NexoraApp:
                     cursor="hand2",
                 ).pack(side=tk.LEFT)
 
-        groups = self.people_manager.get_visible_groups()
+        group_sizes = self.people_manager.get_group_sizes()
+        groups = self.people_manager.get_visible_groups(group_sizes=group_sizes)
         if not groups:
             tk.Label(
                 self.people_scroll_frame,
@@ -741,15 +742,15 @@ class NexoraApp:
             ).pack(pady=30)
             return
 
-        unnamed_numbering = self.people_manager.get_unnamed_numbering()
+        unnamed_numbering = self.people_manager.get_unnamed_numbering(group_sizes=group_sizes)
 
         # Apply search filtering
         search_query = self.people_search_var.get() if hasattr(self, "people_search_var") else ""
-        filtered_groups = self.people_manager.filter_groups(groups, search_query)
+        filtered_groups = self.people_manager.filter_groups(groups, search_query, group_sizes=group_sizes)
 
         # Apply sorting
         sort_by = self.people_sort_var.get() if hasattr(self, "people_sort_var") else "Largest first"
-        display_groups = self.people_manager.sort_groups(filtered_groups, sort_by)
+        display_groups = self.people_manager.sort_groups(filtered_groups, sort_by, group_sizes=group_sizes)
 
         if not display_groups:
             tk.Label(
@@ -779,7 +780,7 @@ class NexoraApp:
             if not display_name:
                 display_name = unnamed_numbering.get(gid, "Unnamed person")
 
-            size = self.people_manager.get_group_size(gid)
+            size = group_sizes.get(gid, 0)
 
             header_frame = tk.Frame(card, bg=theme.COLOR_BG)
             header_frame.pack(fill=tk.X, pady=(0, 8))

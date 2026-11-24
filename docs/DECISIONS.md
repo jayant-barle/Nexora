@@ -135,6 +135,12 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: People screen group size computation optimization:
+  - Added `get_group_sizes()` to `PeopleManager` using `collections.Counter` over `file_groups.values()` in a single pass.
+  - `sort_groups` and `filter_groups` accept an optional precomputed `group_sizes` dictionary (or compute it once if not provided), eliminating repeated O(files) walks per group.
+  - `render_people_cards` computes `group_sizes` once per render and passes it through to `get_visible_groups`, `get_unnamed_numbering`, `filter_groups`, `sort_groups`, and card rendering.
+  - `get_group_size(group_id)` retains its signature and exact return values for callers outside those paths.
+
 
 
 
