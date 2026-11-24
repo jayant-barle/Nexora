@@ -161,6 +161,10 @@
   - All moves completed prior to the error remain recorded in the run log so `undo_run` can cleanly reverse them.
   - Remaining files in the plan remain untouched.
   - Returns a standard summary dictionary with `{"moved": moved_count, "skipped": skipped_count, "refused": refused_count, "stopped": True, "reason": f"Cannot move {source}: {err}"}`.
+- 2026-11-24: Video capture resource release:
+  - In `nexora/faces/groups.py`, wrapped OpenCV `cv2.VideoCapture` operations in `try/finally` blocks inside both `_worker_process_file` and `_process_video`.
+  - Guaranteed `cap.release()` is called in the `finally` block even when `isOpened()` returns `False`, `total_frames <= 0`, or frame reads raise an error.
+  - Prevents lingering file locks on video files on Windows.
 
 
 
