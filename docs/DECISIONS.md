@@ -135,6 +135,11 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: Removal of discarded mid-scan matching and orphan temporary crop writes:
+  - Removed mid-scan online matching (`_find_matching_group`) and temporary group crop writes (`_create_group`, `_create_group_from_bytes`, `_append_crop`, `_append_crop_bytes`) during `scan_source` (sequential and parallel worker paths) and `_process_video`.
+  - Offline clustering (`cluster_all_faces`) creates groups and selects representative crops at the end of the scan from the per-face cache embeddings and crops (`crop_<sha[:10]>_<idx>.jpg`).
+  - Eliminates orphan `crop_group_*.jpg` files in `runs/face_crops/` and unnecessary mid-scan matching overhead while fully preserving per-file caching, incremental progress saves every 50 files, scan logs, unreadable tracking, and mid-scan pause/resume capabilities.
+
 
 
 

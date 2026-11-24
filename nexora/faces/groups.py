@@ -772,36 +772,24 @@ class FaceClusterManager:
                             face_records = self._process_image(item_path, curr_size, curr_sha)
                             if self.cache.get(resolved_key, {}).get("status") != "could not read":
                                 total_faces_found += len(face_records)
-                                assigned_group_ids: list[str] = []
-                                for face_rec in face_records:
-                                    emb = np.array(face_rec["embedding"], dtype=np.float32)
-                                    group = self._find_matching_group(emb, threshold)
-                                    if group is None:
-                                        group = self._create_group(face_rec)
-                                    else:
-                                        self._append_crop(group, face_rec.get("crop"))
-                                    assigned_group_ids.append(group["id"])
-
-                                existing_cached_faces = self.cache.get(resolved_key, {}).get("faces", [])
-                                serializable_faces = []
-                                for idx, r in enumerate(face_records):
-                                    cp = r.get("crop_path")
-                                    if cp is None and idx < len(existing_cached_faces):
-                                        cp = existing_cached_faces[idx].get("crop_path")
-                                    serializable_faces.append({
-                                        "box": r["box"],
-                                        "score": r.get("score", 1.0),
-                                        "embedding": r["embedding"],
-                                        "crop_path": cp,
-                                    })
-                                self.cache[resolved_key] = {
-                                    "size": curr_size,
-                                    "sha256": curr_sha,
-                                    "type": "image",
-                                    "status": "ok",
-                                    "faces": serializable_faces,
-                                }
-                                self.file_groups[resolved_key] = assigned_group_ids
+                                if resolved_key not in self.cache or self.cache[resolved_key].get("status") != "ok":
+                                    serializable_faces = [
+                                        {
+                                            "box": r["box"],
+                                            "score": r.get("score", 1.0),
+                                            "embedding": r["embedding"],
+                                            "crop_path": r.get("crop_path"),
+                                        }
+                                        for r in face_records
+                                    ]
+                                    self.cache[resolved_key] = {
+                                        "size": curr_size,
+                                        "sha256": curr_sha,
+                                        "type": "image",
+                                        "status": "ok",
+                                        "faces": serializable_faces,
+                                    }
+                                self.file_groups[resolved_key] = []
 
                         c_entry = self.cache.get(resolved_key, {})
                         if c_entry.get("status") == "could not read":
@@ -880,24 +868,13 @@ class FaceClusterManager:
                                 elif item_type == "video":
                                     self.unreadable.discard(resolved_key)
                                     frame_faces = result.get("frame_faces", [])
-                                    group_frame_occurrences: dict[str, set[int]] = {}
                                     all_video_faces: list[dict] = []
 
                                     for frame_idx, faces_in_frame in enumerate(frame_faces):
                                         for face_rec in faces_in_frame:
-                                            emb = np.array(face_rec["embedding"], dtype=np.float32)
+                                            face_rec["frame_idx"] = frame_idx
                                             all_video_faces.append(face_rec)
-                                            group = self._find_matching_group(emb, threshold)
-                                            if group is None:
-                                                group = self._create_group_from_bytes(face_rec)
-                                            else:
-                                                self._append_crop_bytes(group, face_rec.get("crop_bytes"))
-                                            group_frame_occurrences.setdefault(group["id"], set()).add(frame_idx)
 
-                                    qualifying_gids = [
-                                        gid for gid, f_set in group_frame_occurrences.items()
-                                        if len(f_set) >= 2
-                                    ]
                                     serializable_faces = []
                                     for f_idx, r in enumerate(all_video_faces):
                                         crop_p = None
@@ -924,7 +901,7 @@ class FaceClusterManager:
                                         "status": "ok",
                                         "faces": serializable_faces,
                                     }
-                                    self.file_groups[resolved_key] = qualifying_gids
+                                    self.file_groups[resolved_key] = []
                                     total_faces_found += len(all_video_faces)
                                     num_f = len(all_video_faces)
                                     if num_f == 0:
@@ -938,16 +915,6 @@ class FaceClusterManager:
                                     self.unreadable.discard(resolved_key)
                                     face_records = result.get("faces", [])
                                     total_faces_found += len(face_records)
-
-                                    assigned_group_ids = []
-                                    for face_rec in face_records:
-                                        emb = np.array(face_rec["embedding"], dtype=np.float32)
-                                        group = self._find_matching_group(emb, threshold)
-                                        if group is None:
-                                            group = self._create_group_from_bytes(face_rec)
-                                        else:
-                                            self._append_crop_bytes(group, face_rec.get("crop_bytes"))
-                                        assigned_group_ids.append(group["id"])
 
                                     serializable_faces = []
                                     for idx, r in enumerate(face_records):
@@ -974,7 +941,7 @@ class FaceClusterManager:
                                         "status": "ok",
                                         "faces": serializable_faces,
                                     }
-                                    self.file_groups[resolved_key] = assigned_group_ids
+                                    self.file_groups[resolved_key] = []
                                     num_f = len(face_records)
                                     if num_f == 0:
                                         count_no_faces += 1
@@ -1238,7 +1205,6 @@ class FaceClusterManager:
                 return 0
 
             self.unreadable.discard(resolved_key)
-            group_frame_occurrences: dict[str, set[int]] = {}
             all_video_faces: list[dict] = []
 
             for frame_idx, frame in enumerate(frames):
@@ -1256,31 +1222,28 @@ class FaceClusterManager:
                         "score": score,
                         "embedding": [float(x) for x in emb],
                         "crop": crop,
+                        "frame_idx": frame_idx,
                     }
                     all_video_faces.append(face_rec)
 
-                    group = self._find_matching_group(np.array(emb, dtype=np.float32), threshold)
-                    if group is None:
-                        group = self._create_group(face_rec)
-                    else:
-                        self._append_crop(group, crop)
-
-                    gid = group["id"]
-                    group_frame_occurrences.setdefault(gid, set()).add(frame_idx)
-
-            qualifying_group_ids = [
-                gid for gid, frame_set in group_frame_occurrences.items()
-                if len(frame_set) >= 2
-            ]
-
-            serializable_faces = [
-                {
+            serializable_faces = []
+            for f_idx, r in enumerate(all_video_faces):
+                crop_p = None
+                raw_crop = r.get("crop")
+                if raw_crop is not None:
+                    c_path = self.crops_dir / f"crop_vid_{sha256[:10]}_{f_idx}.jpg"
+                    try:
+                        cv2.imwrite(str(c_path), raw_crop)
+                        crop_p = str(c_path)
+                    except Exception:
+                        pass
+                serializable_faces.append({
                     "box": r["box"],
                     "score": r["score"],
                     "embedding": r["embedding"],
-                }
-                for r in all_video_faces
-            ]
+                    "crop_path": crop_p,
+                    "frame_idx": r.get("frame_idx", 0),
+                })
             self.cache[resolved_key] = {
                 "size": size,
                 "sha256": sha256,
@@ -1288,7 +1251,7 @@ class FaceClusterManager:
                 "status": "ok",
                 "faces": serializable_faces,
             }
-            self.file_groups[resolved_key] = qualifying_group_ids
+            self.file_groups[resolved_key] = []
             return len(all_video_faces)
         except Exception:
             self.cache[resolved_key] = {
