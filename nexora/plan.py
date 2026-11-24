@@ -31,7 +31,12 @@ def is_same_drive(p1: Path, p2: Path) -> bool:
         return True
 
 
-def resolve_collision(target_dir: Path, filename: str, reserved_targets: set[Path]) -> Path:
+def resolve_collision(
+    target_dir: Path,
+    filename: str,
+    reserved_targets: set[Path],
+    counters: dict[tuple[Path, str, str], int] | None = None,
+) -> Path:
     """Resolve filename collisions by adding numeric suffixes (1), (2), etc."""
     dot_idx = filename.rfind(".")
     if dot_idx != -1:
@@ -41,13 +46,29 @@ def resolve_collision(target_dir: Path, filename: str, reserved_targets: set[Pat
         stem = filename
         ext = ""
 
-    candidate = target_dir / filename
-    counter = 1
-    while candidate.resolve() in reserved_targets or candidate.exists():
+    if counters is None:
+        counters = {}
+
+    key = (target_dir, stem, ext)
+
+    if key in counters:
+        counter = counters[key]
         candidate = target_dir / f"{stem} ({counter}){ext}"
+    else:
+        candidate = target_dir / filename
+        if candidate.resolve() not in reserved_targets and not candidate.exists():
+            reserved_targets.add(candidate.resolve())
+            counters[key] = 1
+            return candidate
+        counter = 1
+        candidate = target_dir / f"{stem} ({counter}){ext}"
+
+    while candidate.resolve() in reserved_targets or candidate.exists():
         counter += 1
+        candidate = target_dir / f"{stem} ({counter}){ext}"
 
     reserved_targets.add(candidate.resolve())
+    counters[key] = counter + 1
     return candidate
 
 
@@ -100,6 +121,7 @@ def build_plan(
 
     planned_moves: list[PlannedMove] = []
     reserved_targets: set[Path] = set()
+    collision_counters: dict[tuple[Path, str, str], int] = {}
 
     # Scan only top-level files in source, ignore subfolders
     entries = sorted([p for p in source.iterdir() if p.is_file()], key=lambda p: p.name.lower())
@@ -243,7 +265,7 @@ def build_plan(
                         matched_by = "Unsorted"
 
         target_dir = dest / folder_rel
-        target_path = resolve_collision(target_dir, file_path.name, reserved_targets)
+        target_path = resolve_collision(target_dir, file_path.name, reserved_targets, collision_counters)
 
         if not is_same_drive(file_path, target_path):
             planned_moves.append(
