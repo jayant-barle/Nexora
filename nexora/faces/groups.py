@@ -1302,46 +1302,11 @@ class FaceClusterManager:
             self.unreadable.add(resolved_key)
             return 0
 
-    def name_group(self, group_id: str, name: str) -> None:
-        """Name a group. One name can cover multiple groups; saving same name merges them."""
-        clean_name = name.strip().lower() if name else None
-        display_name = name.strip() if name else None
-        if not clean_name:
-            clean_name = None
-            display_name = None
-
-        target_group = None
-        for g in self.groups:
-            if g["id"] == group_id:
-                target_group = g
-                break
-
-        if target_group is None:
-            return
-
-        target_group["name"] = clean_name
-        target_group["display_name"] = display_name
-
-        # Store name by member face in self.face_names so it survives re-clustering
-        if not hasattr(self, "face_names"):
-            self.face_names = {}
-
-        for file_key, gids in self.file_groups.items():
-            for idx, gid in enumerate(gids):
-                if gid == group_id:
-                    if display_name:
-                        self.face_names[f"{file_key}:{idx}"] = display_name
-                    elif f"{file_key}:{idx}" in self.face_names:
-                        del self.face_names[f"{file_key}:{idx}"]
-
-        if target_group.get("member_faces"):
-            for m in target_group["member_faces"]:
-                if display_name:
-                    self.face_names[m] = display_name
-                elif m in self.face_names:
-                    del self.face_names[m]
-
-        self.save()
+    def name_group(self, group_id: str, name: str) -> str:
+        """Name a group by delegating to PeopleManager.name_group for unified validation and behavior."""
+        from nexora.faces.people import PeopleManager
+        pm = PeopleManager(self)
+        return pm.name_group(group_id, name)
 
     def get_group_name(self, group_id: str) -> str | None:
         """Get the assigned person name for a group ID."""
