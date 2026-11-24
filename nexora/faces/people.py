@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import re
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,13 @@ class PeopleManager:
     def file_groups(self) -> dict[str, list[str]]:
         return self.cm.file_groups
 
+    def get_group_sizes(self) -> dict[str, int]:
+        """Compute total face counts for all groups across all files in a single pass."""
+        counter: collections.Counter[str] = collections.Counter()
+        for gids in self.file_groups.values():
+            counter.update(gids)
+        return counter
+
     def get_group_size(self, group_id: str) -> int:
         """Count total faces assigned to this group across all files."""
         count = 0
@@ -82,17 +90,22 @@ class PeopleManager:
             count += gids.count(group_id)
         return count
 
-    def get_visible_groups(self) -> list[dict]:
+    def get_visible_groups(self, group_sizes: dict[str, int] | None = None) -> list[dict]:
         """Return only groups that contain at least 2 faces (clusters with 1 face are hidden)."""
-        return [g for g in self.groups if self.get_group_size(g["id"]) >= MIN_VISIBLE_GROUP_SIZE]
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+        return [g for g in self.groups if group_sizes.get(g["id"], 0) >= MIN_VISIBLE_GROUP_SIZE]
 
-    def get_unnamed_numbering(self) -> dict[str, str]:
+    def get_unnamed_numbering(self, group_sizes: dict[str, int] | None = None) -> dict[str, str]:
         """Compute 'Unnamed person N' mapping for unnamed groups ordered by group size."""
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+
         unnamed_groups: list[tuple[str, int]] = []
         for g in self.groups:
             if not g.get("name") and not g.get("display_name"):
                 gid = g["id"]
-                size = self.get_group_size(gid)
+                size = group_sizes.get(gid, 0)
                 unnamed_groups.append((gid, size))
 
         # Sort by size descending, then group ID ascending for stability
@@ -116,13 +129,16 @@ class PeopleManager:
         numbering = self.get_unnamed_numbering()
         return numbering.get(group_id, "Unnamed person")
 
-    def filter_groups(self, groups: list[dict], query: str) -> list[dict]:
+    def filter_groups(self, groups: list[dict], query: str, group_sizes: dict[str, int] | None = None) -> list[dict]:
         """Filter group cards by name or by keywords ('unnamed', 'large group', 'needs review')."""
         q = (query or "").strip().lower()
         if not q:
             return list(groups)
 
-        unnamed_numbering = self.get_unnamed_numbering()
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+
+        unnamed_numbering = self.get_unnamed_numbering(group_sizes=group_sizes)
         filtered: list[dict] = []
 
         keyword_unnamed = {"unnamed", "unnamed person", "unnamed group"}
@@ -158,13 +174,16 @@ class PeopleManager:
 
         return filtered
 
-    def sort_groups(self, groups: list[dict], sort_by: str = "Largest first") -> list[dict]:
+    def sort_groups(self, groups: list[dict], sort_by: str = "Largest first", group_sizes: dict[str, int] | None = None) -> list[dict]:
         """Sort groups by: 'Largest first', 'Smallest first', 'Name A-Z', or 'Needs review first'."""
-        unnamed_numbering = self.get_unnamed_numbering()
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+
+        unnamed_numbering = self.get_unnamed_numbering(group_sizes=group_sizes)
 
         def sort_key(g: dict) -> tuple:
             gid = g["id"]
-            size = self.get_group_size(gid)
+            size = group_sizes.get(gid, 0)
             display_name = (
                 g.get("display_name")
                 or g.get("name")
@@ -308,8 +327,18 @@ class PeopleManager:
         rep_a = (mean_a / norm_a) if norm_a > 0 else mean_a
         rep_b = (mean_b / norm_b) if norm_b > 0 else mean_b
 
+        # Partition member faces
+        members_a = [f"{inst['file_key']}:{inst['face_index']}" for inst in cluster_a]
+        members_b = [f"{inst['file_key']}:{inst['face_index']}" for inst in cluster_b]
+
         target_group["representative_embedding"] = [float(x) for x in rep_a]
         target_group["needs_review"] = False
+        target_group["member_faces"] = members_a
+
+        # If any cluster_b faces had target_group's name in face_names, remove them
+        if hasattr(self.cm, "face_names") and isinstance(self.cm.face_names, dict):
+            for m in members_b:
+                self.cm.face_names.pop(m, None)
 
         new_group = {
             "id": new_gid,
@@ -318,6 +347,7 @@ class PeopleManager:
             "crop_path": target_group.get("crop_path", ""),
             "crop_paths": target_group.get("crop_paths", [])[:3],
             "representative_embedding": [float(x) for x in rep_b],
+            "member_faces": members_b,
             "needs_review": False,
         }
         self.groups.append(new_group)
@@ -359,11 +389,15 @@ class PeopleManager:
         if is_automatic and self.would_guard_refuse_merge(target_group_id, source_group_id):
             return False
 
-        # Reassign in file_groups
+        # Reassign in file_groups and track moved face keys
+        moved_faces: list[str] = []
         for file_key, gids in self.file_groups.items():
             for idx in range(len(gids)):
                 if gids[idx] == source_group_id:
                     gids[idx] = target_group_id
+                    f_key = f"{file_key}:{idx}"
+                    if f_key not in moved_faces:
+                        moved_faces.append(f_key)
 
         # Combine crops
         target_group = None
@@ -376,10 +410,23 @@ class PeopleManager:
 
         if target_group is not None and source_idx is not None:
             source_group = self.groups[source_idx]
-            target_members = target_group.setdefault("member_faces", [])
             for mf in source_group.get("member_faces", []):
+                if mf not in moved_faces:
+                    moved_faces.append(mf)
+
+            target_members = target_group.setdefault("member_faces", [])
+            for mf in moved_faces:
                 if mf not in target_members:
                     target_members.append(mf)
+
+            # When merging into a named target, record target name in cm.face_names for moved faces
+            target_name = target_group.get("display_name") or target_group.get("name")
+            if target_name:
+                if not hasattr(self.cm, "face_names"):
+                    self.cm.face_names = {}
+                for mf in moved_faces:
+                    self.cm.face_names[mf] = target_name
+
             crops = target_group.get("crop_paths", [])
             for c in source_group.get("crop_paths", []):
                 if c not in crops:

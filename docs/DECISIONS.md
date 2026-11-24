@@ -135,6 +135,59 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: Persist face names on group merge:
+  - In `PeopleManager.merge_groups` (`nexora/faces/people.py`), when merging into a named target group, update `cm.face_names` for each moved face to the target group's name.
+  - Ensures moved faces retain the target's assigned name across re-scans and re-clustering.
+- 2026-11-24: Split group member face persistence and name isolation:
+  - Face membership partitioning on split: In `PeopleManager.split_group`, `target_group["member_faces"]` is updated to contain strictly cluster A's faces (`f"{fk}:{idx}"`), and `new_group["member_faces"]` is populated with cluster B's faces.
+  - Face name isolation: When a group is split, any faces partitioned into the new group (`cluster_b`) have their entries in `FaceClusterManager.face_names` removed so they do not inherit the original group's assigned name or contaminate naming during rescans.
+  - Backward compatibility in load: In `FaceClusterManager.load()`, any legacy group entries missing `"member_faces"` have their member faces reconstructed from `self.file_groups` to ensure consistent data structures across the application.
+  - Rescan stability: Split groups retain their distinct member face sets and names across subsequent `cluster_all_faces` rescans, preventing unintended re-merging under the same name.
+- 2026-11-24: Unified single name group path:
+  - `FaceClusterManager.name_group` in `nexora/faces/groups.py` delegates directly to `PeopleManager.name_group` in `nexora/faces/people.py`.
+  - Ensures consistent name validation (empty, max length 40, Windows reserved names) and review flag clearing (`needs_review = False`) across all callers.
+- 2026-11-24: People screen group size computation optimization:
+  - Added `get_group_sizes()` to `PeopleManager` using `collections.Counter` over `file_groups.values()` in a single pass.
+  - `sort_groups` and `filter_groups` accept an optional precomputed `group_sizes` dictionary (or compute it once if not provided), eliminating repeated O(files) walks per group.
+  - `render_people_cards` computes `group_sizes` once per render and passes it through to `get_visible_groups`, `get_unnamed_numbering`, `filter_groups`, `sort_groups`, and card rendering.
+  - `get_group_size(group_id)` retains its signature and exact return values for callers outside those paths.
+- 2026-11-24: Move worker thread exception handling and UI recovery:
+  - Background move thread error boundary: `NexoraApp._on_approve_click` wraps the background worker thread's `run_plan` execution in a `try/except Exception` block, mirroring the error handling pattern used by the scan, preview, and undo threads.
+  - UI state recovery on move failure: When an unhandled exception (such as `OSError`) occurs during `run_plan`, the exception is caught and dispatched to the main thread via `self.root.after(0, self._move_error, str(e))`. The `_move_error` handler resets `is_running = False`, un-packs the progress bar, re-enables the Preview button, disables the Approve button, updates the Undo button state, updates the status bar to "Move failed", and displays the error message via `messagebox.showerror("Move Error", err_msg)`.
+- 2026-11-24: Mover OSError handling, immediate move logging, and run halt summary:
+  - In `nexora/mover.py`, `run_plan` wraps per-file operations (source SHA-256 computation, directory creation, `os.replace`, log entry recording, target SHA-256 verification) in `try/except OSError`.
+  - The JSON log entry for each move is written and flushed immediately upon successful `os.replace`, before target SHA-256 verification. If verification raises `OSError` or detects a hash mismatch, the move is already persisted in the log so `undo_run` can reverse it.
+  - On `OSError` (e.g. file locked by antivirus/cloud sync or disk full), the run stops immediately without unhandled exceptions.
+  - All moves completed prior to the error remain recorded in the run log so `undo_run` can cleanly reverse them.
+  - Remaining files in the plan remain untouched.
+  - Returns a standard summary dictionary with `{"moved": moved_count, "skipped": skipped_count, "refused": refused_count, "stopped": True, "reason": f"Cannot move {source}: {err}"}`.
+- 2026-11-24: Video capture resource release:
+  - In `nexora/faces/groups.py`, wrapped OpenCV `cv2.VideoCapture` operations in `try/finally` blocks inside both `_worker_process_file` and `_process_video`.
+  - Guaranteed `cap.release()` is called in the `finally` block even when `isOpened()` returns `False`, `total_frames <= 0`, or frame reads raise an error.
+  - Prevents lingering file locks on video files on Windows.
+- 2026-11-24: Removal of discarded mid-scan matching and orphan temporary crop writes:
+  - Removed mid-scan online matching (`_find_matching_group`) and temporary group crop writes (`_create_group`, `_create_group_from_bytes`, `_append_crop`, `_append_crop_bytes`) during `scan_source` (sequential and parallel worker paths) and `_process_video`.
+  - Offline clustering (`cluster_all_faces`) creates groups and selects representative crops at the end of the scan from the per-face cache embeddings and crops (`crop_<sha[:10]>_<idx>.jpg`).
+  - Eliminates orphan `crop_group_*.jpg` files in `runs/face_crops/` and unnecessary mid-scan matching overhead while fully preserving per-file caching, incremental progress saves every 50 files, scan logs, unreadable tracking, and mid-scan pause/resume capabilities.
+- 2026-11-24: EXIF DateTimeOriginal null-terminator handling:
+  - Cameras storing EXIF DateTimeOriginal with trailing null bytes (`\x00`) failed string parsing under `strptime` and returned None.
+  - Updated `capture_date` in `nexora/metadata.py` to strip null bytes and whitespace and slice the first 19 characters (`raw_val.strip(" \t\r\n\x00")[:19]`) before parsing with `strptime("%Y:%m:%d %H:%M:%S")`.
+- 2026-11-24: Persistent next-free collision counter in plan generation:
+  - Linear-time collision resolution: In `build_plan` (`nexora/plan.py`), `resolve_collision` maintains a persistent collision counters dictionary keyed by `(target_dir, stem, ext)` to store the next free numeric suffix. Subsequent collisions for the same target directory and file stem start their existence check from the stored next-free integer rather than restarting at 1.
+  - Elimination of O(N^2) disk existence checks: For target folders containing hundreds of files sharing common camera filenames (e.g., `IMG_0001.jpg`), disk checks during preview generation drop from quadratic $O(N^2)$ to linear $O(N)$ (from >90,000 checks down to ~600 for 300 collisions), while strictly preserving existing filename formatting `f"{stem} ({counter}){ext}"` and all placement rules.
+- 2026-11-24: Per-face labelling template evaluation (scripts/measure_faces.py):
+  - Made scripts/measure_faces.py accept per-face labelling template CSVs via `--labels <path>` (columns: file, face_index, crop_path, person), such as runs/chulmati_labels_template.csv.
+  - Rows with non-empty person are treated as ground-truth faces; blank rows (empty or whitespace) are ignored from evaluation and counted as unlabelled rows ignored in the report.
+  - Faces are mapped by file and face_index using the same detection settings as the scan without using cluster IDs.
+  - Reports count of labelled faces, unlabelled rows ignored, distinct people, pairwise precision/recall/FPR at detection thresholds 0.6, 0.7, 0.85, and specific file names involved in false merges.
+  - Retained full backwards compatibility with legacy expected_faces.csv format (columns: file, person) via `--csv`.
+  - Exits cleanly without error when --labels points at a missing file.
+- 2026-11-24: Face quality metrics in detection, template, and evaluation:
+  - Stored face quality metrics (`box_w`, `box_h` in original image pixels, and `det_score`) for each detected face in `nexora/faces/detect.py` and `nexora/faces/groups.py`.
+  - Bumped `runs/faces.json` `schema_version` to 3; `FaceClusterManager.load()` automatically migrates older schemas (schema 1 and 2) in place, loading existing entries cleanly with the new fields missing.
+  - Added `box_w`, `box_h`, `det_score` columns to `runs/chulmati_labels_template.csv` in `scripts/real_library_report.py`, preserving existing columns and keeping template free of cluster IDs.
+  - Enhanced `scripts/measure_faces.py` when `--labels` is used to include breakdown tables of wrong merges (FP pairs) and wrong splits (FN pairs) categorized by face size bucket (under 60px, 60–100px, over 100px) and detection score bucket (<0.70, 0.70–0.85, 0.85–0.95, >0.95).
+
 
 
 

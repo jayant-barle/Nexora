@@ -68,3 +68,10 @@ def test_heic_image_with_datetime_original(tmp_path: Path) -> None:
 
     dt = capture_date(heic_path)
     assert dt == datetime(2023, 5, 20, 14, 30, 0)
+
+
+def test_image_with_null_terminated_datetime_original(tmp_path: Path) -> None:
+    img_path = _create_test_image(tmp_path / "img_null_date.jpg", "2023:05:14 10:22:31\x00")
+    dt = capture_date(img_path)
+    assert dt == datetime(2023, 5, 14, 10, 22, 31)
+
