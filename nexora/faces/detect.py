@@ -187,6 +187,18 @@ def _invert_rot270(faces: list[np.ndarray], orig_w: int) -> list[np.ndarray]:
     return res
 
 
+def get_face_box_and_score(face: np.ndarray) -> dict[str, Any]:
+    """Extract face box width, height (in original image pixels), and detection score from a face array."""
+    w = int(round(float(face[2]))) if len(face) > 2 else 0
+    h = int(round(float(face[3]))) if len(face) > 3 else 0
+    score = float(face[14]) if len(face) > 14 else 1.0
+    return {
+        "box_w": w,
+        "box_h": h,
+        "det_score": score,
+    }
+
+
 def detect_faces(
     image_path: Path | str | np.ndarray,
     model_path: Path | None = None,

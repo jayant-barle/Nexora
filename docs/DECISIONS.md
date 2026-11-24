@@ -175,6 +175,18 @@
 - 2026-11-24: Persistent next-free collision counter in plan generation:
   - Linear-time collision resolution: In `build_plan` (`nexora/plan.py`), `resolve_collision` maintains a persistent collision counters dictionary keyed by `(target_dir, stem, ext)` to store the next free numeric suffix. Subsequent collisions for the same target directory and file stem start their existence check from the stored next-free integer rather than restarting at 1.
   - Elimination of O(N^2) disk existence checks: For target folders containing hundreds of files sharing common camera filenames (e.g., `IMG_0001.jpg`), disk checks during preview generation drop from quadratic $O(N^2)$ to linear $O(N)$ (from >90,000 checks down to ~600 for 300 collisions), while strictly preserving existing filename formatting `f"{stem} ({counter}){ext}"` and all placement rules.
+- 2026-11-24: Per-face labelling template evaluation (scripts/measure_faces.py):
+  - Made scripts/measure_faces.py accept per-face labelling template CSVs via `--labels <path>` (columns: file, face_index, crop_path, person), such as runs/chulmati_labels_template.csv.
+  - Rows with non-empty person are treated as ground-truth faces; blank rows (empty or whitespace) are ignored from evaluation and counted as unlabelled rows ignored in the report.
+  - Faces are mapped by file and face_index using the same detection settings as the scan without using cluster IDs.
+  - Reports count of labelled faces, unlabelled rows ignored, distinct people, pairwise precision/recall/FPR at detection thresholds 0.6, 0.7, 0.85, and specific file names involved in false merges.
+  - Retained full backwards compatibility with legacy expected_faces.csv format (columns: file, person) via `--csv`.
+  - Exits cleanly without error when --labels points at a missing file.
+- 2026-11-24: Face quality metrics in detection, template, and evaluation:
+  - Stored face quality metrics (`box_w`, `box_h` in original image pixels, and `det_score`) for each detected face in `nexora/faces/detect.py` and `nexora/faces/groups.py`.
+  - Bumped `runs/faces.json` `schema_version` to 3; `FaceClusterManager.load()` automatically migrates older schemas (schema 1 and 2) in place, loading existing entries cleanly with the new fields missing.
+  - Added `box_w`, `box_h`, `det_score` columns to `runs/chulmati_labels_template.csv` in `scripts/real_library_report.py`, preserving existing columns and keeping template free of cluster IDs.
+  - Enhanced `scripts/measure_faces.py` when `--labels` is used to include breakdown tables of wrong merges (FP pairs) and wrong splits (FN pairs) categorized by face size bucket (under 60px, 60–100px, over 100px) and detection score bucket (<0.70, 0.70–0.85, 0.85–0.95, >0.95).
 
 
 

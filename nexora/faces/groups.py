@@ -163,9 +163,14 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
 
                     box = [int(v) for v in face[0:4]]
                     score = float(face[14]) if len(face) > 14 else 1.0
+                    box_w = int(round(float(face[2]))) if len(face) > 2 else (box[2] if len(box) > 2 else 0)
+                    box_h = int(round(float(face[3]))) if len(face) > 3 else (box[3] if len(box) > 3 else 0)
                     faces_in_frame.append({
                         "box": box,
+                        "box_w": box_w,
+                        "box_h": box_h,
                         "score": score,
+                        "det_score": score,
                         "embedding": [float(x) for x in emb],
                         "crop_bytes": crop_bytes,
                     })
@@ -220,9 +225,14 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
 
                 box = [int(v) for v in face[0:4]]
                 score = float(face[14]) if len(face) > 14 else 1.0
+                box_w = int(round(float(face[2]))) if len(face) > 2 else (box[2] if len(box) > 2 else 0)
+                box_h = int(round(float(face[3]))) if len(face) > 3 else (box[3] if len(box) > 3 else 0)
                 face_records.append({
                     "box": box,
+                    "box_w": box_w,
+                    "box_h": box_h,
                     "score": score,
+                    "det_score": score,
                     "embedding": [float(x) for x in emb],
                     "crop_bytes": crop_bytes,
                 })
@@ -323,17 +333,17 @@ class FaceClusterManager:
                 if members:
                     g["member_faces"] = members
 
-        # Migrate schema 1 (or missing schema_version) in place to schema 2
-        if schema_version is None or schema_version < 2:
+        # Migrate older schema versions (missing, 1, or 2) in place to schema 3
+        if schema_version is None or schema_version < 3:
             self.save()
 
     def save(self) -> None:
-        """Save state to JSON atomically using a temp file and replace with schema_version 2."""
+        """Save state to JSON atomically using a temp file and replace with schema_version 3."""
         self.json_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = self.json_path.with_suffix(".tmp")
         data = {
-            "schema_version": 2,
-            "version": 2,
+            "schema_version": 3,
+            "version": 3,
             "cache": self.cache,
             "groups": self.groups,
             "file_groups": self.file_groups,
