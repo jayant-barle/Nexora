@@ -135,6 +135,10 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: EXIF DateTimeOriginal null-terminator handling:
+  - Cameras storing EXIF DateTimeOriginal with trailing null bytes (`\x00`) failed string parsing under `strptime` and returned None.
+  - Updated `capture_date` in `nexora/metadata.py` to strip null bytes and whitespace and slice the first 19 characters (`raw_val.strip(" \t\r\n\x00")[:19]`) before parsing with `strptime("%Y:%m:%d %H:%M:%S")`.
+
 
 
 
