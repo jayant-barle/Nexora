@@ -135,6 +135,10 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: Persist face names on group merge:
+  - In `PeopleManager.merge_groups` (`nexora/faces/people.py`), when merging into a named target group, update `cm.face_names` for each moved face to the target group's name.
+  - Ensures moved faces retain the target's assigned name across re-scans and re-clustering.
+
 
 
 

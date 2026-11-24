@@ -359,11 +359,15 @@ class PeopleManager:
         if is_automatic and self.would_guard_refuse_merge(target_group_id, source_group_id):
             return False
 
-        # Reassign in file_groups
+        # Reassign in file_groups and track moved face keys
+        moved_faces: list[str] = []
         for file_key, gids in self.file_groups.items():
             for idx in range(len(gids)):
                 if gids[idx] == source_group_id:
                     gids[idx] = target_group_id
+                    f_key = f"{file_key}:{idx}"
+                    if f_key not in moved_faces:
+                        moved_faces.append(f_key)
 
         # Combine crops
         target_group = None
@@ -376,10 +380,23 @@ class PeopleManager:
 
         if target_group is not None and source_idx is not None:
             source_group = self.groups[source_idx]
-            target_members = target_group.setdefault("member_faces", [])
             for mf in source_group.get("member_faces", []):
+                if mf not in moved_faces:
+                    moved_faces.append(mf)
+
+            target_members = target_group.setdefault("member_faces", [])
+            for mf in moved_faces:
                 if mf not in target_members:
                     target_members.append(mf)
+
+            # When merging into a named target, record target name in cm.face_names for moved faces
+            target_name = target_group.get("display_name") or target_group.get("name")
+            if target_name:
+                if not hasattr(self.cm, "face_names"):
+                    self.cm.face_names = {}
+                for mf in moved_faces:
+                    self.cm.face_names[mf] = target_name
+
             crops = target_group.get("crop_paths", [])
             for c in source_group.get("crop_paths", []):
                 if c not in crops:
