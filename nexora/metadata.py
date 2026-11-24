@@ -49,6 +49,7 @@ def capture_date(path: Path) -> datetime | None:
             if not raw_val or not isinstance(raw_val, str):
                 return None
 
-            return datetime.strptime(raw_val.strip(), "%Y:%m:%d %H:%M:%S")
+            cleaned_val = raw_val.strip(" \t\r\n\x00")[:19]
+            return datetime.strptime(cleaned_val, "%Y:%m:%d %H:%M:%S")
     except Exception:
         return None

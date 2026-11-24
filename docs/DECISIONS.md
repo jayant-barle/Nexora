@@ -169,6 +169,9 @@
   - Removed mid-scan online matching (`_find_matching_group`) and temporary group crop writes (`_create_group`, `_create_group_from_bytes`, `_append_crop`, `_append_crop_bytes`) during `scan_source` (sequential and parallel worker paths) and `_process_video`.
   - Offline clustering (`cluster_all_faces`) creates groups and selects representative crops at the end of the scan from the per-face cache embeddings and crops (`crop_<sha[:10]>_<idx>.jpg`).
   - Eliminates orphan `crop_group_*.jpg` files in `runs/face_crops/` and unnecessary mid-scan matching overhead while fully preserving per-file caching, incremental progress saves every 50 files, scan logs, unreadable tracking, and mid-scan pause/resume capabilities.
+- 2026-11-24: EXIF DateTimeOriginal null-terminator handling:
+  - Cameras storing EXIF DateTimeOriginal with trailing null bytes (`\x00`) failed string parsing under `strptime` and returned None.
+  - Updated `capture_date` in `nexora/metadata.py` to strip null bytes and whitespace and slice the first 19 characters (`raw_val.strip(" \t\r\n\x00")[:19]`) before parsing with `strptime("%Y:%m:%d %H:%M:%S")`.
 
 
 
