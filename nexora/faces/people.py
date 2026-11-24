@@ -308,8 +308,18 @@ class PeopleManager:
         rep_a = (mean_a / norm_a) if norm_a > 0 else mean_a
         rep_b = (mean_b / norm_b) if norm_b > 0 else mean_b
 
+        # Partition member faces
+        members_a = [f"{inst['file_key']}:{inst['face_index']}" for inst in cluster_a]
+        members_b = [f"{inst['file_key']}:{inst['face_index']}" for inst in cluster_b]
+
         target_group["representative_embedding"] = [float(x) for x in rep_a]
         target_group["needs_review"] = False
+        target_group["member_faces"] = members_a
+
+        # If any cluster_b faces had target_group's name in face_names, remove them
+        if hasattr(self.cm, "face_names") and isinstance(self.cm.face_names, dict):
+            for m in members_b:
+                self.cm.face_names.pop(m, None)
 
         new_group = {
             "id": new_gid,
@@ -318,6 +328,7 @@ class PeopleManager:
             "crop_path": target_group.get("crop_path", ""),
             "crop_paths": target_group.get("crop_paths", [])[:3],
             "representative_embedding": [float(x) for x in rep_b],
+            "member_faces": members_b,
             "needs_review": False,
         }
         self.groups.append(new_group)

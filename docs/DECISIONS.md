@@ -135,6 +135,12 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: Split group member face persistence and name isolation:
+  - Face membership partitioning on split: In `PeopleManager.split_group`, `target_group["member_faces"]` is updated to contain strictly cluster A's faces (`f"{fk}:{idx}"`), and `new_group["member_faces"]` is populated with cluster B's faces.
+  - Face name isolation: When a group is split, any faces partitioned into the new group (`cluster_b`) have their entries in `FaceClusterManager.face_names` removed so they do not inherit the original group's assigned name or contaminate naming during rescans.
+  - Backward compatibility in load: In `FaceClusterManager.load()`, any legacy group entries missing `"member_faces"` have their member faces reconstructed from `self.file_groups` to ensure consistent data structures across the application.
+  - Rescan stability: Split groups retain their distinct member face sets and names across subsequent `cluster_all_faces` rescans, preventing unintended re-merging under the same name.
+
 
 
 
