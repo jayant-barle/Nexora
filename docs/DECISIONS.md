@@ -146,6 +146,11 @@
 - 2026-11-24: Unified single name group path:
   - `FaceClusterManager.name_group` in `nexora/faces/groups.py` delegates directly to `PeopleManager.name_group` in `nexora/faces/people.py`.
   - Ensures consistent name validation (empty, max length 40, Windows reserved names) and review flag clearing (`needs_review = False`) across all callers.
+- 2026-11-24: People screen group size computation optimization:
+  - Added `get_group_sizes()` to `PeopleManager` using `collections.Counter` over `file_groups.values()` in a single pass.
+  - `sort_groups` and `filter_groups` accept an optional precomputed `group_sizes` dictionary (or compute it once if not provided), eliminating repeated O(files) walks per group.
+  - `render_people_cards` computes `group_sizes` once per render and passes it through to `get_visible_groups`, `get_unnamed_numbering`, `filter_groups`, `sort_groups`, and card rendering.
+  - `get_group_size(group_id)` retains its signature and exact return values for callers outside those paths.
 
 
 

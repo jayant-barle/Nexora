@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import re
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,13 @@ class PeopleManager:
     def file_groups(self) -> dict[str, list[str]]:
         return self.cm.file_groups
 
+    def get_group_sizes(self) -> dict[str, int]:
+        """Compute total face counts for all groups across all files in a single pass."""
+        counter: collections.Counter[str] = collections.Counter()
+        for gids in self.file_groups.values():
+            counter.update(gids)
+        return counter
+
     def get_group_size(self, group_id: str) -> int:
         """Count total faces assigned to this group across all files."""
         count = 0
@@ -82,17 +90,22 @@ class PeopleManager:
             count += gids.count(group_id)
         return count
 
-    def get_visible_groups(self) -> list[dict]:
+    def get_visible_groups(self, group_sizes: dict[str, int] | None = None) -> list[dict]:
         """Return only groups that contain at least 2 faces (clusters with 1 face are hidden)."""
-        return [g for g in self.groups if self.get_group_size(g["id"]) >= MIN_VISIBLE_GROUP_SIZE]
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+        return [g for g in self.groups if group_sizes.get(g["id"], 0) >= MIN_VISIBLE_GROUP_SIZE]
 
-    def get_unnamed_numbering(self) -> dict[str, str]:
+    def get_unnamed_numbering(self, group_sizes: dict[str, int] | None = None) -> dict[str, str]:
         """Compute 'Unnamed person N' mapping for unnamed groups ordered by group size."""
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+
         unnamed_groups: list[tuple[str, int]] = []
         for g in self.groups:
             if not g.get("name") and not g.get("display_name"):
                 gid = g["id"]
-                size = self.get_group_size(gid)
+                size = group_sizes.get(gid, 0)
                 unnamed_groups.append((gid, size))
 
         # Sort by size descending, then group ID ascending for stability
@@ -116,13 +129,16 @@ class PeopleManager:
         numbering = self.get_unnamed_numbering()
         return numbering.get(group_id, "Unnamed person")
 
-    def filter_groups(self, groups: list[dict], query: str) -> list[dict]:
+    def filter_groups(self, groups: list[dict], query: str, group_sizes: dict[str, int] | None = None) -> list[dict]:
         """Filter group cards by name or by keywords ('unnamed', 'large group', 'needs review')."""
         q = (query or "").strip().lower()
         if not q:
             return list(groups)
 
-        unnamed_numbering = self.get_unnamed_numbering()
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+
+        unnamed_numbering = self.get_unnamed_numbering(group_sizes=group_sizes)
         filtered: list[dict] = []
 
         keyword_unnamed = {"unnamed", "unnamed person", "unnamed group"}
@@ -158,13 +174,16 @@ class PeopleManager:
 
         return filtered
 
-    def sort_groups(self, groups: list[dict], sort_by: str = "Largest first") -> list[dict]:
+    def sort_groups(self, groups: list[dict], sort_by: str = "Largest first", group_sizes: dict[str, int] | None = None) -> list[dict]:
         """Sort groups by: 'Largest first', 'Smallest first', 'Name A-Z', or 'Needs review first'."""
-        unnamed_numbering = self.get_unnamed_numbering()
+        if group_sizes is None:
+            group_sizes = self.get_group_sizes()
+
+        unnamed_numbering = self.get_unnamed_numbering(group_sizes=group_sizes)
 
         def sort_key(g: dict) -> tuple:
             gid = g["id"]
-            size = self.get_group_size(gid)
+            size = group_sizes.get(gid, 0)
             display_name = (
                 g.get("display_name")
                 or g.get("name")
