@@ -46,39 +46,47 @@ def run_plan(plan: list[PlannedMove], log_path: Path | str) -> dict[str, Any]:
             if move.status != "ready":
                 continue
 
-            # a. Compute the SHA-256 of the source
-            src_sha = compute_sha256(move.source)
+            try:
+                # a. Compute the SHA-256 of the source
+                src_sha = compute_sha256(move.source)
 
-            # b. Ensure target folder exists and move using os.replace
-            move.target.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(move.source, move.target)
+                # b. Ensure target folder exists and move using os.replace
+                move.target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(move.source, move.target)
 
-            # c. Compute the SHA-256 of the target and verify integrity
-            target_sha = compute_sha256(move.target)
-            if target_sha != src_sha:
-                # STOP immediately and report. Never delete anything.
+                # c. Append JSON log entry and flush immediately so undo works
+                entry = {
+                    "original": str(move.source.resolve()),
+                    "moved_to": str(move.target.resolve()),
+                    "sha256": src_sha,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+                log_file.write(json.dumps(entry) + "\n")
+                log_file.flush()
+                moved_count += 1
+
+                # d. Compute the SHA-256 of the target and verify integrity
+                target_sha = compute_sha256(move.target)
+                if target_sha != src_sha:
+                    # STOP immediately and report. Never delete anything.
+                    return {
+                        "moved": moved_count,
+                        "skipped": skipped_count,
+                        "refused": refused_count,
+                        "stopped": True,
+                        "reason": (
+                            f"SHA-256 mismatch for moved file {move.target} "
+                            f"(expected {src_sha}, got {target_sha}). Run halted."
+                        ),
+                    }
+            except OSError as err:
                 return {
                     "moved": moved_count,
                     "skipped": skipped_count,
                     "refused": refused_count,
                     "stopped": True,
-                    "reason": (
-                        f"SHA-256 mismatch for moved file {move.target} "
-                        f"(expected {src_sha}, got {target_sha}). Run halted."
-                    ),
+                    "reason": f"Cannot move {move.source}: {err}",
                 }
-
-            # d. Append JSON log entry and flush immediately
-            entry = {
-                "original": str(move.source.resolve()),
-                "moved_to": str(move.target.resolve()),
-                "sha256": src_sha,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-            log_file.write(json.dumps(entry) + "\n")
-            log_file.flush()
-
-            moved_count += 1
 
     return {
         "moved": moved_count,

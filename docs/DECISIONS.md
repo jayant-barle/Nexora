@@ -154,6 +154,13 @@
 - 2026-11-24: Move worker thread exception handling and UI recovery:
   - Background move thread error boundary: `NexoraApp._on_approve_click` wraps the background worker thread's `run_plan` execution in a `try/except Exception` block, mirroring the error handling pattern used by the scan, preview, and undo threads.
   - UI state recovery on move failure: When an unhandled exception (such as `OSError`) occurs during `run_plan`, the exception is caught and dispatched to the main thread via `self.root.after(0, self._move_error, str(e))`. The `_move_error` handler resets `is_running = False`, un-packs the progress bar, re-enables the Preview button, disables the Approve button, updates the Undo button state, updates the status bar to "Move failed", and displays the error message via `messagebox.showerror("Move Error", err_msg)`.
+- 2026-11-24: Mover OSError handling, immediate move logging, and run halt summary:
+  - In `nexora/mover.py`, `run_plan` wraps per-file operations (source SHA-256 computation, directory creation, `os.replace`, log entry recording, target SHA-256 verification) in `try/except OSError`.
+  - The JSON log entry for each move is written and flushed immediately upon successful `os.replace`, before target SHA-256 verification. If verification raises `OSError` or detects a hash mismatch, the move is already persisted in the log so `undo_run` can reverse it.
+  - On `OSError` (e.g. file locked by antivirus/cloud sync or disk full), the run stops immediately without unhandled exceptions.
+  - All moves completed prior to the error remain recorded in the run log so `undo_run` can cleanly reverse them.
+  - Remaining files in the plan remain untouched.
+  - Returns a standard summary dictionary with `{"moved": moved_count, "skipped": skipped_count, "refused": refused_count, "stopped": True, "reason": f"Cannot move {source}: {err}"}`.
 
 
 
