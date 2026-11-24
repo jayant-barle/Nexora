@@ -92,46 +92,47 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
     if is_video:
         try:
             cap = cv2.VideoCapture(str(file_path))
-            if not cap.isOpened():
-                return {
-                    "resolved_key": file_path_str,
-                    "type": "video",
-                    "size": curr_size,
-                    "sha256": curr_sha,
-                    "status": "could not read",
-                    "frame_faces": [],
-                }
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            if total_frames <= 0:
-                cap.release()
-                return {
-                    "resolved_key": file_path_str,
-                    "type": "video",
-                    "size": curr_size,
-                    "sha256": curr_sha,
-                    "status": "could not read",
-                    "frame_faces": [],
-                }
+            try:
+                if not cap.isOpened():
+                    return {
+                        "resolved_key": file_path_str,
+                        "type": "video",
+                        "size": curr_size,
+                        "sha256": curr_sha,
+                        "status": "could not read",
+                        "frame_faces": [],
+                    }
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames <= 0:
+                    return {
+                        "resolved_key": file_path_str,
+                        "type": "video",
+                        "size": curr_size,
+                        "sha256": curr_sha,
+                        "status": "could not read",
+                        "frame_faces": [],
+                    }
 
-            indices = [
-                min(int((i + 0.5) * total_frames / 5), total_frames - 1)
-                for i in range(5)
-            ]
-            frames: list[np.ndarray] = []
-            for idx in indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    # Normalize frame to 1280px
-                    fh, fw = frame.shape[:2]
-                    longest = max(fh, fw)
-                    if longest != TARGET_SIZE and longest > 0:
-                        scale = TARGET_SIZE / float(longest)
-                        frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
-                    else:
-                        frame_1280 = frame
-                    frames.append(frame_1280)
-            cap.release()
+                indices = [
+                    min(int((i + 0.5) * total_frames / 5), total_frames - 1)
+                    for i in range(5)
+                ]
+                frames: list[np.ndarray] = []
+                for idx in indices:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        # Normalize frame to 1280px
+                        fh, fw = frame.shape[:2]
+                        longest = max(fh, fw)
+                        if longest != TARGET_SIZE and longest > 0:
+                            scale = TARGET_SIZE / float(longest)
+                            frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
+                        else:
+                            frame_1280 = frame
+                        frames.append(frame_1280)
+            finally:
+                cap.release()
 
             if len(frames) == 0:
                 return {
@@ -1179,51 +1180,52 @@ class FaceClusterManager:
         resolved_key = str(video_path.resolve())
         try:
             cap = cv2.VideoCapture(str(video_path))
-            if not cap.isOpened():
-                self.cache[resolved_key] = {
-                    "size": size,
-                    "sha256": sha256,
-                    "type": "video",
-                    "status": "could not read",
-                    "faces": [],
-                }
-                self.file_groups[resolved_key] = []
-                self.unreadable.add(resolved_key)
-                return 0
+            try:
+                if not cap.isOpened():
+                    self.cache[resolved_key] = {
+                        "size": size,
+                        "sha256": sha256,
+                        "type": "video",
+                        "status": "could not read",
+                        "faces": [],
+                    }
+                    self.file_groups[resolved_key] = []
+                    self.unreadable.add(resolved_key)
+                    return 0
 
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            if total_frames <= 0:
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames <= 0:
+                    self.cache[resolved_key] = {
+                        "size": size,
+                        "sha256": sha256,
+                        "type": "video",
+                        "status": "could not read",
+                        "faces": [],
+                    }
+                    self.file_groups[resolved_key] = []
+                    self.unreadable.add(resolved_key)
+                    return 0
+
+                indices = [
+                    min(int((i + 0.5) * total_frames / 5), total_frames - 1)
+                    for i in range(5)
+                ]
+                frames: list[np.ndarray] = []
+                for idx in indices:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        # Normalize frame to 1280px
+                        fh, fw = frame.shape[:2]
+                        longest = max(fh, fw)
+                        if longest != TARGET_SIZE and longest > 0:
+                            scale = TARGET_SIZE / float(longest)
+                            frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
+                        else:
+                            frame_1280 = frame
+                        frames.append(frame_1280)
+            finally:
                 cap.release()
-                self.cache[resolved_key] = {
-                    "size": size,
-                    "sha256": sha256,
-                    "type": "video",
-                    "status": "could not read",
-                    "faces": [],
-                }
-                self.file_groups[resolved_key] = []
-                self.unreadable.add(resolved_key)
-                return 0
-
-            indices = [
-                min(int((i + 0.5) * total_frames / 5), total_frames - 1)
-                for i in range(5)
-            ]
-            frames: list[np.ndarray] = []
-            for idx in indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    # Normalize frame to 1280px
-                    fh, fw = frame.shape[:2]
-                    longest = max(fh, fw)
-                    if longest != TARGET_SIZE and longest > 0:
-                        scale = TARGET_SIZE / float(longest)
-                        frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
-                    else:
-                        frame_1280 = frame
-                    frames.append(frame_1280)
-            cap.release()
 
             if len(frames) == 0:
                 self.cache[resolved_key] = {
