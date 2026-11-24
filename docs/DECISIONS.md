@@ -135,6 +135,10 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: Persistent next-free collision counter in plan generation:
+  - Linear-time collision resolution: In `build_plan` (`nexora/plan.py`), `resolve_collision` maintains a persistent collision counters dictionary keyed by `(target_dir, stem, ext)` to store the next free numeric suffix. Subsequent collisions for the same target directory and file stem start their existence check from the stored next-free integer rather than restarting at 1.
+  - Elimination of O(N^2) disk existence checks: For target folders containing hundreds of files sharing common camera filenames (e.g., `IMG_0001.jpg`), disk checks during preview generation drop from quadratic $O(N^2)$ to linear $O(N)$ (from >90,000 checks down to ~600 for 300 collisions), while strictly preserving existing filename formatting `f"{stem} ({counter}){ext}"` and all placement rules.
+
 
 
 
