@@ -310,6 +310,18 @@ class FaceClusterManager:
             if isinstance(v, dict) and v.get("status") == "could not read":
                 self.unreadable.add(k)
 
+        # Ensure all groups have member_faces populated from file_groups if missing
+        for g in self.groups:
+            if isinstance(g, dict) and "member_faces" not in g:
+                gid = g.get("id")
+                members = []
+                for fk, gids in self.file_groups.items():
+                    for idx, g_val in enumerate(gids):
+                        if g_val == gid:
+                            members.append(f"{fk}:{idx}")
+                if members:
+                    g["member_faces"] = members
+
         # Migrate schema 1 (or missing schema_version) in place to schema 2
         if schema_version is None or schema_version < 2:
             self.save()

@@ -138,6 +138,11 @@
 - 2026-11-24: Persist face names on group merge:
   - In `PeopleManager.merge_groups` (`nexora/faces/people.py`), when merging into a named target group, update `cm.face_names` for each moved face to the target group's name.
   - Ensures moved faces retain the target's assigned name across re-scans and re-clustering.
+- 2026-11-24: Split group member face persistence and name isolation:
+  - Face membership partitioning on split: In `PeopleManager.split_group`, `target_group["member_faces"]` is updated to contain strictly cluster A's faces (`f"{fk}:{idx}"`), and `new_group["member_faces"]` is populated with cluster B's faces.
+  - Face name isolation: When a group is split, any faces partitioned into the new group (`cluster_b`) have their entries in `FaceClusterManager.face_names` removed so they do not inherit the original group's assigned name or contaminate naming during rescans.
+  - Backward compatibility in load: In `FaceClusterManager.load()`, any legacy group entries missing `"member_faces"` have their member faces reconstructed from `self.file_groups` to ensure consistent data structures across the application.
+  - Rescan stability: Split groups retain their distinct member face sets and names across subsequent `cluster_all_faces` rescans, preventing unintended re-merging under the same name.
 
 
 
