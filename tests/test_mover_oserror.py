@@ -74,3 +74,52 @@ def test_mover_oserror_stops_run_and_logs_completed_moves(
 
     # Assert: third file is untouched
     assert f3.exists(), "Third file must be untouched"
+
+
+def test_target_hash_oserror_logs_move_and_allows_undo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When compute_sha256 raises OSError on the target after os.replace:
+
+    1. The moved file is recorded in the run log.
+    2. undo_run restores it to its source.
+    """
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    runs = tmp_path / "runs"
+    src.mkdir(parents=True)
+    dst.mkdir(parents=True)
+    runs.mkdir(parents=True)
+
+    f1 = src / "nyc_1.jpg"
+    f1.write_text("photo 1", encoding="utf-8")
+
+    plan = build_plan(src, dst)
+    ready_moves = [m for m in plan if m.status == "ready"]
+    assert len(ready_moves) == 1
+
+    real_compute = nexora.mover.compute_sha256
+    call_count = 0
+
+    def mock_compute(path):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:  # Target hash after os.replace
+            raise OSError("Disk read error on destination during verification")
+        return real_compute(path)
+
+    monkeypatch.setattr(nexora.mover, "compute_sha256", mock_compute)
+
+    log_path = runs / "run.log"
+
+    summary = run_plan(plan, log_path)
+
+    assert summary["stopped"] is True
+    assert log_path.exists(), "Log file must exist"
+
+    # Assert: the moved file is recorded in the run log, and undo_run restores it to its source
+    assert not f1.exists(), "Source file should have been moved"
+    undo_summary = undo_run(log_path)
+    assert undo_summary["restored"] == 1
+    assert f1.exists(), "Moved file must be restored by undo_run"
+
