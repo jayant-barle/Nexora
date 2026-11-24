@@ -1406,8 +1406,11 @@ class NexoraApp:
         log_path = run_folder / "run.log"
 
         def worker() -> None:
-            summary = run_plan(self.current_plan, log_path)
-            self.root.after(0, self._move_finished, summary, log_path)
+            try:
+                summary = run_plan(self.current_plan, log_path)
+                self.root.after(0, self._move_finished, summary, log_path)
+            except Exception as e:
+                self.root.after(0, self._move_error, str(e))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1426,6 +1429,15 @@ class NexoraApp:
         self.current_plan = []
         self._set_approve_button_state(False)
         self.update_undo_button_state()
+
+    def _move_error(self, err_msg: str) -> None:
+        self.is_running = False
+        self.progress_bar.pack_forget()
+        self._set_preview_button_state(True)
+        self._set_approve_button_state(False)
+        self.update_undo_button_state()
+        self.status_var.set("Move failed")
+        messagebox.showerror("Move Error", err_msg)
 
     _on_start_click = _on_approve_click
 

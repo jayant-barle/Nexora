@@ -135,6 +135,10 @@
   - People screen sort dropdown: supports four ordering modes: "Largest first" (default; groups ordered by face count descending), "Smallest first" (face count ascending), "Name A-Z" (alphabetical by display name case-insensitive), and "Needs review first" (all groups marked `needs_review` placed at the top, ordered largest first, followed by non-review groups ordered largest first).
   - Naming large groups: naming a `needs_review` group via the standard `PeopleManager.name_group` path clears the `needs_review` flag (`group["needs_review"] = False`), updates `faces.json`, and immediately makes the group eligible for placement in `get_face_data_for_plan()` on subsequent preview and move runs.
   - Safety & confirmations: existing merge confirmation (`messagebox.askyesno`) and merge guard rules are strictly preserved without alteration.
+- 2026-11-24: Move worker thread exception handling and UI recovery:
+  - Background move thread error boundary: `NexoraApp._on_approve_click` wraps the background worker thread's `run_plan` execution in a `try/except Exception` block, mirroring the error handling pattern used by the scan, preview, and undo threads.
+  - UI state recovery on move failure: When an unhandled exception (such as `OSError`) occurs during `run_plan`, the exception is caught and dispatched to the main thread via `self.root.after(0, self._move_error, str(e))`. The `_move_error` handler resets `is_running = False`, un-packs the progress bar, re-enables the Preview button, disables the Approve button, updates the Undo button state, updates the status bar to "Move failed", and displays the error message via `messagebox.showerror("Move Error", err_msg)`.
+
 
 
 
