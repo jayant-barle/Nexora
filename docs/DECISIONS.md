@@ -151,6 +151,9 @@
   - `sort_groups` and `filter_groups` accept an optional precomputed `group_sizes` dictionary (or compute it once if not provided), eliminating repeated O(files) walks per group.
   - `render_people_cards` computes `group_sizes` once per render and passes it through to `get_visible_groups`, `get_unnamed_numbering`, `filter_groups`, `sort_groups`, and card rendering.
   - `get_group_size(group_id)` retains its signature and exact return values for callers outside those paths.
+- 2026-11-24: Move worker thread exception handling and UI recovery:
+  - Background move thread error boundary: `NexoraApp._on_approve_click` wraps the background worker thread's `run_plan` execution in a `try/except Exception` block, mirroring the error handling pattern used by the scan, preview, and undo threads.
+  - UI state recovery on move failure: When an unhandled exception (such as `OSError`) occurs during `run_plan`, the exception is caught and dispatched to the main thread via `self.root.after(0, self._move_error, str(e))`. The `_move_error` handler resets `is_running = False`, un-packs the progress bar, re-enables the Preview button, disables the Approve button, updates the Undo button state, updates the status bar to "Move failed", and displays the error message via `messagebox.showerror("Move Error", err_msg)`.
 
 
 
