@@ -143,6 +143,9 @@
   - Face name isolation: When a group is split, any faces partitioned into the new group (`cluster_b`) have their entries in `FaceClusterManager.face_names` removed so they do not inherit the original group's assigned name or contaminate naming during rescans.
   - Backward compatibility in load: In `FaceClusterManager.load()`, any legacy group entries missing `"member_faces"` have their member faces reconstructed from `self.file_groups` to ensure consistent data structures across the application.
   - Rescan stability: Split groups retain their distinct member face sets and names across subsequent `cluster_all_faces` rescans, preventing unintended re-merging under the same name.
+- 2026-11-24: Unified single name group path:
+  - `FaceClusterManager.name_group` in `nexora/faces/groups.py` delegates directly to `PeopleManager.name_group` in `nexora/faces/people.py`.
+  - Ensures consistent name validation (empty, max length 40, Windows reserved names) and review flag clearing (`needs_review = False`) across all callers.
 
 
 
