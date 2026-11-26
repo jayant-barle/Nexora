@@ -9,14 +9,70 @@
   }
 }
 
-@keyframes nxFireflyDrift {
+@keyframes nxFairyFlutter {
   0%, 100% {
-    transform: translate(0px, 0px) scale(0.95);
-    opacity: 0.45;
+    transform: translateY(0px) rotate(-1deg);
   }
   50% {
-    transform: translate(10px, -12px) scale(1.15);
-    opacity: 0.95;
+    transform: translateY(-8px) rotate(1.5deg);
+  }
+}
+
+@keyframes nxFairyBusy {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.04);
+  }
+}
+
+@keyframes nxWingBeat {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.82);
+  }
+}
+
+@keyframes nxSwaySlow {
+  0%, 100% {
+    transform: rotate(-1.2deg);
+  }
+  50% {
+    transform: rotate(1.4deg);
+  }
+}
+
+@keyframes nxCloudDrift {
+  0%, 100% {
+    transform: translateX(0px);
+  }
+  50% {
+    transform: translateX(18px);
+  }
+}
+
+@keyframes nxChimneyPuff {
+  0% {
+    transform: translateY(0px) scale(0.9);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-22px) scale(1.35);
+    opacity: 0;
+  }
+}
+
+@keyframes nxFireflyDrift {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(0.92);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate(12px, -14px) scale(1.18);
+    opacity: 0.96;
   }
 }
 
@@ -31,19 +87,83 @@
   }
 }
 
-.nx-fairy-float {
-  animation: nxFloatGentle 3.4s ease-in-out infinite;
+/* Treehouse Foliage & Environmental Motion */
+.nx-sway-a {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: nxSwaySlow 6.2s ease-in-out infinite;
 }
 
+.nx-sway-b {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: nxSwaySlow 7.4s ease-in-out infinite reverse;
+}
+
+.nx-vine-sway {
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: nxSwaySlow 5.4s ease-in-out infinite;
+}
+
+.nx-cloud-a {
+  animation: nxCloudDrift 18s ease-in-out infinite;
+}
+
+.nx-cloud-b {
+  animation: nxCloudDrift 22s ease-in-out infinite reverse;
+}
+
+.nx-chimney-puff {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: nxChimneyPuff 3.2s ease-out infinite;
+}
+
+/* Interactive Treehouse Room Hover Highlights */
+.nx-scene-room {
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.18s ease, filter 0.18s ease;
+  transform-box: fill-box;
+  transform-origin: center center;
+}
+
+.nx-scene-room:hover,
+.nx-scene-room:focus-visible {
+  transform: translateY(-4px) scale(1.03);
+  filter: drop-shadow(0 0 12px rgba(245, 217, 147, 0.95));
+}
+
+/* Ambient Fireflies */
 .nx-firefly {
   position: absolute;
   width: 9px;
   height: 9px;
   border-radius: 50%;
   background: var(--nx-gold-warm);
-  box-shadow: 0 0 10px 3px rgba(232, 196, 119, 0.75);
+  box-shadow: 0 0 10px 3px rgba(232, 196, 119, 0.78);
   pointer-events: none;
   animation: nxFireflyDrift 4.8s ease-in-out infinite;
+}
+
+/* Woodland Fairy States */
+.nx-fairy-float {
+  animation: nxFairyFlutter 3.2s ease-in-out infinite;
+}
+
+.nx-fairy-state-working .nx-fairy-float {
+  animation: nxFairyBusy 0.95s ease-in-out infinite;
+}
+
+.nx-fairy-state-celebrate .nx-fairy-float {
+  animation: nxFairyBusy 0.65s ease-in-out 4;
+}
+
+.nx-fairy-wings {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: nxWingBeat 0.45s ease-in-out infinite;
 }
 
 .nx-room-view {
@@ -51,7 +171,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .nx-sway-a,
+  .nx-sway-b,
+  .nx-vine-sway,
+  .nx-cloud-a,
+  .nx-cloud-b,
+  .nx-chimney-puff,
   .nx-fairy-float,
+  .nx-fairy-wings,
   .nx-firefly,
   .nx-room-view {
     animation: none !important;
