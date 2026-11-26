@@ -266,3 +266,87 @@ def test_bridge_people_operations_and_merge_guard(tmp_path: Path) -> None:
     split_res = api.split_group("group_001")
     assert split_res["ok"] is True
     assert len(api.get_people_state()["cards"]) >= 1
+
+
+def test_web_app_static_routes_and_media_token_security(tmp_path: Path) -> None:
+    """Verify Bottle WSGI static routing and per-session token protection on /api/media."""
+    import io
+    import urllib.parse
+    from nexora.web.app import create_web_app, get_static_dir
+
+    runs = tmp_path / "runs"
+    crops = runs / "face_crops"
+    crops.mkdir(parents=True)
+    crop = crops / "crop_001.jpg"
+    Image.new("RGB", (48, 48), color="purple").save(crop)
+
+    outside = tmp_path / "outside.jpg"
+    Image.new("RGB", (48, 48), color="orange").save(outside)
+
+    api = NexoraBridgeApi(runs_dir=runs)
+    wsgi_app = create_web_app(api, static_dir=get_static_dir())
+
+    def call_wsgi(path_info: str, query_string: str = "") -> tuple[str, list, bytes]:
+        captured: dict = {}
+        environ = {
+            "REQUEST_METHOD": "GET",
+            "PATH_INFO": path_info,
+            "QUERY_STRING": query_string,
+            "SERVER_NAME": "127.0.0.1",
+            "SERVER_PORT": "8080",
+            "wsgi.version": (1, 0),
+            "wsgi.url_scheme": "http",
+            "wsgi.input": io.BytesIO(b""),
+            "wsgi.errors": io.StringIO(),
+            "wsgi.multithread": False,
+            "wsgi.multiprocess": False,
+            "wsgi.run_once": False,
+        }
+
+        def start_response(status, headers, exc_info=None):
+            captured["status"] = status
+            captured["headers"] = dict(headers)
+
+        body = b"".join(wsgi_app(environ, start_response))
+        return captured["status"], list(captured["headers"].items()), body
+
+    st_idx, _, idx_body = call_wsgi("/")
+    assert st_idx.startswith("200")
+    assert b"Welcome to the Living Treehouse" in idx_body
+
+    st_css, hdrs_css, _ = call_wsgi("/static/css/tokens.css")
+    assert st_css.startswith("200")
+    assert any("text/css" in v for k, v in hdrs_css if k.lower() == "content-type")
+
+    # /api/media without token or wrong token -> 403
+    q_crop = urllib.parse.urlencode({"path": str(crop), "token": "wrong-token"})
+    st_bad, _, _ = call_wsgi("/api/media", q_crop)
+    assert st_bad.startswith("403")
+
+    # /api/media with valid token but outside path -> 403
+    q_outside = urllib.parse.urlencode({"path": str(outside), "token": api.session_token})
+    st_out, _, _ = call_wsgi("/api/media", q_outside)
+    assert st_out.startswith("403")
+
+    # /api/media with valid token + allowlisted crop -> 200 JPEG
+    q_ok = urllib.parse.urlencode({"path": str(crop), "token": api.session_token})
+    st_ok, hdrs_ok, jpg_body = call_wsgi("/api/media", q_ok)
+    assert st_ok.startswith("200")
+    assert any("image/jpeg" in v for k, v in hdrs_ok if k.lower() == "content-type")
+    assert jpg_body.startswith(b"\xff\xd8")
+
+
+def test_main_web_worker_process_guard() -> None:
+    """Ensure spawned ProcessPoolExecutor workers cannot open a PyWebView window."""
+    import multiprocessing
+    from unittest.mock import patch
+    from nexora.web.app import main_web
+
+    orig_name = multiprocessing.current_process().name
+    try:
+        multiprocessing.current_process().name = "NexoraScanWorker-123"
+        with patch("webview.create_window") as mock_win:
+            main_web()
+            assert mock_win.call_count == 0
+    finally:
+        multiprocessing.current_process().name = orig_name

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexora — Enchanted File Treehouse</title>
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/animations.css" />
+</head>
+<body data-room="treehouse">
+  <div class="nx-shell">
+    <!-- Conventional Fallback Navigation Sidebar -->
+    <aside class="nx-sidebar" aria-label="Treehouse Rooms Navigation">
+      <div class="nx-brand">
+        <div class="nx-brand-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#322116" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L4 9h3v11h10V9h3L12 2z" fill="#8EBB70"/>
+            <circle cx="12" cy="14" r="2.2" fill="#F4EBD5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="nx-brand-title">NEXORA</div>
+          <div class="nx-brand-sub" id="app-version">v0.5.5-dev</div>
+        </div>
+      </div>
+
+      <nav class="nx-nav-list">
+        <button class="nx-nav-item is-active" data-room-target="treehouse">
+          <span class="nx-nav-icon">🌳</span> Treehouse Hub
+        </button>
+        <button class="nx-nav-item" data-room-target="main-hall">
+          <span class="nx-nav-icon">🏠</span> Main Hall
+        </button>
+        <button class="nx-nav-item" data-room-target="library">
+          <span class="nx-nav-icon">📚</span> Magical Library
+        </button>
+        <button class="nx-nav-item" data-room-target="photo-garden">
+          <span class="nx-nav-icon">🌸</span> Photo Garden
+        </button>
+        <button class="nx-nav-item" data-room-target="potion-workshop">
+          <span class="nx-nav-icon">🧪</span> Potion Workshop
+        </button>
+        <button class="nx-nav-item" data-room-target="memory-room">
+          <span class="nx-nav-icon">📜</span> Memory Room
+        </button>
+        <button class="nx-nav-item" data-room-target="secret-vault">
+          <span class="nx-nav-icon">🔐</span> Secret Vault
+        </button>
+        <button class="nx-nav-item" data-room-target="crystal-chamber">
+          <span class="nx-nav-icon">💎</span> Crystal Chamber
+          <span class="nx-nav-tag">Safe</span>
+        </button>
+      </nav>
+
+      <div class="nx-sidebar-foot">
+        <strong>Phase 2 Web Bridge</strong><br />
+        Classic Tkinter fallback remains available via <code>--classic</code>.
+      </div>
+    </aside>
+
+    <!-- Main Workspace Column -->
+    <div class="nx-main-wrap">
+      <header class="nx-topbar">
+        <div class="nx-folder-strip">
+          <button id="btn-pick-source" class="nx-btn nx-btn-primary">Select Source</button>
+          <span id="source-path-pill" class="nx-pill-path" title="Source Folder">No source folder chosen</span>
+          <button id="btn-pick-dest" class="nx-btn">Select Destination</button>
+          <span id="dest-path-pill" class="nx-pill-path" title="Destination Folder">No destination folder chosen</span>
+        </div>
+      </header>
+
+      <main class="nx-stage">
+        <!-- Hub: Living Treehouse (Phase 2 Foundation) -->
+        <section class="nx-room-view" data-room-panel="treehouse">
+          <div class="nx-treehouse-hero">
+            <span class="nx-firefly" style="left: 16%; top: 24%;"></span>
+            <span class="nx-firefly" style="left: 78%; top: 18%; animation-delay: 1.4s;"></span>
+            <span class="nx-firefly" style="left: 62%; top: 68%; animation-delay: 2.3s;"></span>
+            <h1 class="nx-card-title" style="font-size: 24px;">Welcome to the Living Treehouse</h1>
+            <p class="nx-muted">Choose a glowing doorway below or use the forest sidebar to enter any room.</p>
+            <div style="text-align: center; margin: 10px 0;">
+              <img src="/static/assets/svg/treehouse-crest.svg" alt="Living Giant Treehouse" style="max-width: 100%; height: auto;" />
+            </div>
+            <div class="nx-room-hotspots">
+              <button class="nx-btn nx-btn-gold" data-room-target="main-hall">Enter Main Hall</button>
+              <button class="nx-btn nx-btn-primary" data-room-target="potion-workshop">Potion Workshop (AI Sort)</button>
+              <button class="nx-btn" data-room-target="photo-garden">Photo Garden (People)</button>
+              <button class="nx-btn" data-room-target="library">Magical Library</button>
+              <button class="nx-btn nx-btn-lavender" data-room-target="secret-vault">Secret Vault (Undo)</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Room: Main Hall -->
+        <section class="nx-room-view" data-room-panel="main-hall" hidden>
+          <div class="nx-card">
+            <div class="nx-card-header">
+              <h2 class="nx-card-title">Main Hall — Enchanted Library Overview</h2>
+            </div>
+            <div class="nx-kpi-grid">
+              <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-indexed">0</div><div class="nx-kpi-label">Indexed Media (Cache)</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-people">0</div><div class="nx-kpi-label">Visible People Groups</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-named">0</div><div class="nx-kpi-label">Named People</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-unreadable">0</div><div class="nx-kpi-label">Unreadable Files</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Room: Magical Library (Foundation Placeholder -> Phase 5) -->
+        <section class="nx-room-view" data-room-panel="library" hidden>
+          <div class="nx-card">
+            <h2 class="nx-card-title">Magical Library</h2>
+            <p class="nx-muted">Bridge verified for top-level source exploration (`list_source_files`). Full room UI connects in Phase 4/5.</p>
+          </div>
+        </section>
+
+        <!-- Room: Photo Garden (Foundation Placeholder -> Phase 5) -->
+        <section class="nx-room-view" data-room-panel="photo-garden" hidden>
+          <div class="nx-card">
+            <h2 class="nx-card-title">Photo Garden</h2>
+            <p class="nx-muted">Bridge verified for People cards, naming, splitting, and merge confirmation (`get_people_state`). Full room UI connects in Phase 4/5.</p>
+          </div>
+        </section>
+
+        <!-- Room: Potion Workshop (Foundation Placeholder -> Phase 5) -->
+        <section class="nx-room-view" data-room-panel="potion-workshop" hidden>
+          <div class="nx-card">
+            <h2 class="nx-card-title">Potion Workshop</h2>
+            <p class="nx-muted">Bridge verified for Scan People, Preview (`build_preview`), Approve (`approve_move`), and Reject. Full room UI connects in Phase 4/5.</p>
+          </div>
+        </section>
+
+        <!-- Room: Memory Room (Foundation Placeholder -> Phase 5) -->
+        <section class="nx-room-view" data-room-panel="memory-room" hidden>
+          <div class="nx-card">
+            <h2 class="nx-card-title">Memory Room</h2>
+            <p class="nx-muted">Bridge verified for run/scan audit log inspection (`list_activity_logs`). Full timeline UI connects in Phase 4/5.</p>
+          </div>
+        </section>
+
+        <!-- Room: Secret Vault (Foundation Placeholder -> Phase 5) -->
+        <section class="nx-room-view" data-room-panel="secret-vault" hidden>
+          <div class="nx-card">
+            <h2 class="nx-card-title">Secret Vault</h2>
+            <p class="nx-muted">Bridge verified for full-run Undo (`execute_undo`) &amp; corrupt backup logs. Full recovery UI connects in Phase 4/5.</p>
+          </div>
+        </section>
+
+        <!-- Room: Crystal Chamber (Safety Guard) -->
+        <section class="nx-room-view" data-room-panel="crystal-chamber" hidden>
+          <div class="nx-card">
+            <div class="nx-card-header">
+              <h2 class="nx-card-title">Crystal Chamber — Safety Policy</h2>
+            </div>
+            <div class="nx-banner-safe">
+              <p id="crystal-summary" style="margin-top: 0; font-weight: 700;"></p>
+              <ul id="crystal-details" style="margin-bottom: 0;"></ul>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Status Bar & Safety Rule Footer -->
+    <footer class="nx-statusbar">
+      <span id="status-text">Connecting to Nexora Python bridge...</span>
+      <span id="safety-footer" class="nx-safety-footer">Files are moved, not copied. Nothing is deleted.</span>
+    </footer>
+  </div>
+
+  <!-- Non-blocking Woodland Fairy Corner Dock -->
+  <div class="nx-fairy-dock" aria-live="polite">
+    <div id="fairy-bubble" class="nx-fairy-bubble">Welcome to the Living Treehouse! Pick a room on the tree or use the sidebar.</div>
+    <button id="fairy-toggle-btn" class="nx-fairy-btn nx-fairy-float" title="Click fairy companion for guidance">
+      <img src="/static/assets/svg/fairy.svg" alt="Woodland Fairy Companion" />
+    </button>
+  </div>
+
+  <script defer src="/static/js/api.js"></script>
+  <script defer src="/static/js/fairy.js"></script>
+  <script defer src="/static/js/router.js"></script>
+</body>
+</html>

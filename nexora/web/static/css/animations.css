@@ -1,0 +1,59 @@
+/* NEXORA — Lightweight CSS Environmental & Fairy Animations */
+
+@keyframes nxFloatGentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes nxFireflyDrift {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(0.95);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(10px, -12px) scale(1.15);
+    opacity: 0.95;
+  }
+}
+
+@keyframes nxRoomEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0px);
+  }
+}
+
+.nx-fairy-float {
+  animation: nxFloatGentle 3.4s ease-in-out infinite;
+}
+
+.nx-firefly {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--nx-gold-warm);
+  box-shadow: 0 0 10px 3px rgba(232, 196, 119, 0.75);
+  pointer-events: none;
+  animation: nxFireflyDrift 4.8s ease-in-out infinite;
+}
+
+.nx-room-view {
+  animation: nxRoomEnter 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-fairy-float,
+  .nx-firefly,
+  .nx-room-view {
+    animation: none !important;
+  }
+}

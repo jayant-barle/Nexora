@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import multiprocessing
 from pathlib import Path
 import sys
@@ -10,6 +11,11 @@ from typing import Any
 import bottle
 
 from nexora.web.bridge import NexoraBridgeApi
+
+# Ensure standard MIME types regardless of Windows Registry overrides
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 
 def get_static_dir() -> Path:

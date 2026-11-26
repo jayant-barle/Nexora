@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Woodland Fairy Companion">
+  <!-- Left & right translucent forest wings -->
+  <path d="M56 54 C28 30, 14 48, 30 68 C40 74, 52 68, 56 60 Z" fill="#B7A1DC" fill-opacity="0.72" stroke="#322116" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M64 54 C92 30, 106 48, 90 68 C80 74, 68 68, 64 60 Z" fill="#B7A1DC" fill-opacity="0.72" stroke="#322116" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Leaf tunic body -->
+  <path d="M48 64 Q60 56 72 64 L78 96 Q60 102 42 96 Z" fill="#8EBB70" stroke="#322116" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M54 68 L60 95 L66 68" fill="none" stroke="#315B3B" stroke-width="2" stroke-linecap="round"/>
+  <!-- Acorn cap & warm cream face -->
+  <circle cx="60" cy="44" r="16" fill="#F4EBD5" stroke="#322116" stroke-width="3"/>
+  <path d="M43 38 C46 22, 74 22, 77 38 Q60 32 43 38 Z" fill="#79563C" stroke="#322116" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M60 22 L62 15" stroke="#322116" stroke-width="3" stroke-linecap="round"/>
+  <!-- Expressive eyes and warm smile -->
+  <circle cx="54" cy="44" r="2.4" fill="#322116"/>
+  <circle cx="66" cy="44" r="2.4" fill="#322116"/>
+  <circle cx="49" cy="49" r="3" fill="#E8C477" opacity="0.65"/>
+  <circle cx="71" cy="49" r="3" fill="#E8C477" opacity="0.65"/>
+  <path d="M55 50 Q60 55 65 50" fill="none" stroke="#322116" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- Sparkle lantern twig -->
+  <line x1="75" y1="74" x2="90" y2="62" stroke="#79563C" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="92" cy="60" r="5" fill="#E8C477" stroke="#322116" stroke-width="2.2"/>
+</svg>
