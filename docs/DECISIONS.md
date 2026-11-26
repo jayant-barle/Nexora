@@ -187,6 +187,13 @@
   - Bumped `runs/faces.json` `schema_version` to 3; `FaceClusterManager.load()` automatically migrates older schemas (schema 1 and 2) in place, loading existing entries cleanly with the new fields missing.
   - Added `box_w`, `box_h`, `det_score` columns to `runs/chulmati_labels_template.csv` in `scripts/real_library_report.py`, preserving existing columns and keeping template free of cluster IDs.
   - Enhanced `scripts/measure_faces.py` when `--labels` is used to include breakdown tables of wrong merges (FP pairs) and wrong splits (FN pairs) categorized by face size bucket (under 60px, 60–100px, over 100px) and detection score bucket (<0.70, 0.70–0.85, 0.85–0.95, >0.95).
+- 2026-11-27: Magical World UI Redesign architecture decisions (owner-approved):
+  - Visual direction: Whimsical, colorful, hand-drawn 2D magical forest aesthetic inspired by Adventure Time, using original SVG artwork, characters, and storybook styling (Forest green `#315B3B`, Leaf green `#8EBB70`, Cream `#F4EBD5`, Wood brown `#79563C`, Sky blue `#A8D8E8`, Magical lavender `#B7A1DC`, Warm gold `#E8C477`).
+  - Main environment: Interactive living giant treehouse surrounded by an animated magical forest (fireflies, swaying leaves/flowers, glowing mushrooms) and an original woodland fairy companion (friendly, playful, status/error/celebration guide that never blocks file operations).
+  - Hybrid navigation: Interactive clickable treehouse rooms (Main Hall, Magical Library, Photo Garden, Crystal Chamber, Potion Workshop, Memory Room, Secret Vault) paired with a conventional persistent sidebar navigation fallback.
+  - Frontend stack: Pure HTML5, CSS3, Vanilla JavaScript, SVG artwork, and lightweight CSS animations — no React/Vue/Angular. Python remains the sole backend and business-logic runtime.
+  - Bridge & fallback strategy: Investigate and validate `pywebview` (Windows EdgeChromium WebView2 + PyInstaller `--onefile` compatibility, Python 3.14.7) as the Python-to-web UI bridge before migrating the default launch path. Preserve the existing Tkinter `NexoraApp` (`nexora/ui.py`) untouched as a `--classic` fallback and to maintain 100% compatibility with all existing 189 tests.
+  - Safety & scope boundaries preserved: Never delete or overwrite user files, preserve top-level scan rules and EXIF/name/person placement precedence, require explicit user confirmation before moving files, compute pre/post SHA-256 + audit log + Undo, and do not fabricate unsupported duplicate detection or file deletion in the Crystal Chamber.
 
 
 
