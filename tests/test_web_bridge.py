@@ -350,3 +350,22 @@ def test_main_web_worker_process_guard() -> None:
             assert mock_win.call_count == 0
     finally:
         multiprocessing.current_process().name = orig_name
+
+
+def test_bridge_multiprocess_scan_and_stop(tmp_path: Path) -> None:
+    """Verify real ProcessPoolExecutor scan works cleanly through NexoraBridgeApi."""
+    runs = tmp_path / "runs"
+    src = tmp_path / "photos"
+    src.mkdir()
+    for i in range(3):
+        Image.new("RGB", (64, 64), color=(20 * i, 120, 80)).save(src / f"test_{i}.jpg")
+
+    api = NexoraBridgeApi(runs_dir=runs)
+    api.set_folders(source_dir=str(src), dest_dir="")
+    res = api.start_scan()
+    assert res["ok"] is True
+
+    job = _wait_job_done(api, timeout=20.0)
+    assert job["error"] is None
+    assert job["last_result"]["images_scanned"] == 3
+    assert api.get_main_hall_summary()["indexed_total"] == 3
