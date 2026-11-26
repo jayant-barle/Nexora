@@ -54,8 +54,8 @@
       </nav>
 
       <div class="nx-sidebar-foot">
-        <strong>Phase 2 Web Bridge</strong><br />
-        Classic Tkinter fallback remains available via <code>--classic</code>.
+        <strong>Enchanted Treehouse</strong><br />
+        Click any doorway or use this fallback sidebar anytime.
       </div>
     </aside>
 
@@ -70,33 +70,27 @@
         </div>
       </header>
 
-      <main class="nx-stage">
-        <!-- Hub: Living Treehouse (Phase 2 Foundation) -->
+      <main id="main-stage" class="nx-stage nx-stage-home">
+        <!-- Hub: Interactive Living Giant Treehouse & Enchanted Forest -->
         <section class="nx-room-view" data-room-panel="treehouse">
-          <div class="nx-treehouse-hero">
-            <span class="nx-firefly" style="left: 16%; top: 24%;"></span>
-            <span class="nx-firefly" style="left: 78%; top: 18%; animation-delay: 1.4s;"></span>
-            <span class="nx-firefly" style="left: 62%; top: 68%; animation-delay: 2.3s;"></span>
-            <h1 class="nx-card-title" style="font-size: 24px;">Welcome to the Living Treehouse</h1>
-            <p class="nx-muted">Choose a glowing doorway below or use the forest sidebar to enter any room.</p>
-            <div style="text-align: center; margin: 10px 0;">
-              <img src="/static/assets/svg/treehouse-crest.svg" alt="Living Giant Treehouse" style="max-width: 100%; height: auto;" />
+          <div class="nx-treehouse-world">
+            <div id="treehouse-fireflies" class="nx-firefly-layer" aria-hidden="true"></div>
+            <div id="treehouse-canvas-mount" class="nx-canvas-mount">
+              <div class="nx-card" style="margin: 24px;">Loading the Living Treehouse...</div>
             </div>
-            <div class="nx-room-hotspots">
-              <button class="nx-btn nx-btn-gold" data-room-target="main-hall">Enter Main Hall</button>
-              <button class="nx-btn nx-btn-primary" data-room-target="potion-workshop">Potion Workshop (AI Sort)</button>
-              <button class="nx-btn" data-room-target="photo-garden">Photo Garden (People)</button>
-              <button class="nx-btn" data-room-target="library">Magical Library</button>
-              <button class="nx-btn nx-btn-lavender" data-room-target="secret-vault">Secret Vault (Undo)</button>
-            </div>
+          </div>
+          <div class="nx-scene-plaque" aria-live="polite">
+            <div id="scene-hover-title" class="nx-scene-plaque-title">Living Giant Treehouse</div>
+            <div id="scene-hover-desc" class="nx-scene-plaque-desc">Hover any cozy door, balcony, or window to preview its room — click to enter.</div>
           </div>
         </section>
 
-        <!-- Room: Main Hall -->
+        <!-- Room 1: Main Hall -->
         <section class="nx-room-view" data-room-panel="main-hall" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
               <h2 class="nx-card-title">Main Hall — Enchanted Library Overview</h2>
+              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
             </div>
             <div class="nx-kpi-grid">
               <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-indexed">0</div><div class="nx-kpi-label">Indexed Media (Cache)</div></div>
@@ -107,51 +101,67 @@
           </div>
         </section>
 
-        <!-- Room: Magical Library (Foundation Placeholder -> Phase 5) -->
+        <!-- Room 2: Magical Library (Connected in Phase 4/5) -->
         <section class="nx-room-view" data-room-panel="library" hidden>
           <div class="nx-card">
-            <h2 class="nx-card-title">Magical Library</h2>
-            <p class="nx-muted">Bridge verified for top-level source exploration (`list_source_files`). Full room UI connects in Phase 4/5.</p>
+            <div class="nx-card-header">
+              <h2 class="nx-card-title">Magical Library</h2>
+              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+            </div>
+            <p class="nx-muted">Entry doorway ready. Full file explorer, search, and top-level media preview connect in Phase 4 &amp; 5.</p>
           </div>
         </section>
 
-        <!-- Room: Photo Garden (Foundation Placeholder -> Phase 5) -->
+        <!-- Room 3: Photo Garden (Connected in Phase 4/5) -->
         <section class="nx-room-view" data-room-panel="photo-garden" hidden>
           <div class="nx-card">
-            <h2 class="nx-card-title">Photo Garden</h2>
-            <p class="nx-muted">Bridge verified for People cards, naming, splitting, and merge confirmation (`get_people_state`). Full room UI connects in Phase 4/5.</p>
+            <div class="nx-card-header">
+              <h2 class="nx-card-title">Photo Garden</h2>
+              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+            </div>
+            <p class="nx-muted">Entry balcony ready. Full people cards, face crops, naming, split, and merge controls connect in Phase 4 &amp; 5.</p>
           </div>
         </section>
 
-        <!-- Room: Potion Workshop (Foundation Placeholder -> Phase 5) -->
+        <!-- Room 4: Potion Workshop (Connected in Phase 4/5) -->
         <section class="nx-room-view" data-room-panel="potion-workshop" hidden>
           <div class="nx-card">
-            <h2 class="nx-card-title">Potion Workshop</h2>
-            <p class="nx-muted">Bridge verified for Scan People, Preview (`build_preview`), Approve (`approve_move`), and Reject. Full room UI connects in Phase 4/5.</p>
+            <div class="nx-card-header">
+              <h2 class="nx-card-title">Potion Workshop</h2>
+              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+            </div>
+            <p class="nx-muted">Workshop loft ready. Full AI scan progress, preview table, Approve/Reject, and SHA-256 move workflow connect in Phase 4 &amp; 5.</p>
           </div>
         </section>
 
-        <!-- Room: Memory Room (Foundation Placeholder -> Phase 5) -->
+        <!-- Room 5: Memory Room (Connected in Phase 4/5) -->
         <section class="nx-room-view" data-room-panel="memory-room" hidden>
           <div class="nx-card">
-            <h2 class="nx-card-title">Memory Room</h2>
-            <p class="nx-muted">Bridge verified for run/scan audit log inspection (`list_activity_logs`). Full timeline UI connects in Phase 4/5.</p>
+            <div class="nx-card-header">
+              <h2 class="nx-card-title">Memory Room</h2>
+              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+            </div>
+            <p class="nx-muted">Attic study ready. Run history &amp; scan log timeline connect in Phase 4 &amp; 5.</p>
           </div>
         </section>
 
-        <!-- Room: Secret Vault (Foundation Placeholder -> Phase 5) -->
+        <!-- Room 6: Secret Vault (Connected in Phase 4/5) -->
         <section class="nx-room-view" data-room-panel="secret-vault" hidden>
           <div class="nx-card">
-            <h2 class="nx-card-title">Secret Vault</h2>
-            <p class="nx-muted">Bridge verified for full-run Undo (`execute_undo`) &amp; corrupt backup logs. Full recovery UI connects in Phase 4/5.</p>
+            <div class="nx-card-header">
+              <h2 class="nx-card-title">Secret Vault</h2>
+              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+            </div>
+            <p class="nx-muted">Root vault ready. Full-run Undo &amp; corrupt backup inspection connect in Phase 4 &amp; 5.</p>
           </div>
         </section>
 
-        <!-- Room: Crystal Chamber (Safety Guard) -->
+        <!-- Room 7: Crystal Chamber -->
         <section class="nx-room-view" data-room-panel="crystal-chamber" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
               <h2 class="nx-card-title">Crystal Chamber — Safety Policy</h2>
+              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
             </div>
             <div class="nx-banner-safe">
               <p id="crystal-summary" style="margin-top: 0; font-weight: 700;"></p>
@@ -169,16 +179,20 @@
     </footer>
   </div>
 
-  <!-- Non-blocking Woodland Fairy Corner Dock -->
-  <div class="nx-fairy-dock" aria-live="polite">
-    <div id="fairy-bubble" class="nx-fairy-bubble">Welcome to the Living Treehouse! Pick a room on the tree or use the sidebar.</div>
-    <button id="fairy-toggle-btn" class="nx-fairy-btn nx-fairy-float" title="Click fairy companion for guidance">
-      <img src="/static/assets/svg/fairy.svg" alt="Woodland Fairy Companion" />
+  <!-- Non-blocking Multi-Expression Woodland Fairy Corner Dock -->
+  <div id="fairy-dock" class="nx-fairy-dock nx-fairy-state-idle" data-mood="idle" aria-live="polite">
+    <div id="fairy-bubble" class="nx-fairy-bubble">
+      <button id="fairy-close-btn" class="nx-fairy-close" title="Hide speech bubble" aria-label="Hide fairy tip">×</button>
+      <span id="fairy-bubble-text">Welcome to the Living Treehouse! Hover any cozy window or door to explore, or use the sidebar.</span>
+    </div>
+    <button id="fairy-toggle-btn" class="nx-fairy-btn nx-fairy-float" title="Click woodland fairy for help">
+      <span id="fairy-avatar-slot"></span>
     </button>
   </div>
 
   <script defer src="/static/js/api.js"></script>
   <script defer src="/static/js/fairy.js"></script>
+  <script defer src="/static/js/scene.js"></script>
   <script defer src="/static/js/router.js"></script>
 </body>
 </html>

@@ -312,7 +312,23 @@ def test_web_app_static_routes_and_media_token_security(tmp_path: Path) -> None:
 
     st_idx, _, idx_body = call_wsgi("/")
     assert st_idx.startswith("200")
-    assert b"Welcome to the Living Treehouse" in idx_body
+    assert b"treehouse-canvas-mount" in idx_body
+
+    st_svg, hdrs_svg, svg_body = call_wsgi("/static/assets/svg/forest-scene.svg")
+    assert st_svg.startswith("200")
+    assert any("image/svg+xml" in v for k, v in hdrs_svg if k.lower() == "content-type")
+    import xml.etree.ElementTree as ET
+    ET.fromstring(svg_body.decode("utf-8"))
+    for room in (
+        b"main-hall",
+        b"library",
+        b"photo-garden",
+        b"potion-workshop",
+        b"memory-room",
+        b"secret-vault",
+        b"crystal-chamber",
+    ):
+        assert room in svg_body
 
     st_css, hdrs_css, _ = call_wsgi("/static/css/tokens.css")
     assert st_css.startswith("200")

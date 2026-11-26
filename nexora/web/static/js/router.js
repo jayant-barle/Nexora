@@ -1,31 +1,35 @@
-/* NEXORA — Phase 2 Hybrid Router & Design Foundation Validation */
+/* NEXORA — Hybrid Treehouse & Sidebar Router */
 (function (global) {
   "use strict";
 
-  var ROOM_META = {
-    "treehouse": { title: "Living Treehouse", subtitle: "Home forest hub — choose any room door or sidebar item." },
-    "main-hall": { title: "Main Hall", subtitle: "Dashboard of real indexed counts, active status, and recent runs." },
-    "library": { title: "Magical Library", subtitle: "Top-level source browser (Phase 5 connects full exploration & preview)." },
-    "photo-garden": { title: "Photo Garden", subtitle: "People cards, naming, splitting, merging (Phase 5 wires full workspace)." },
-    "crystal-chamber": { title: "Crystal Chamber", subtitle: "Safety boundary: duplicate detection & file deletion are disabled." },
-    "potion-workshop": { title: "Potion Workshop", subtitle: "AI face scan, preview table, explicit Approve & SHA-256 verified moves." },
-    "memory-room": { title: "Memory Room", subtitle: "Audit timeline from runs/ logs." },
-    "secret-vault": { title: "Secret Vault", subtitle: "Verified full-run Undo & corrupt-state recovery backups." }
+  var VALID_ROOMS = {
+    "treehouse": true,
+    "main-hall": true,
+    "library": true,
+    "photo-garden": true,
+    "potion-workshop": true,
+    "memory-room": true,
+    "secret-vault": true,
+    "crystal-chamber": true
   };
 
   function navigateTo(roomId) {
-    if (!ROOM_META[roomId]) roomId = "treehouse";
+    if (!VALID_ROOMS[roomId]) roomId = "treehouse";
     document.body.dataset.room = roomId;
 
-    var navBtns = document.querySelectorAll("[data-room-target]");
+    var navBtns = document.querySelectorAll(".nx-nav-item[data-room-target]");
     navBtns.forEach(function (btn) {
       btn.classList.toggle("is-active", btn.dataset.roomTarget === roomId);
     });
 
+    var stage = document.getElementById("main-stage");
+    if (stage) {
+      stage.classList.toggle("nx-stage-home", roomId === "treehouse");
+    }
+
     var panels = document.querySelectorAll("[data-room-panel]");
     panels.forEach(function (panel) {
-      var match = panel.dataset.roomPanel === roomId;
-      panel.hidden = !match;
+      panel.hidden = panel.dataset.roomPanel !== roomId;
     });
 
     if (global.NexoraFairy) {
@@ -58,6 +62,9 @@
     }).catch(function (err) {
       var statusEl = document.getElementById("status-text");
       if (statusEl) statusEl.textContent = "Bridge error: " + err.message;
+      if (global.NexoraFairy) {
+        global.NexoraFairy.say("Hmm, the bridge seems sleepy: " + err.message, "error");
+      }
     });
   }
 
@@ -99,7 +106,7 @@
           if (res && res.ok && !res.cancelled) {
             refreshAppState();
             if (global.NexoraFairy) {
-              global.NexoraFairy.say("Source folder set! You can now visit Potion Workshop or Magical Library.");
+              global.NexoraFairy.say("Source folder set! Explore the treehouse rooms anytime.", "celebrate");
             }
           }
         });
@@ -113,7 +120,7 @@
           if (res && res.ok && !res.cancelled) {
             refreshAppState();
             if (global.NexoraFairy) {
-              global.NexoraFairy.say("Destination folder chosen! Ready for safe organization preview.");
+              global.NexoraFairy.say("Destination folder chosen! Safe organizing ahead.", "celebrate");
             }
           }
         });
@@ -124,6 +131,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     bindControls();
     if (global.NexoraFairy) global.NexoraFairy.init();
+    if (global.NexoraScene) global.NexoraScene.load();
     navigateTo("treehouse");
     refreshAppState().then(function () {
       refreshRoomData("main-hall");

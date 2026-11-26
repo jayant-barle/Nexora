@@ -105,24 +105,24 @@
   <g id="nx-tree-canopy">
     <!-- Deep forest back foliage clouds -->
     <g fill="#315B3B" stroke="#322116" stroke-width="3.4">
-      <circle cx="315" cy="184" r="78"/>
-      <circle cx="786" cy="182" r="82"/>
-      <circle cx="432" cy="116" r="88"/>
-      <circle cx="672" cy="114" r="88"/>
-      <circle cx="552" cy="90" r="96"/>
+      <circle cx="315" cy="188" r="76"/>
+      <circle cx="786" cy="186" r="80"/>
+      <circle cx="432" cy="126" r="84"/>
+      <circle cx="672" cy="124" r="84"/>
+      <circle cx="552" cy="108" r="88"/>
     </g>
     <!-- Sunlit bright leaf clusters (animated gentle sway) -->
     <g class="nx-leaf-cluster nx-sway-a" fill="#8EBB70" stroke="#322116" stroke-width="3.2">
-      <circle cx="272" cy="176" r="48"/>
-      <circle cx="362" cy="144" r="52"/>
-      <circle cx="468" cy="88" r="58"/>
-      <circle cx="554" cy="70" r="64"/>
+      <circle cx="272" cy="180" r="46"/>
+      <circle cx="362" cy="148" r="50"/>
+      <circle cx="468" cy="96" r="54"/>
+      <circle cx="554" cy="84" r="56"/>
     </g>
     <g class="nx-leaf-cluster nx-sway-b" fill="#8EBB70" stroke="#322116" stroke-width="3.2">
-      <circle cx="642" cy="86" r="56"/>
-      <circle cx="746" cy="138" r="54"/>
-      <circle cx="834" cy="174" r="50"/>
-      <circle cx="552" cy="148" r="46" fill="#A7D485"/>
+      <circle cx="642" cy="94" r="52"/>
+      <circle cx="746" cy="142" r="52"/>
+      <circle cx="834" cy="178" r="48"/>
+      <circle cx="552" cy="152" r="44" fill="#A7D485"/>
     </g>
 
     <!-- Hanging swaying vines -->
@@ -150,7 +150,7 @@
   </g>
 
   <!-- HOTSPOT 2: MAGICAL LIBRARY (Upper-Left Canopy Study) -->
-  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="library" data-room-title="Magical Library" data-room-desc="Browse top-level source images & videos safely with rule hints." aria-label="Enter Magical Library">
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="library" data-room-title="Magical Library" data-room-desc="Browse top-level source images &amp; videos safely with rule hints." aria-label="Enter Magical Library">
     <rect x="334" y="156" width="116" height="84" rx="12" fill="#F4EBD5" stroke="#322116" stroke-width="3.2"/>
     <path d="M322 162 L392 118 L462 162 Z" fill="#315B3B" stroke="#322116" stroke-width="3.2" stroke-linejoin="round"/>
     <!-- Book-filled arched window -->
@@ -225,7 +225,7 @@
   </g>
 
   <!-- HOTSPOT 6: CRYSTAL CHAMBER (Lower-Left Safe Mossy Crystal Shrine) -->
-  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="crystal-chamber" data-room-title="Crystal Chamber (Safe Guard)" data-room-desc="Policy lock: duplicate detection & file deletion are intentionally disabled." aria-label="Enter Crystal Chamber">
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="crystal-chamber" data-room-title="Crystal Chamber (Safe Guard)" data-room-desc="Policy lock: duplicate detection &amp; file deletion are intentionally disabled." aria-label="Enter Crystal Chamber">
     <circle cx="350" cy="462" r="42" fill="url(#nxMagicGlow)"/>
     <g stroke="#322116" stroke-width="2.6" stroke-linejoin="round">
       <polygon points="326,488 338,442 354,444 358,488" fill="#B7A1DC"/>
