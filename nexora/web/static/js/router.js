@@ -36,7 +36,7 @@
       global.NexoraFairy.onRoomChanged(roomId);
     }
 
-    if (roomId === "main-hall" || roomId === "crystal-chamber") {
+    if (roomId === "main-hall" || roomId === "crystal-chamber" || roomId === "library") {
       refreshRoomData(roomId);
     }
   }
@@ -173,6 +173,10 @@
   function refreshRoomData(roomId) {
     if (roomId === "main-hall") {
       global.NexoraApi.call("get_main_hall_summary").then(renderMainHall);
+    } else if (roomId === "library") {
+      if (global.NexoraLibrary) {
+        global.NexoraLibrary.refresh(false);
+      }
     } else if (roomId === "crystal-chamber") {
       global.NexoraApi.call("get_crystal_chamber_status").then(function (data) {
         if (!data || !data.ok) return;
@@ -201,6 +205,9 @@
         global.NexoraApi.call("pick_folder", "source").then(function (res) {
           if (res && res.ok && !res.cancelled) {
             refreshAppState();
+            if (global.NexoraLibrary) {
+              global.NexoraLibrary.refresh(false);
+            }
             if (global.NexoraFairy) {
               global.NexoraFairy.say("Source folder set! Explore the treehouse rooms anytime.", "celebrate");
             }

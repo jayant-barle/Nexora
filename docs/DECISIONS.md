@@ -194,6 +194,10 @@
   - Frontend stack: Pure HTML5, CSS3, Vanilla JavaScript, SVG artwork, and lightweight CSS animations — no React/Vue/Angular. Python remains the sole backend and business-logic runtime.
   - Bridge & fallback strategy: Investigate and validate `pywebview` (Windows EdgeChromium WebView2 + PyInstaller `--onefile` compatibility, Python 3.14.7) as the Python-to-web UI bridge before migrating the default launch path. Preserve the existing Tkinter `NexoraApp` (`nexora/ui.py`) untouched as a `--classic` fallback and to maintain 100% compatibility with all existing 189 tests.
   - Safety & scope boundaries preserved: Never delete or overwrite user files, preserve top-level scan rules and EXIF/name/person placement precedence, require explicit user confirmation before moving files, compute pre/post SHA-256 + audit log + Undo, and do not fabricate unsupported duplicate detection or file deletion in the Crystal Chamber.
+- 2026-11-28: Phase 4 Magical Library implementation decisions:
+  - Read-only top-level explorer: `NexoraBridgeApi.list_source_files` adds `type_counts` (`all`, `image`, `video`, `other`) across top-level files while continuing to skip subfolders per placement policy and using client-side pagination (60 items per page) to keep large directories responsive in WebView2.
+  - On-demand file inspection: Added `NexoraBridgeApi.inspect_source_file(path_str)` restricted strictly to top-level files inside `_source_dir` (`resolved.parent == _source_dir.resolve()`). Extracts only authoritative backend metadata: file size, media category, `extract_name` token, EXIF `DateTimeOriginal` via `nexora.metadata.capture_date` (never OS file created/modified dates), read-only image pixel dimensions via Pillow, cached face/unreadable state from `runs/faces.json`, and authenticated image preview URL via `/api/media`.
+  - Honest capability boundaries: Video playback previews and arbitrary non-media file previews are not invented; the Reading Desk explains when a video frame or unsupported file cannot be inline-previewed, and file movement stays strictly gated behind Potion Workshop Preview + Approve.
 
 
 

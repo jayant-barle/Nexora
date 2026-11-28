@@ -30,6 +30,7 @@ except Exception:
 
 from nexora.faces.groups import FaceClusterManager, get_runs_dir
 from nexora.faces.people import PeopleManager
+from nexora.metadata import capture_date
 from nexora.mover import run_plan
 from nexora.names import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, extract_name, is_image_or_video
 from nexora.plan import PlannedMove, build_plan
@@ -419,16 +420,32 @@ class NexoraBridgeApi:
                 "source_dir": "",
                 "files": [],
                 "total_top_level": 0,
+                "filtered_count": 0,
+                "type_counts": {"all": 0, "image": 0, "video": 0, "other": 0},
                 "subfolders_skipped": 0,
                 "note": "Top-level files only. Subfolders are skipped by placement policy.",
             }
 
         q = (query or "").strip().lower()
-        entries = sorted(src.iterdir(), key=lambda p: p.name.lower())
+        try:
+            entries = sorted(src.iterdir(), key=lambda p: p.name.lower())
+        except OSError as err:
+            return {
+                "ok": False,
+                "has_source": True,
+                "source_dir": str(src),
+                "files": [],
+                "total_top_level": 0,
+                "filtered_count": 0,
+                "type_counts": {"all": 0, "image": 0, "video": 0, "other": 0},
+                "subfolders_skipped": 0,
+                "error": f"Could not read source folder: {err}",
+            }
 
         items: list[dict[str, Any]] = []
         subfolders_skipped = 0
         total_files = 0
+        type_counts = {"all": 0, "image": 0, "video": 0, "other": 0}
 
         for entry in entries:
             if entry.is_dir():
@@ -445,6 +462,9 @@ class NexoraBridgeApi:
                 ftype = "video"
             else:
                 ftype = "other"
+
+            type_counts["all"] += 1
+            type_counts[ftype] += 1
 
             if file_type in ("image", "video", "other") and ftype != file_type:
                 continue
@@ -481,8 +501,169 @@ class NexoraBridgeApi:
             "files": items,
             "total_top_level": total_files,
             "filtered_count": len(items),
+            "type_counts": type_counts,
             "subfolders_skipped": subfolders_skipped,
             "note": "Top-level files only. Subfolders are skipped by placement policy.",
+        }
+
+    def inspect_source_file(self, path_str: str) -> dict[str, Any]:
+        """Return safe read-only metadata and preview info for one top-level source file.
+
+        Strictly validates that the target sits directly inside `_source_dir`
+        and reads only real Nexora metadata (EXIF DateTimeOriginal, image dimensions,
+        name-rule candidate, and runs/faces.json scan cache). Never uses file mtime/ctime.
+        """
+        try:
+            resolved = self._validate_clean_path_input(path_str)
+        except ValueError as err:
+            return {"ok": False, "error": str(err)}
+
+        with self._state_lock:
+            src = self._source_dir
+
+        if src is None or not src.is_dir():
+            return {"ok": False, "error": "Select a source folder first."}
+
+        try:
+            src_resolved = src.resolve()
+        except OSError as err:
+            return {"ok": False, "error": f"Source folder unavailable: {err}"}
+
+        if not resolved.is_file() or resolved.parent != src_resolved:
+            return {
+                "ok": False,
+                "error": "Access denied: Magical Library can inspect only top-level files inside the selected source folder.",
+            }
+
+        ext = resolved.suffix.lower()
+        if ext in IMAGE_EXTENSIONS:
+            ftype = "image"
+        elif ext in VIDEO_EXTENSIONS:
+            ftype = "video"
+        else:
+            ftype = "other"
+
+        try:
+            sz = resolved.stat().st_size
+        except OSError:
+            sz = 0
+
+        supported = is_image_or_video(resolved.name)
+        name_candidate = extract_name(resolved.name) if supported else None
+
+        dimensions: str | None = None
+        exif_date: str | None = None
+        exif_folder: str | None = None
+        image_error: str | None = None
+        preview_url: str | None = None
+        preview_note = ""
+
+        if ftype == "image":
+            dt = capture_date(resolved)
+            if dt is not None:
+                exif_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+                exif_folder = f"{dt.year:04d}/{dt.year:04d}-{dt.month:02d}/"
+            try:
+                with Image.open(resolved) as img:
+                    transposed = ImageOps.exif_transpose(img) or img
+                    w, h = transposed.size
+                    dimensions = f"{w} × {h} px"
+                preview_url = self.media_url(resolved)
+            except Exception as err:
+                image_error = f"Image could not be decoded for preview: {err}"
+                preview_note = image_error
+        elif ftype == "video":
+            preview_note = (
+                "Video playback is not built into the Magical Library. "
+                "Videos never use metadata dates; sampled frames are checked only during Potion Workshop AI scans."
+            )
+        else:
+            preview_note = (
+                "Unsupported file format. Per Nexora safety rules, other files are skipped during move planning "
+                "and are never modified or deleted."
+            )
+
+        # Look up any already-scanned face cache / person associations in runs/faces.json
+        self._cluster_manager.load()
+        resolved_key = str(resolved)
+        norm_key = os.path.normcase(resolved_key)
+
+        cache_entry = self._cluster_manager.cache.get(resolved_key)
+        if cache_entry is None:
+            for k, val in self._cluster_manager.cache.items():
+                if os.path.normcase(k) == norm_key:
+                    cache_entry = val
+                    break
+
+        is_unreadable = resolved_key in self._cluster_manager.unreadable or any(
+            os.path.normcase(u) == norm_key for u in self._cluster_manager.unreadable
+        )
+        unreadable_reason = "Recorded as unreadable during previous scan" if is_unreadable else None
+
+        matched_gids = self._people_manager.file_groups.get(resolved_key)
+        if matched_gids is None:
+            matched_gids = []
+            for k, gids in self._people_manager.file_groups.items():
+                if os.path.normcase(k) == norm_key:
+                    matched_gids = gids
+                    break
+
+        group_sizes = self._people_manager.get_group_sizes()
+        unnamed_nums = self._people_manager.get_unnamed_numbering(group_sizes=group_sizes)
+        people_labels: list[str] = []
+        named_folder_names: list[str] = []
+        for gid in matched_gids:
+            grp = self._cluster_manager.groups.get(gid)
+            if not grp:
+                continue
+            label = grp.get("display_name") or grp.get("name") or unnamed_nums.get(gid, "Unnamed person")
+            people_labels.append(label)
+            folder_name = (grp.get("name") or "").strip().lower()
+            if folder_name:
+                named_folder_names.append(folder_name)
+
+        # Explain expected placement order honestly without mutating state or creating targets
+        if not supported:
+            placement_summary = "Skipped (unsupported file type — never moved)"
+        elif len(named_folder_names) == 1 and ftype == "image":
+            placement_summary = f"Face rule (when planned) -> {named_folder_names[0]}/"
+        elif len(named_folder_names) >= 2 and ftype == "image":
+            placement_summary = "Face rule (when planned) -> Group photos/"
+        elif name_candidate:
+            placement_summary = f"Name rule -> {name_candidate}/"
+        elif exif_folder and ftype == "image":
+            placement_summary = f"EXIF capture date -> {exif_folder}"
+        elif ftype == "video":
+            placement_summary = "Unsorted/ (unless a named person matches >=2 sampled frames)"
+        else:
+            placement_summary = "Unsorted/ (until a known person is identified & named)"
+
+        return {
+            "ok": True,
+            "file": {
+                "name": resolved.name,
+                "path": resolved_key,
+                "type": ftype,
+                "extension": ext or "(none)",
+                "supported": supported,
+                "size": sz,
+                "size_formatted": _format_size(sz),
+                "dimensions": dimensions,
+                "exif_date": exif_date,
+                "exif_folder": exif_folder,
+                "name_rule_candidate": name_candidate,
+                "placement_summary": placement_summary,
+                "preview_url": preview_url,
+                "preview_note": preview_note,
+                "image_error": image_error,
+                "scan_cache": {
+                    "cached": cache_entry is not None,
+                    "faces_detected": len(cache_entry.get("faces", [])) if cache_entry else 0,
+                    "people_labels": people_labels,
+                    "unreadable_reason": unreadable_reason,
+                },
+            },
+            "safety_note": "Read-only inspection. Real placement runs only in Potion Workshop after Preview and Approve.",
         }
 
     # ------------------------------------------------------------------

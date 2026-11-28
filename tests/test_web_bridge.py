@@ -131,11 +131,54 @@ def test_bridge_library_crystal_chamber_and_main_hall(tmp_path: Path) -> None:
     assert lib_all["has_source"] is True
     assert lib_all["total_top_level"] == 3
     assert lib_all["subfolders_skipped"] == 1
+    assert lib_all["type_counts"] == {"all": 3, "image": 1, "video": 1, "other": 1}
 
     lib_imgs = api.list_source_files(query="nyc", file_type="image")
     assert len(lib_imgs["files"]) == 1
     assert lib_imgs["files"][0]["name"] == "nyc_park.jpg"
     assert lib_imgs["files"][0]["preview_url"] is not None
+
+    # Inspect supported image with EXIF DateTimeOriginal, video, and unsupported file
+    exif = Image.Exif()
+    exif[36867] = "2024:06:15 11:22:33"
+    exif_photo = src / "dated_trip.jpg"
+    Image.new("RGB", (32, 24), color="blue").save(exif_photo, exif=exif)
+    corrupt_img = src / "broken.jpg"
+    corrupt_img.write_bytes(b"not a real jpeg")
+    sub_img = src / "ignored_subfolder" / "hidden.jpg"
+    Image.new("RGB", (10, 10), color="red").save(sub_img)
+
+    insp_img = api.inspect_source_file(str(exif_photo))
+    assert insp_img["ok"] is True
+    assert insp_img["file"]["dimensions"] == "32 × 24 px"
+    assert insp_img["file"]["exif_date"] == "2024-06-15 11:22:33"
+    assert insp_img["file"]["exif_folder"] == "2024/2024-06/"
+    assert insp_img["file"]["name_rule_candidate"] == "dated"
+    assert insp_img["file"]["preview_url"] is not None
+
+    insp_vid = api.inspect_source_file(str(src / "clip.mp4"))
+    assert insp_vid["ok"] is True
+    assert insp_vid["file"]["type"] == "video"
+    assert insp_vid["file"]["exif_date"] is None
+    assert insp_vid["file"]["preview_url"] is None
+
+    insp_other = api.inspect_source_file(str(src / "readme.txt"))
+    assert insp_other["ok"] is True
+    assert insp_other["file"]["supported"] is False
+    assert insp_other["file"]["preview_url"] is None
+    assert "skipped" in insp_other["file"]["placement_summary"].lower()
+
+    insp_corrupt = api.inspect_source_file(str(corrupt_img))
+    assert insp_corrupt["ok"] is True
+    assert insp_corrupt["file"]["preview_url"] is None
+    assert insp_corrupt["file"]["image_error"] is not None
+
+    # Security: inspection blocks subfolders and arbitrary outside paths
+    assert api.inspect_source_file(str(sub_img))["ok"] is False
+    outside = tmp_path / "outside.jpg"
+    Image.new("RGB", (10, 10), color="white").save(outside)
+    assert api.inspect_source_file(str(outside))["ok"] is False
+    assert api.inspect_source_file("bad\x00path")["ok"] is False
 
     crystal = api.get_crystal_chamber_status()
     assert crystal["supported"] is False
@@ -345,6 +388,14 @@ def test_web_app_static_routes_and_media_token_security(tmp_path: Path) -> None:
     assert st_css.startswith("200")
     assert any("text/css" in v for k, v in hdrs_css if k.lower() == "content-type")
 
+    st_lib_svg, _, lib_svg_body = call_wsgi("/static/assets/svg/library-shelf.svg")
+    assert st_lib_svg.startswith("200")
+    ET.fromstring(lib_svg_body.decode("utf-8"))
+
+    st_lib_js, _, lib_js_body = call_wsgi("/static/js/library.js")
+    assert st_lib_js.startswith("200")
+    assert b"NexoraLibrary" in lib_js_body
+
     # /api/media without token or wrong token -> 403
     q_crop = urllib.parse.urlencode({"path": str(crop), "token": "wrong-token"})
     st_bad, _, _ = call_wsgi("/api/media", q_crop)
@@ -396,3 +447,47 @@ def test_bridge_multiprocess_scan_and_stop(tmp_path: Path) -> None:
     assert job["error"] is None
     assert job["last_result"]["images_scanned"] == 3
     assert api.get_main_hall_summary()["indexed_total"] == 3
+
+
+def test_bridge_library_empty_and_large_collection(tmp_path: Path) -> None:
+    """Verify Magical Library handles empty folders and 240+ file collections cleanly."""
+    runs = tmp_path / "runs"
+    empty_src = tmp_path / "empty_src"
+    (empty_src / "nested_only").mkdir(parents=True)
+
+    api = NexoraBridgeApi(runs_dir=runs)
+    # Before selecting source
+    no_src = api.list_source_files()
+    assert no_src["has_source"] is False
+    assert no_src["type_counts"] == {"all": 0, "image": 0, "video": 0, "other": 0}
+
+    # Empty source (with skipped nested folder)
+    assert api.set_folders(source_dir=str(empty_src), dest_dir="")["ok"] is True
+    empty_res = api.list_source_files()
+    assert empty_res["has_source"] is True
+    assert empty_res["total_top_level"] == 0
+    assert empty_res["subfolders_skipped"] == 1
+
+    # Large collection of 240 files across images, videos, and unsupported types
+    large_src = tmp_path / "large_src"
+    large_src.mkdir()
+    for i in range(150):
+        (large_src / f"beach_{i:03d}.jpg").write_bytes(b"img")
+    for i in range(50):
+        (large_src / f"clip_{i:03d}.mp4").write_bytes(b"vid")
+    for i in range(40):
+        (large_src / f"note_{i:03d}.txt").write_bytes(b"txt")
+
+    assert api.set_folders(source_dir=str(large_src), dest_dir="")["ok"] is True
+    full_res = api.list_source_files()
+    assert full_res["total_top_level"] == 240
+    assert full_res["filtered_count"] == 240
+    assert full_res["type_counts"] == {"all": 240, "image": 150, "video": 50, "other": 40}
+
+    vid_res = api.list_source_files(query="clip_04", file_type="video")
+    assert vid_res["filtered_count"] == 10
+    assert all(it["type"] == "video" for it in vid_res["files"])
+
+    other_res = api.list_source_files(file_type="other")
+    assert other_res["filtered_count"] == 40
+    assert all(it["preview_url"] is None for it in other_res["files"])

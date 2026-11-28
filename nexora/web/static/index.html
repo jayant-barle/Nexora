@@ -147,14 +147,124 @@
           </div>
         </section>
 
-        <!-- Room 2: Magical Library (Connected in Phase 4/5) -->
+        <!-- Room 2: Magical Library (Top-Level File Explorer & Reading Desk) -->
         <section class="nx-room-view" data-room-panel="library" hidden>
-          <div class="nx-card">
-            <div class="nx-card-header">
-              <h2 class="nx-card-title">Magical Library</h2>
-              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+          <div class="nx-card nx-lib-header-card">
+            <div class="nx-lib-banner">
+              <div class="nx-lib-banner-text">
+                <div class="nx-card-header" style="margin-bottom: 6px;">
+                  <div>
+                    <h2 class="nx-card-title">Magical Library — Archive &amp; Reading Desk</h2>
+                    <div class="nx-muted">Top-level source browser &amp; metadata reader. Subfolders stay skipped and untouched.</div>
+                  </div>
+                  <div class="nx-lib-top-actions">
+                    <button id="lib-refresh-btn" class="nx-btn" type="button">↻ Refresh Shelf</button>
+                    <button class="nx-btn" type="button" data-room-target="treehouse">← Back to Treehouse</button>
+                  </div>
+                </div>
+                <div class="nx-lib-source-strip">
+                  <button id="lib-pick-source-btn" class="nx-btn nx-btn-primary" type="button">Choose Source Folder</button>
+                  <span id="lib-source-badge" class="nx-pill-path" style="max-width: 420px;">No source folder chosen</span>
+                  <span class="nx-pill-badge is-good">Read-only browsing</span>
+                </div>
+              </div>
+              <div class="nx-lib-shelf-art" aria-hidden="true">
+                <img src="/static/assets/svg/library-shelf.svg" alt="" width="290" height="87" />
+              </div>
             </div>
-            <p class="nx-muted">Entry doorway ready. Full file explorer, search, and top-level media preview connect in Phase 4 &amp; 5.</p>
+
+            <div class="nx-lib-controls">
+              <div class="nx-lib-search-wrap">
+                <label class="nx-sr-only" for="lib-search-input">Search files by filename</label>
+                <input id="lib-search-input" class="nx-input" type="search" placeholder="Search scrolls &amp; files by filename..." />
+                <button id="lib-clear-search-btn" class="nx-btn" type="button" title="Reset search and filters">Clear</button>
+              </div>
+              <div class="nx-filter-row" role="group" aria-label="Filter files by category">
+                <button class="nx-filter-pill is-active" type="button" data-lib-type="all" aria-pressed="true">
+                  All <span class="nx-count-chip" id="lib-count-all">0</span>
+                </button>
+                <button class="nx-filter-pill" type="button" data-lib-type="image" aria-pressed="false">
+                  Images <span class="nx-count-chip" id="lib-count-image">0</span>
+                </button>
+                <button class="nx-filter-pill" type="button" data-lib-type="video" aria-pressed="false">
+                  Videos <span class="nx-count-chip" id="lib-count-video">0</span>
+                </button>
+                <button class="nx-filter-pill" type="button" data-lib-type="other" aria-pressed="false">
+                  Other <span class="nx-count-chip" id="lib-count-other">0</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="nx-library-desk">
+            <!-- Left Column: Top-level Bookshelf Collection -->
+            <div class="nx-card nx-lib-shelf-pane">
+              <div class="nx-lib-pane-head">
+                <h3 class="nx-card-title" style="font-size: 16px;">Bookshelf Collection</h3>
+                <span id="lib-summary-bar" class="nx-muted">No source folder chosen</span>
+              </div>
+
+              <div id="lib-loading" class="nx-lib-state-box" hidden>Reading source shelf...</div>
+              <div id="lib-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
+
+              <div id="lib-empty" class="nx-lib-state-box" hidden>
+                <div id="lib-empty-title" class="nx-lib-state-title">No Source Folder Selected Yet</div>
+                <p id="lib-empty-desc" class="nx-muted" style="margin: 6px 0 12px;">Choose a folder above to browse top-level files safely.</p>
+                <div class="nx-quick-actions" style="justify-content: center; margin-top: 0;">
+                  <button id="lib-empty-pick-btn" class="nx-btn nx-btn-primary" type="button">Select Source Folder</button>
+                  <button id="lib-empty-reset-btn" class="nx-btn" type="button" hidden>Reset Search &amp; Filters</button>
+                </div>
+              </div>
+
+              <div id="lib-file-list" class="nx-lib-file-list" role="region" aria-label="Source files"></div>
+
+              <div id="lib-pagination" class="nx-lib-pagination" hidden>
+                <button id="lib-prev-page" class="nx-btn" type="button">← Previous</button>
+                <span id="lib-page-label" class="nx-muted">Page 1 of 1</span>
+                <button id="lib-next-page" class="nx-btn" type="button">Next →</button>
+              </div>
+            </div>
+
+            <!-- Right Column: Cozy Reading Desk & Metadata Ledger -->
+            <div class="nx-card nx-lib-desk-pane">
+              <div class="nx-lib-pane-head">
+                <h3 class="nx-card-title" style="font-size: 16px;">Reading Desk &amp; Metadata</h3>
+                <span class="nx-pill-badge">OS Dates Ignored</span>
+              </div>
+
+              <div id="lib-desk-idle" class="nx-lib-state-box">
+                <div class="nx-lib-state-title">Open Any Scroll to Inspect</div>
+                <p id="lib-desk-idle-text" class="nx-muted" style="margin: 6px 0 0;">Select any photo, video, or other file on the shelf to preview supported media and view authoritative Nexora metadata.</p>
+              </div>
+
+              <div id="lib-desk-loading" class="nx-lib-state-box" hidden>Reading file metadata...</div>
+              <div id="lib-desk-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
+
+              <div id="lib-desk-content" hidden>
+                <div id="lib-desk-media-box" class="nx-lib-media-box">
+                  <img id="lib-desk-img" alt="" hidden />
+                  <p id="lib-desk-preview-note" class="nx-muted" style="margin: 0;" hidden></p>
+                </div>
+
+                <dl class="nx-meta-ledger">
+                  <div class="nx-meta-row"><dt>File Name</dt><dd id="lib-meta-name">—</dd></div>
+                  <div class="nx-meta-row"><dt>Category</dt><dd id="lib-meta-type">—</dd></div>
+                  <div class="nx-meta-row"><dt>File Size</dt><dd id="lib-meta-size">—</dd></div>
+                  <div class="nx-meta-row"><dt>Image Dimensions</dt><dd id="lib-meta-dims">—</dd></div>
+                  <div class="nx-meta-row"><dt>EXIF Capture Date</dt><dd id="lib-meta-exif">—</dd></div>
+                  <div class="nx-meta-row"><dt>Name Rule Token</dt><dd id="lib-meta-name-rule">—</dd></div>
+                  <div class="nx-meta-row"><dt>Face Scan Cache</dt><dd id="lib-meta-faces">—</dd></div>
+                  <div class="nx-meta-row"><dt>Rule Preview</dt><dd id="lib-meta-rule">—</dd></div>
+                </dl>
+
+                <div class="nx-banner-safe" style="margin-top: 12px; font-size: 13px;">
+                  <div id="lib-meta-safety-note" style="font-weight: 600;"></div>
+                  <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px;">
+                    <button class="nx-btn nx-btn-primary" type="button" data-room-target="potion-workshop">🧪 Open Potion Workshop</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -239,6 +349,7 @@
   <script defer src="/static/js/api.js"></script>
   <script defer src="/static/js/fairy.js"></script>
   <script defer src="/static/js/scene.js"></script>
+  <script defer src="/static/js/library.js"></script>
   <script defer src="/static/js/router.js"></script>
 </body>
 </html>
