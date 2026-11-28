@@ -215,6 +215,9 @@
   - Visual direction updated per supplied Dark 3D Glassmorphism + Electric Lime reference (`--nx-bg: #080909`, `--nx-sidebar: #101210`, `--nx-surface: #151816`, `--nx-card: #202321`, `--nx-card-raised: #292D2A`, `--nx-border: #343936`, `--nx-accent: #B5FF3B`, `--nx-accent-start: #75CB32`, `--nx-accent-end: #D2FF70`, `--nx-text: #F5F7F2`, `--nx-text-secondary: #929793`, semantic `--nx-success`/`--nx-warning`/`--nx-danger`), superseding Obsidian Lavender.
   - Designed original NEXORA orbital connected-node brand mark, floating layered charcoal cards, translucent glassmorphism hero progress card, soft radial lime edge illumination, and real-data SVG gauges/bars without hardcoding sample metrics.
   - Preserved Milestone 1 stop gate: complete Dashboard and live WebView2 visual verification first before migrating remaining workspace screens.
+- 2026-11-28: Dashboard Visual Refinement (Milestone 1.1):
+  - Fixed grid track sizing (`minmax(0, 1fr)` on `.nx-shell` and `.nx-room-view` / `.nx-stage` / `.nx-topbar` flex-wrap constraints) so no cards, search bar, or folder buttons clip or overflow horizontally across `1560x900`, `1240x820`, `1024x700`, and `940x640`.
+  - Added an explicit empty-workspace banner and honest cache provenance labels on the Dashboard so previously saved `runs/faces.json` counts are clearly distinguished from an active workspace scan when no source folder is selected.
 
 
 

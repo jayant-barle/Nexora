@@ -95,14 +95,24 @@
         <!-- Milestone 1 Primary Screen: Dark 3D Glassmorphism + Electric Lime Dashboard -->
         <section id="dashboard-panel" class="nx-room-view" data-room-panel="dashboard">
           <div class="nx-dash-header">
-            <div>
+            <div style="min-width: 0;">
               <h2 class="nx-card-title" style="font-size: 20px;">Workspace Intelligence</h2>
-              <p class="nx-dash-subtitle">Real-time metrics read directly from your local face cache, move plan, and <span class="nx-mono">runs/</span> history.</p>
+              <p class="nx-dash-subtitle">Metrics read directly from local <span class="nx-mono">runs/</span> history and face cache.</p>
             </div>
             <div class="nx-action-inline">
               <button class="nx-btn" type="button" data-room-target="library">Open File Explorer</button>
               <button class="nx-btn nx-btn-primary" type="button" data-room-target="photo-garden">Photos &amp; People</button>
             </div>
+          </div>
+
+          <!-- Honest Empty Workspace / Saved Cache Notice -->
+          <div id="dash-workspace-notice" class="nx-workspace-notice">
+            <div class="nx-workspace-notice-head">
+              <span class="nx-notice-dot" aria-hidden="true"></span>
+              <strong id="dash-notice-title">No source workspace selected</strong>
+              <span id="dash-notice-pill" class="nx-pill-badge">Waiting for folder</span>
+            </div>
+            <p id="dash-notice-body" class="nx-muted" style="margin: 4px 0 0;">Select a source folder below to inspect top-level files or run a fresh face scan.</p>
           </div>
 
           <!-- Source & Destination Folder Selectors -->
@@ -139,7 +149,7 @@
                   <span id="dash-ring-indexed-txt" class="nx-ring-text">0%</span>
                 </div>
               </div>
-              <div class="nx-kpi-label">Indexed Media (Cache)</div>
+              <div class="nx-kpi-label" id="dash-kpi-indexed-label">Indexed Media (Saved Cache)</div>
               <div class="nx-kpi-num" id="dash-kpi-indexed">0</div>
               <div class="nx-kpi-sub" id="dash-kpi-indexed-sub">0 images · 0 videos</div>
             </div>
@@ -157,7 +167,7 @@
                   <span id="dash-ring-people-txt" class="nx-ring-text">0%</span>
                 </div>
               </div>
-              <div class="nx-kpi-label">People Discovered</div>
+              <div class="nx-kpi-label" id="dash-kpi-people-label">People Discovered</div>
               <div class="nx-kpi-num" id="dash-kpi-people">0</div>
               <div class="nx-kpi-sub" id="dash-kpi-people-sub">0 confirmed · 0 unnamed</div>
             </div>
@@ -279,7 +289,7 @@
               <div class="nx-card-header" style="margin-bottom: 4px;">
                 <div>
                   <h3 class="nx-card-title">Workspace Distribution</h3>
-                  <div class="nx-muted">Live counts from cache &amp; move plan</div>
+                  <div class="nx-muted" id="dash-chart-subtitle">Saved cache counts · no active source</div>
                 </div>
                 <span id="dash-chart-peak-pill" class="nx-pill-badge">No data</span>
               </div>

@@ -60,7 +60,13 @@
   function refreshAppState() {
     return global.NexoraApi.call("get_app_state").then(function (state) {
       if (el("app-version")) el("app-version").textContent = "v" + state.version;
-      if (el("status-text") && state.job) el("status-text").textContent = state.job.status_text || "Ready";
+      if (el("status-text") && state.job) {
+        if (!state.source_dir && !state.job.running) {
+          el("status-text").textContent = "No source workspace selected — showing saved runs/ cache only";
+        } else {
+          el("status-text").textContent = state.job.status_text || "Ready";
+        }
+      }
       if (el("safety-footer") && state.footer) el("safety-footer").textContent = state.footer;
 
       var srcPill = el("source-path-pill");
@@ -199,17 +205,40 @@
     var unreadableCount = Number(data.unreadable_count || 0);
     var planTotal = Number(pCounts.total || 0);
     var planReady = appSt.has_active_plan ? Number(pCounts.ready || 0) : 0;
+    var hasSource = Boolean(appSt.source_dir);
 
+    var noticeEl = el("dash-workspace-notice");
+    if (noticeEl) {
+      noticeEl.hidden = hasSource;
+      if (!hasSource) {
+        if (el("dash-notice-title")) el("dash-notice-title").textContent = "No source workspace selected";
+        if (el("dash-notice-pill")) {
+          el("dash-notice-pill").textContent = indexedTotal > 0 ? "Saved Cache Only" : "Awaiting Folder";
+        }
+        if (el("dash-notice-body")) {
+          el("dash-notice-body").textContent = indexedTotal > 0 || visiblePeople > 0
+            ? "Numbers below reflect previously saved runs/faces.json cache (" + indexedTotal + " item(s), " + visiblePeople + " group(s)). No active scan has run in this session — choose a source folder below to inspect live files or start a fresh scan."
+            : "No source folder is selected and no saved face cache was found. Select a top-level source folder and same-drive destination folder below to get started.";
+        }
+      }
+    }
+
+    if (el("dash-kpi-indexed-label")) {
+      el("dash-kpi-indexed-label").textContent = hasSource ? "Indexed Media (Cache)" : "Indexed Media (Saved Cache)";
+    }
     if (el("dash-kpi-indexed")) el("dash-kpi-indexed").textContent = String(indexedTotal);
     if (el("dash-kpi-indexed-sub")) {
-      el("dash-kpi-indexed-sub").textContent = indexedImages + " images · " + indexedVideos + " videos";
+      el("dash-kpi-indexed-sub").textContent = indexedImages + " images · " + indexedVideos + " videos" + (!hasSource && indexedTotal > 0 ? " (saved)" : "");
     }
     var imageShare = indexedTotal > 0 ? (indexedImages / indexedTotal) * 100 : 0;
     setRing("dash-ring-indexed", "dash-ring-indexed-txt", imageShare);
 
+    if (el("dash-kpi-people-label")) {
+      el("dash-kpi-people-label").textContent = hasSource ? "People Discovered" : "People (Saved Cache)";
+    }
     if (el("dash-kpi-people")) el("dash-kpi-people").textContent = String(visiblePeople);
     if (el("dash-kpi-people-sub")) {
-      el("dash-kpi-people-sub").textContent = namedPeople + " confirmed · " + unnamedPeople + " unnamed";
+      el("dash-kpi-people-sub").textContent = namedPeople + " confirmed · " + unnamedPeople + " unnamed" + (!hasSource && visiblePeople > 0 ? " (saved)" : "");
     }
     var namedShare = visiblePeople > 0 ? (namedPeople / visiblePeople) * 100 : 0;
     setRing("dash-ring-people", "dash-ring-people-txt", namedShare);
@@ -234,7 +263,7 @@
     // Hero Frosted Glass Gauge: displays active plan readiness when previewed, else named-people ratio from cache
     var heroPct = 0;
     var heroLabel = "0 of 0 groups named";
-    var heroSub = "Real naming coverage from cache";
+    var heroSub = "Saved cache · select workspace for live scan";
     if (appSt.has_active_plan && planTotal > 0) {
       heroPct = Math.round((planReady / planTotal) * 100);
       heroLabel = planReady + " of " + planTotal + " planned files ready";
@@ -243,10 +272,21 @@
     } else {
       heroPct = visiblePeople > 0 ? Math.round((namedPeople / visiblePeople) * 100) : 0;
       heroLabel = visiblePeople > 0
-        ? namedPeople + " of " + visiblePeople + " groups named"
-        : "No visible people groups scanned yet";
-      heroSub = "Real naming coverage from cache";
-      if (el("dash-hero-badge")) el("dash-hero-badge").textContent = indexedTotal > 0 ? "Live Cache" : "Idle";
+        ? namedPeople + " of " + visiblePeople + " saved groups named"
+        : "No face cache groups saved yet";
+      if (hasSource) {
+        heroSub = "Active workspace face-cache coverage";
+        if (el("dash-hero-badge")) el("dash-hero-badge").textContent = indexedTotal > 0 ? "Active Cache" : "Workspace Ready";
+      } else {
+        heroSub = indexedTotal > 0 ? "From saved runs/ cache · no workspace selected" : "No workspace selected yet";
+        if (el("dash-hero-badge")) el("dash-hero-badge").textContent = indexedTotal > 0 ? "Saved Cache" : "No Workspace";
+      }
+    }
+
+    if (el("dash-chart-subtitle")) {
+      el("dash-chart-subtitle").textContent = hasSource
+        ? "Active workspace & preview counts"
+        : (indexedTotal > 0 ? "Saved cache counts · no active source" : "No workspace selected yet");
     }
 
     var arc = el("dash-gauge-arc");
