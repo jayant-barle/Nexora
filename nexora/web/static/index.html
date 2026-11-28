@@ -89,14 +89,60 @@
         <section class="nx-room-view" data-room-panel="main-hall" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
-              <h2 class="nx-card-title">Main Hall — Enchanted Library Overview</h2>
+              <div>
+                <h2 class="nx-card-title">Main Hall — Enchanted Library Overview</h2>
+                <div class="nx-muted">Live metrics and audit records read directly from your local runs folder.</div>
+              </div>
               <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
             </div>
-            <div class="nx-kpi-grid">
+            <div class="nx-kpi-grid" style="margin-bottom: 0;">
               <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-indexed">0</div><div class="nx-kpi-label">Indexed Media (Cache)</div></div>
               <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-people">0</div><div class="nx-kpi-label">Visible People Groups</div></div>
               <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-named">0</div><div class="nx-kpi-label">Named People</div></div>
               <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-unreadable">0</div><div class="nx-kpi-label">Unreadable Files</div></div>
+            </div>
+          </div>
+
+          <div class="nx-hall-grid">
+            <div class="nx-card">
+              <div class="nx-card-header">
+                <h3 class="nx-card-title" style="font-size: 16px;">Cached Media &amp; People Groups</h3>
+                <button class="nx-btn" data-room-target="photo-garden">Open Photo Garden</button>
+              </div>
+              <div class="nx-stat-rows">
+                <div class="nx-stat-row"><span>Cached Images</span><span class="nx-stat-val" id="hall-images-count">0</span></div>
+                <div class="nx-stat-row"><span>Cached Videos</span><span class="nx-stat-val" id="hall-videos-count">0</span></div>
+                <div class="nx-stat-row"><span>Cached Media Size</span><span class="nx-stat-val" id="hall-cached-size">0.0 KB</span></div>
+                <div class="nx-stat-row"><span>Review / Unnamed</span><span class="nx-stat-val" id="hall-unnamed-review">0 / 0</span></div>
+              </div>
+              <div id="hall-people-chips" class="nx-people-chips"></div>
+            </div>
+
+            <div class="nx-card">
+              <div class="nx-card-header">
+                <h3 class="nx-card-title" style="font-size: 16px;">Workspace Status &amp; Quick Actions</h3>
+              </div>
+              <div class="nx-stat-rows" style="grid-template-columns: 1fr;">
+                <div class="nx-stat-row"><span>Source Folder</span><span class="nx-stat-val" id="hall-source-status">Not selected</span></div>
+                <div class="nx-stat-row"><span>Destination Folder</span><span class="nx-stat-val" id="hall-dest-status">Not selected</span></div>
+                <div class="nx-stat-row"><span>Active Preview Plan</span><span class="nx-stat-val" id="hall-plan-status">No preview built</span></div>
+                <div class="nx-stat-row"><span>Undo Recovery</span><span class="nx-stat-val" id="hall-undo-status">No active run log</span></div>
+              </div>
+              <div class="nx-quick-actions">
+                <button class="nx-btn nx-btn-primary" data-room-target="potion-workshop">🧪 Potion Workshop</button>
+                <button class="nx-btn" data-room-target="library">📚 Magical Library</button>
+                <button class="nx-btn nx-btn-lavender" data-room-target="secret-vault">🔐 Secret Vault</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="nx-card">
+            <div class="nx-card-header">
+              <h3 class="nx-card-title" style="font-size: 16px;">Recent Organization &amp; Scan Activity</h3>
+              <button class="nx-btn" data-room-target="memory-room">Open Memory Room</button>
+            </div>
+            <div id="hall-activity-list" class="nx-activity-list">
+              <p class="nx-muted" style="margin: 0;">Loading recent logs...</p>
             </div>
           </div>
         </section>

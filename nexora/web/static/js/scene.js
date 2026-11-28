@@ -60,6 +60,16 @@
 
       roomEl.addEventListener("focus", function () {
         showRoomTooltip(roomEl);
+        if (global.NexoraFairy) {
+          global.NexoraFairy.setExpression("curious");
+        }
+      });
+
+      roomEl.addEventListener("blur", function () {
+        resetTooltip();
+        if (global.NexoraFairy) {
+          global.NexoraFairy.setExpression("idle");
+        }
       });
 
       roomEl.addEventListener("click", function () {

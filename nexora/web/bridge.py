@@ -341,10 +341,42 @@ class NexoraBridgeApi:
         visible_groups = self._people_manager.get_visible_groups(group_sizes=group_sizes)
 
         named_people = sum(1 for g in visible_groups if g.get("name") or g.get("display_name"))
+        unnamed_people = max(0, len(visible_groups) - named_people)
         needs_review = sum(1 for g in visible_groups if g.get("needs_review") and not g.get("name"))
 
-        cached_images = sum(1 for v in self._cluster_manager.cache.values() if v.get("type") == "image")
-        cached_videos = sum(1 for v in self._cluster_manager.cache.values() if v.get("type") == "video")
+        unnamed_numbering = self._people_manager.get_unnamed_numbering(group_sizes=group_sizes)
+        sorted_visible = self._people_manager.sort_groups(visible_groups, "Largest first", group_sizes=group_sizes)
+        people_preview: list[dict[str, Any]] = []
+        for g in sorted_visible[:8]:
+            gid = g["id"]
+            crop_paths = g.get("crop_paths", [])
+            if not crop_paths and g.get("crop_path"):
+                crop_paths = [g["crop_path"]]
+            crop_url = self.media_url(crop_paths[0]) if crop_paths else None
+            people_preview.append({
+                "id": gid,
+                "display_name": g.get("display_name") or g.get("name") or unnamed_numbering.get(gid, "Unnamed person"),
+                "named": bool(g.get("name") or g.get("display_name")),
+                "needs_review": bool(g.get("needs_review") and not g.get("name")),
+                "size": group_sizes.get(gid, 0),
+                "crop_url": crop_url,
+            })
+
+        cached_images = 0
+        cached_videos = 0
+        for cache_key, v in self._cluster_manager.cache.items():
+            # Older runs/faces.json cache records may omit "type"; infer safely from extension.
+            media_type = v.get("type")
+            if media_type == "video":
+                cached_videos += 1
+            elif media_type == "image":
+                cached_images += 1
+            else:
+                suffix = Path(cache_key).suffix.lower()
+                if suffix in VIDEO_EXTENSIONS:
+                    cached_videos += 1
+                else:
+                    cached_images += 1
         total_cached_bytes = sum(int(v.get("size", 0) or 0) for v in self._cluster_manager.cache.values())
 
         recent_logs = self.list_activity_logs().get("entries", [])[:6]
@@ -359,8 +391,10 @@ class NexoraBridgeApi:
             "indexed_size_formatted": _format_size(total_cached_bytes),
             "visible_people": len(visible_groups),
             "named_people": named_people,
+            "unnamed_people": unnamed_people,
             "needs_review_count": needs_review,
             "unreadable_count": len(self._cluster_manager.unreadable),
+            "people_preview": people_preview,
             "recent_activity": recent_logs,
             "app_state": app_state,
         }

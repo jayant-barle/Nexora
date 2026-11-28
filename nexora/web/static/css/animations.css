@@ -32,7 +32,16 @@
     transform: scaleY(1);
   }
   50% {
-    transform: scaleY(0.82);
+    transform: scaleY(0.84);
+  }
+}
+
+@keyframes nxFairyBlink {
+  0%, 92%, 100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.12);
   }
 }
 
@@ -120,19 +129,34 @@
   animation: nxChimneyPuff 3.2s ease-out infinite;
 }
 
-/* Interactive Treehouse Room Hover Highlights */
+/* Interactive Treehouse Room Hover, Keyboard Focus, & Active States */
 .nx-scene-room {
   cursor: pointer;
   outline: none;
-  transition: transform 0.18s ease, filter 0.18s ease;
+  transition: transform 0.16s ease, filter 0.16s ease;
   transform-box: fill-box;
   transform-origin: center center;
 }
 
-.nx-scene-room:hover,
-.nx-scene-room:focus-visible {
+.nx-scene-room:hover {
   transform: translateY(-4px) scale(1.03);
-  filter: drop-shadow(0 0 12px rgba(245, 217, 147, 0.95));
+  filter: drop-shadow(0 0 11px rgba(245, 217, 147, 0.96));
+}
+
+.nx-scene-room:focus-visible {
+  transform: translateY(-4px) scale(1.04);
+  filter: drop-shadow(0 0 8px rgba(183, 161, 220, 1)) drop-shadow(0 0 14px rgba(245, 217, 147, 0.95));
+}
+
+.nx-scene-room:active {
+  transform: translateY(-1px) scale(0.99);
+  filter: drop-shadow(0 0 8px rgba(232, 196, 119, 0.9));
+}
+
+.nx-fairy-eyes-blink {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: nxFairyBlink 4.6s ease-in-out infinite;
 }
 
 /* Ambient Fireflies */
@@ -179,6 +203,7 @@
   .nx-chimney-puff,
   .nx-fairy-float,
   .nx-fairy-wings,
+  .nx-fairy-eyes-blink,
   .nx-firefly,
   .nx-room-view {
     animation: none !important;

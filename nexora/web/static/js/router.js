@@ -68,15 +68,111 @@
     });
   }
 
+  function renderMainHall(data) {
+    if (!data || !data.ok) return;
+    document.getElementById("kpi-indexed").textContent = String(data.indexed_total);
+    document.getElementById("kpi-people").textContent = String(data.visible_people);
+    document.getElementById("kpi-named").textContent = String(data.named_people);
+    document.getElementById("kpi-unreadable").textContent = String(data.unreadable_count);
+
+    document.getElementById("hall-images-count").textContent = String(data.indexed_images || 0);
+    document.getElementById("hall-videos-count").textContent = String(data.indexed_videos || 0);
+    document.getElementById("hall-cached-size").textContent = data.indexed_size_formatted || "0.0 KB";
+    document.getElementById("hall-unnamed-review").textContent =
+      (data.needs_review_count || 0) + " review / " + (data.unnamed_people || 0) + " unnamed";
+
+    var appSt = data.app_state || {};
+    document.getElementById("hall-source-status").textContent = appSt.source_dir ? "Selected" : "Not selected";
+    document.getElementById("hall-dest-status").textContent = appSt.dest_dir ? "Selected" : "Not selected";
+    var pCounts = appSt.plan_counts || {};
+    document.getElementById("hall-plan-status").textContent = appSt.has_active_plan
+      ? (pCounts.ready || 0) + " ready, " + (pCounts.skipped || 0) + " skipped"
+      : "No preview built";
+    document.getElementById("hall-undo-status").textContent = appSt.can_undo
+      ? "Available (" + appSt.active_undo_run + ")"
+      : "No active run log";
+
+    var chipsWrap = document.getElementById("hall-people-chips");
+    chipsWrap.innerHTML = "";
+    var previewPeople = data.people_preview || [];
+    if (previewPeople.length === 0) {
+      var emptyPeople = document.createElement("span");
+      emptyPeople.className = "nx-muted";
+      emptyPeople.textContent = "No visible people groups scanned yet.";
+      chipsWrap.appendChild(emptyPeople);
+    } else {
+      previewPeople.forEach(function (person) {
+        var chip = document.createElement("button");
+        chip.className = "nx-people-chip";
+        chip.type = "button";
+        chip.title = "Open Photo Garden";
+        chip.addEventListener("click", function () {
+          navigateTo("photo-garden");
+        });
+        if (person.crop_url) {
+          var img = document.createElement("img");
+          img.src = person.crop_url;
+          img.alt = person.display_name;
+          chip.appendChild(img);
+        } else {
+          var dot = document.createElement("span");
+          dot.className = "nx-people-chip-dot";
+          dot.textContent = (person.display_name || "?").charAt(0).toUpperCase();
+          chip.appendChild(dot);
+        }
+        var label = document.createElement("span");
+        label.textContent = person.display_name + " (" + person.size + ")";
+        chip.appendChild(label);
+        chipsWrap.appendChild(chip);
+      });
+    }
+
+    var actWrap = document.getElementById("hall-activity-list");
+    actWrap.innerHTML = "";
+    var entries = data.recent_activity || [];
+    if (entries.length === 0) {
+      var emptyAct = document.createElement("p");
+      emptyAct.className = "nx-muted";
+      emptyAct.style.margin = "0";
+      emptyAct.textContent = "No scan logs or organization runs recorded in runs/ yet.";
+      actWrap.appendChild(emptyAct);
+    } else {
+      entries.forEach(function (entry) {
+        var row = document.createElement("div");
+        row.className = "nx-activity-row";
+
+        var left = document.createElement("div");
+        var title = document.createElement("strong");
+        title.textContent = entry.id || entry.kind;
+        var detail = document.createElement("div");
+        detail.className = "nx-muted";
+        if (entry.kind === "move_run") {
+          detail.textContent = entry.moved_count + " file(s) moved at " + entry.timestamp;
+        } else {
+          detail.textContent = entry.summary || "Scan recorded";
+        }
+        left.appendChild(title);
+        left.appendChild(detail);
+
+        var badge = document.createElement("span");
+        badge.className = "nx-pill-badge";
+        if (entry.kind === "move_run") {
+          badge.classList.add(entry.undone ? "is-warn" : "is-good");
+          badge.textContent = entry.undone ? "Undone (" + entry.restored_count + ")" : "Move Run";
+        } else {
+          badge.textContent = "Face Scan";
+        }
+
+        row.appendChild(left);
+        row.appendChild(badge);
+        actWrap.appendChild(row);
+      });
+    }
+  }
+
   function refreshRoomData(roomId) {
     if (roomId === "main-hall") {
-      global.NexoraApi.call("get_main_hall_summary").then(function (data) {
-        if (!data || !data.ok) return;
-        document.getElementById("kpi-indexed").textContent = String(data.indexed_total);
-        document.getElementById("kpi-people").textContent = String(data.visible_people);
-        document.getElementById("kpi-named").textContent = String(data.named_people);
-        document.getElementById("kpi-unreadable").textContent = String(data.unreadable_count);
-      });
+      global.NexoraApi.call("get_main_hall_summary").then(renderMainHall);
     } else if (roomId === "crystal-chamber") {
       global.NexoraApi.call("get_crystal_chamber_status").then(function (data) {
         if (!data || !data.ok) return;

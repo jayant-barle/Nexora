@@ -144,6 +144,17 @@ def test_bridge_library_crystal_chamber_and_main_hall(tmp_path: Path) -> None:
     hall = api.get_main_hall_summary()
     assert hall["ok"] is True
     assert hall["indexed_total"] == 0
+    assert hall["unnamed_people"] == 0
+    assert hall["people_preview"] == []
+
+    # Legacy cache entries without explicit "type" should infer image vs video from suffix
+    api._cluster_manager.cache["legacy_photo.jpg"] = {"size": 1200}
+    api._cluster_manager.cache["legacy_clip.mp4"] = {"size": 4096}
+    hall_legacy = api.get_main_hall_summary()
+    assert hall_legacy["indexed_total"] == 2
+    assert hall_legacy["indexed_images"] == 1
+    assert hall_legacy["indexed_videos"] == 1
+    assert hall_legacy["indexed_bytes"] == 5296
 
 
 def test_bridge_preview_confirm_move_activity_and_undo(tmp_path: Path) -> None:

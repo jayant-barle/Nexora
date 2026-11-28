@@ -97,8 +97,12 @@
     <!-- Massive trunk body & flared roots -->
     <path d="M412 496 C444 468, 466 420, 468 352 L462 198 L636 198 L630 352 C632 422, 658 468, 708 504 C664 510, 632 498, 608 486 C580 502, 532 504, 502 486 C474 498, 442 506, 412 496 Z" fill="url(#nxBarkGrad)" stroke="#322116" stroke-width="3.8" stroke-linejoin="round"/>
 
-    <!-- Subtle hand-drawn bark texture lines -->
+    <!-- Subtle hand-drawn bark grain, wood knot, and mossy root accents -->
     <path d="M492 316 Q498 370 486 432 M608 320 Q602 375 616 440 M518 225 Q522 270 516 308 M584 228 Q580 268 586 306" fill="none" stroke="#4A3221" stroke-width="3" stroke-linecap="round" opacity="0.72"/>
+    <ellipse cx="590" cy="340" rx="9" ry="14" fill="#5A3E2A" stroke="#4A3221" stroke-width="2.2"/>
+    <ellipse cx="590" cy="340" rx="4" ry="7" fill="#79563C" stroke="#4A3221" stroke-width="1.5"/>
+    <path d="M446 472 Q462 456 478 474 Q492 464 504 476" fill="#8EBB70" stroke="#322116" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M624 468 Q640 452 656 470 Q670 462 682 478" fill="#8EBB70" stroke="#322116" stroke-width="2.2" stroke-linejoin="round"/>
   </g>
 
   <!-- 5. LUSH TIERED TREEHOUSE CANOPY & HANGING VINES -->
@@ -125,12 +129,22 @@
       <circle cx="552" cy="152" r="44" fill="#A7D485"/>
     </g>
 
-    <!-- Hanging swaying vines -->
+    <!-- Hanging swaying vines & branch leaves -->
     <g class="nx-vine-sway" fill="none" stroke="#315B3B" stroke-width="3.2" stroke-linecap="round">
       <path d="M238 220 Q232 252 240 278"/>
       <circle cx="240" cy="280" r="6" fill="#8EBB70" stroke="#322116" stroke-width="2"/>
+      <path d="M322 256 Q318 282 326 302"/>
+      <ellipse cx="326" cy="306" rx="5" ry="7" fill="#8EBB70" stroke="#322116" stroke-width="2"/>
       <path d="M862 216 Q868 248 858 276"/>
       <circle cx="858" cy="278" r="6" fill="#E8C477" stroke="#322116" stroke-width="2"/>
+      <path d="M718 258 Q724 282 715 304"/>
+      <ellipse cx="715" cy="307" rx="5" ry="7" fill="#A7D485" stroke="#322116" stroke-width="2"/>
+    </g>
+    <!-- Small canopy blossoms -->
+    <g stroke="#322116" stroke-width="1.8">
+      <circle cx="440" cy="84" r="5" fill="#F4EBD5"/>
+      <circle cx="676" cy="96" r="5" fill="#E8C477"/>
+      <circle cx="776" cy="148" r="4.5" fill="#E8DFFA"/>
     </g>
   </g>
 
@@ -140,6 +154,8 @@
   <g class="nx-scene-room" tabindex="0" role="button" data-room-target="memory-room" data-room-title="Memory Room" data-room-desc="Read-only timeline of completed move runs and scan audit logs." aria-label="Enter Memory Room">
     <rect x="498" y="96" width="108" height="82" rx="10" fill="#F4EBD5" stroke="#322116" stroke-width="3.2"/>
     <path d="M482 104 L552 46 L622 104 Z" fill="#79563C" stroke="#322116" stroke-width="3.4" stroke-linejoin="round"/>
+    <line x1="552" y1="36" x2="552" y2="48" stroke="#322116" stroke-width="2.6" stroke-linecap="round"/>
+    <circle cx="552" cy="34" r="4.5" fill="#E8C477" stroke="#322116" stroke-width="2"/>
     <!-- Attic clock / star window -->
     <circle cx="552" cy="136" r="24" fill="#B7A1DC" stroke="#322116" stroke-width="3"/>
     <circle cx="552" cy="136" r="17" fill="#E8DFFA" opacity="0.65"/>
@@ -177,8 +193,12 @@
     <circle cx="246" cy="292" r="21" fill="url(#nxMagicGlow)"/>
     <!-- Flask icon inside window -->
     <path d="M241 278 L251 278 L251 285 L259 299 A6 6 0 0 1 254 308 L238 308 A6 6 0 0 1 233 299 L241 285 Z" fill="#E8C477" stroke="#322116" stroke-width="2.2"/>
-    <!-- Wooden balcony rail -->
+    <!-- Wooden balcony rail & cozy spindles -->
     <rect x="170" y="336" width="152" height="12" rx="5" fill="#79563C" stroke="#322116" stroke-width="2.6"/>
+    <line x1="190" y1="336" x2="190" y2="348" stroke="#322116" stroke-width="2"/>
+    <line x1="218" y1="336" x2="218" y2="348" stroke="#322116" stroke-width="2"/>
+    <line x1="274" y1="336" x2="274" y2="348" stroke="#322116" stroke-width="2"/>
+    <line x1="302" y1="336" x2="302" y2="348" stroke="#322116" stroke-width="2"/>
     <rect x="186" y="352" width="120" height="22" rx="11" fill="#E8DFFA" stroke="#322116" stroke-width="2.2"/>
     <text x="246" y="367" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="11" font-weight="800" fill="#322116">Potion Workshop</text>
   </g>
@@ -265,15 +285,27 @@
     <circle cx="938" cy="550" r="3" fill="#FAF4E6" stroke="none"/>
   </g>
 
-  <!-- Gently swaying wildflower tufts -->
+  <!-- Gently swaying wildflower tufts & meadow grass details -->
   <g class="nx-flower nx-sway-a" transform="translate(262, 578)">
     <path d="M0 24 Q-4 10 2 0" fill="none" stroke="#315B3B" stroke-width="2.8" stroke-linecap="round"/>
     <circle cx="2" cy="-2" r="7" fill="#FAF4E6" stroke="#322116" stroke-width="2"/>
     <circle cx="2" cy="-2" r="3" fill="#E8C477"/>
+  </g>
+  <g class="nx-flower nx-sway-b" transform="translate(392, 594)">
+    <path d="M0 20 Q-3 9 1 0" fill="none" stroke="#315B3B" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="1" cy="-1" r="6" fill="#E8C477" stroke="#322116" stroke-width="1.8"/>
+    <circle cx="1" cy="-1" r="2.5" fill="#FAF4E6"/>
+  </g>
+  <g class="nx-flower nx-sway-a" transform="translate(744, 598)">
+    <path d="M0 18 Q3 8 -1 0" fill="none" stroke="#315B3B" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="-1" cy="-1" r="6" fill="#FAF4E6" stroke="#322116" stroke-width="1.8"/>
+    <circle cx="-1" cy="-1" r="2.5" fill="#B7A1DC"/>
   </g>
   <g class="nx-flower nx-sway-b" transform="translate(838, 576)">
     <path d="M0 24 Q4 12 -2 0" fill="none" stroke="#315B3B" stroke-width="2.8" stroke-linecap="round"/>
     <circle cx="-2" cy="-2" r="7" fill="#B7A1DC" stroke="#322116" stroke-width="2"/>
     <circle cx="-2" cy="-2" r="3" fill="#FAF4E6"/>
   </g>
+  <!-- Grass blade tufts along meadow edge -->
+  <path d="M98 548 L104 536 L108 548 M104 548 L113 538 L116 549 M872 522 L878 510 L882 522 M878 522 L886 512 L889 523" fill="none" stroke="#315B3B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

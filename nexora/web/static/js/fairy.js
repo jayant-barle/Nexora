@@ -32,8 +32,8 @@
         '<path d="M60 22 L62 15" stroke="#322116" stroke-width="3" stroke-linecap="round"/>' +
         '<circle cx="49" cy="49" r="3" fill="#E8C477" opacity="0.65"/>' +
         '<circle cx="71" cy="49" r="3" fill="#E8C477" opacity="0.65"/>' +
-        /* Expression: Default / Curious / Working eyes */
-        '<g id="fairy-eyes-open">' +
+        /* Expression: Default / Curious / Working eyes (with gentle CSS blink) */
+        '<g id="fairy-eyes-open" class="nx-fairy-eyes-blink">' +
           '<circle cx="54" cy="44" r="2.4" fill="#322116"/>' +
           '<circle cx="66" cy="44" r="2.4" fill="#322116"/>' +
         '</g>' +
