@@ -658,3 +658,60 @@ def test_bridge_garden_security_caches_and_scan_guards(tmp_path: Path) -> None:
         assert dup_res["ok"] is False
     finally:
         api._finish_job("Done")
+
+
+def test_audit_fixes_midscan_locks_quality_metrics_and_sanitization(tmp_path: Path) -> None:
+    """Verify audit regression fixes: mid-scan lock, folder sanitization, single-file quality fields, and inspect."""
+    import numpy as np
+    from unittest.mock import patch
+    from nexora.faces.groups import FaceClusterManager
+
+    runs = tmp_path / "runs"
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    runs.mkdir()
+    src.mkdir()
+    dst.mkdir()
+    img1 = src / "mom_portrait.jpg"
+    Image.new("RGB", (120, 120), color="beige").save(img1)
+
+    # 1. Sequential 1-file scan records box_w, box_h, det_score via shared extractor
+    cm = FaceClusterManager(json_path=runs / "faces.json")
+    fake_face = np.array([10, 15, 64, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.92], dtype=np.float32)
+    fake_emb = np.array([1.0] + [0.0] * 127, dtype=np.float32)
+    with patch("nexora.faces.groups.detect_faces", return_value=[fake_face]), \
+         patch("nexora.faces.groups.embed_face", return_value=fake_emb), \
+         patch("nexora.faces.groups.align_and_crop", return_value=None):
+        cm.scan_source(src)
+
+    rec = cm.cache[str(img1.resolve())]["faces"][0]
+    assert rec["box_w"] == 64
+    assert rec["box_h"] == 64
+    assert rec["det_score"] > 0.9
+
+    # 2. cluster_all_faces preserves to_folder_name sanitization ("Mom / Dad" -> "mom  dad")
+    cm.name_group("group_001", "Mom / Dad")
+    cm.cluster_all_faces()
+    assert cm.groups[0]["name"] == "mom  dad"
+
+    # 3. inspect_source_file works safely on already-grouped image without AttributeError
+    api = NexoraBridgeApi(runs_dir=runs)
+    assert api.set_folders(source_dir=str(src), dest_dir=str(dst))["ok"] is True
+    insp = api.inspect_source_file(str(img1))
+    assert insp["ok"] is True
+    assert insp["file"]["scan_cache"]["people_labels"] == ["Mom / Dad"]
+
+    # 4. Mid-scan: UI queries keep unsaved memory and mutations reject cleanly while running
+    unsaved_key = str((src / "unsaved_in_mem.jpg").resolve())
+    api._cluster_manager.cache[unsaved_key] = {"type": "image", "size": 99, "faces": []}
+    assert api._begin_job("scan", "Scanning...") is True
+    try:
+        assert api.set_folders(source_dir=str(src), dest_dir="")["ok"] is False
+        assert api.build_preview()["ok"] is False
+        assert api.reject_preview()["ok"] is False
+        assert api.name_group("group_001", "Alice")["ok"] is False
+
+        assert api.get_people_state()["ok"] is True
+        assert unsaved_key in api._cluster_manager.cache
+    finally:
+        api._finish_job("Done")

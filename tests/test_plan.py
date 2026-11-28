@@ -241,3 +241,13 @@ def test_undated_image_with_modified_time_never_uses_mtime_for_placement(tmp_pat
     move = plan[0]
     assert move.folder == "Unsorted", f"Must go to Unsorted, got {move.folder}"
     assert move.matched_by == "Unsorted", f"Matched by must be Unsorted, got {move.matched_by}"
+
+
+def test_is_same_drive_fails_closed_on_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from nexora.plan import is_same_drive
+
+    def broken_resolve(self):
+        raise OSError("device error")
+
+    monkeypatch.setattr(Path, "resolve", broken_resolve)
+    assert is_same_drive(tmp_path / "a.jpg", tmp_path / "b.jpg") is False

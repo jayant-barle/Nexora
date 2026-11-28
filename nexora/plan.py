@@ -28,7 +28,7 @@ def is_same_drive(p1: Path, p2: Path) -> bool:
     try:
         return p1.resolve().drive.lower() == p2.resolve().drive.lower()
     except Exception:
-        return True
+        return False
 
 
 def resolve_collision(

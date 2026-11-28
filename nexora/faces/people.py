@@ -271,20 +271,15 @@ class PeopleManager:
             raise ValueError("Cannot split a group with fewer than 2 faces.")
 
         # Partition embeddings into 2 clusters using furthest pair as seeds
-        embs = [inst["embedding"] for inst in face_instances]
-        n = len(embs)
-        best_dist = -1.0
-        seed_a, seed_b = 0, 1
-        for i in range(n):
-            for j in range(i + 1, n):
-                sim = cosine_similarity(embs[i], embs[j])
-                dist = 1.0 - sim
-                if dist > best_dist:
-                    best_dist = dist
-                    seed_a, seed_b = i, j
+        mat = np.stack([np.asarray(inst["embedding"], dtype=np.float32) for inst in face_instances])
+        norms = np.linalg.norm(mat, axis=1, keepdims=True)
+        norm_mat = np.divide(mat, np.where(norms > 0, norms, 1.0))
+        sim_mat = norm_mat @ norm_mat.T
+        np.fill_diagonal(sim_mat, 2.0)
+        seed_a, seed_b = divmod(int(np.argmin(sim_mat)), len(face_instances))
 
-        rep_a = embs[seed_a]
-        rep_b = embs[seed_b]
+        rep_a = face_instances[seed_a]["embedding"]
+        rep_b = face_instances[seed_b]["embedding"]
 
         cluster_a: list[dict[str, Any]] = []
         cluster_b: list[dict[str, Any]] = []
@@ -363,8 +358,9 @@ class PeopleManager:
         """
         if target_group_id == source_group_id:
             return False
-        target_size = self.get_group_size(target_group_id)
-        source_size = self.get_group_size(source_group_id)
+        sizes = self.get_group_sizes()
+        target_size = sizes.get(target_group_id, 0)
+        source_size = sizes.get(source_group_id, 0)
         return (
             target_size <= MERGE_GUARD_SMALL_CLUSTER_MAX
             and source_size > MERGE_GUARD_MAX_RATIO * target_size
@@ -556,11 +552,12 @@ class PeopleManager:
           'size': int,
           'reason': str,
         """
+        sizes = self.get_group_sizes()
         person_counts: dict[str, int] = {}
         for g in self.groups:
             folder_name = (g.get("name") or "").strip().lower()
             if folder_name:
-                person_counts[folder_name] = person_counts.get(folder_name, 0) + self.get_group_size(g["id"])
+                person_counts[folder_name] = person_counts.get(folder_name, 0) + sizes.get(g["id"], 0)
 
         report: dict[str, list[dict[str, Any]]] = {
             "needs_review": [],
@@ -568,12 +565,12 @@ class PeopleManager:
             "hidden_group": [],
         }
 
-        unnamed_numbering = self.get_unnamed_numbering()
+        unnamed_numbering = self.get_unnamed_numbering(group_sizes=sizes)
 
         for g in self.groups:
             gid = g["id"]
             folder_name = (g.get("name") or "").strip().lower()
-            size = self.get_group_size(gid)
+            size = sizes.get(gid, 0)
             display_name = g.get("display_name") or g.get("name") or unnamed_numbering.get(gid, "Unnamed person")
             needs_review = g.get("needs_review", False)
 
