@@ -218,6 +218,8 @@
 - 2026-11-28: Dashboard Visual Refinement (Milestone 1.1):
   - Fixed grid track sizing (`minmax(0, 1fr)` on `.nx-shell` and `.nx-room-view` / `.nx-stage` / `.nx-topbar` flex-wrap constraints) so no cards, search bar, or folder buttons clip or overflow horizontally across `1560x900`, `1240x820`, `1024x700`, and `940x640`.
   - Added an explicit empty-workspace banner and honest cache provenance labels on the Dashboard so previously saved `runs/faces.json` counts are clearly distinguished from an active workspace scan when no source folder is selected.
+- 2026-11-28: Default WebView2 entrypoint for built Nexora.exe:
+  - Updated `app.py` so launching without flags starts `nexora.web.app.main_web()` (HTML/CSS/JS PyWebView desktop UI) directly, while preserving classic Tkinter fallback under `--classic` (`--web` remains accepted).
 
 
 

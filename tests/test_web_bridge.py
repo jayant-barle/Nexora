@@ -27,7 +27,7 @@ def _wait_job_done(api: NexoraBridgeApi, timeout: float = 10.0) -> dict:
 
 
 def test_app_entry_keeps_freeze_support_and_classic_default() -> None:
-    """Verify --web is opt-in, --classic works, and freeze_support stays first in __main__."""
+    """Verify web UI is default, --classic and --web flags are handled, and freeze_support stays first in __main__."""
     src = inspect.getsource(app_entry)
     tree = ast.parse(src)
     main_if = next(
