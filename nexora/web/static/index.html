@@ -268,14 +268,180 @@
           </div>
         </section>
 
-        <!-- Room 3: Photo Garden (Connected in Phase 4/5) -->
+        <!-- Room 3: Photo Garden (Phase 5: Overview, Gallery, People Management, Guarded Actions) -->
         <section class="nx-room-view" data-room-panel="photo-garden" hidden>
-          <div class="nx-card">
-            <div class="nx-card-header">
-              <h2 class="nx-card-title">Photo Garden</h2>
-              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+          <div class="nx-card nx-garden-hero">
+            <div class="nx-lib-banner">
+              <div class="nx-lib-banner-text">
+                <div class="nx-card-header" style="margin-bottom: 6px;">
+                  <div>
+                    <h2 class="nx-card-title">Photo Garden — Portraits &amp; People Sanctuary</h2>
+                    <div class="nx-muted">Review detected face groups, confirm names explicitly, and inspect top-level photos without auto-moving or deleting anything.</div>
+                  </div>
+                  <div class="nx-lib-top-actions">
+                    <button id="garden-refresh-btn" class="nx-btn" type="button">↻ Refresh Garden</button>
+                    <button class="nx-btn" type="button" data-room-target="treehouse">← Back to Treehouse</button>
+                  </div>
+                </div>
+                <span id="garden-provenance-pill" class="nx-garden-provenance is-empty">Checking face scan cache...</span>
+              </div>
+              <div class="nx-lib-shelf-art" aria-hidden="true">
+                <img src="/static/assets/svg/photo-garden.svg" alt="" width="280" height="88" />
+              </div>
             </div>
-            <p class="nx-muted">Entry balcony ready. Full people cards, face crops, naming, split, and merge controls connect in Phase 4 &amp; 5.</p>
+
+            <!-- A. Garden Overview Metrics -->
+            <div class="nx-garden-kpi-grid" style="margin-top: 14px;">
+              <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-indexed">0</div><div class="nx-kpi-label">Cached Images</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-faces">0</div><div class="nx-kpi-label">With Detected Faces</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-groups">0</div><div class="nx-kpi-label">Visible Groups</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-named">0</div><div class="nx-kpi-label">Confirmed Names</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-unnamed">0</div><div class="nx-kpi-label">Unnamed / Review</div></div>
+              <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-unreadable">0</div><div class="nx-kpi-label">Unreadable / Other</div></div>
+            </div>
+
+            <!-- User-Initiated Scan Controls (Never auto-started) -->
+            <div class="nx-garden-scan-box">
+              <div class="nx-action-inline">
+                <button id="garden-scan-start-btn" class="nx-btn nx-btn-primary" type="button">Scan People</button>
+                <button id="garden-scan-stop-btn" class="nx-btn" type="button" hidden>Stop Scan</button>
+              </div>
+              <div class="nx-scan-progress-wrap">
+                <div id="garden-scan-status-text" class="nx-muted">Ready — click Scan People when you want to detect faces.</div>
+                <div class="nx-progress-track" aria-hidden="true">
+                  <div id="garden-scan-progress-fill" class="nx-progress-fill"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Garden Section Sub-Tabs -->
+          <div class="nx-garden-subtabs" role="tablist" aria-label="Photo Garden Sections">
+            <button class="nx-garden-tab is-active" type="button" role="tab" aria-selected="true" data-garden-tab="people">🌸 People &amp; Merge Suggestions</button>
+            <button class="nx-garden-tab" type="button" role="tab" aria-selected="false" data-garden-tab="gallery">🖼 Photo Gallery</button>
+            <button class="nx-garden-tab" type="button" role="tab" aria-selected="false" data-garden-tab="reports">🔎 Unreadable &amp; Withheld Reports</button>
+          </div>
+
+          <!-- Tab 1: People Group Cards & Separate Suggested Merges -->
+          <div id="garden-tab-people" role="tabpanel">
+            <div class="nx-card" id="garden-suggestions-card" style="margin-bottom: 14px;">
+              <div class="nx-card-header">
+                <div>
+                  <h3 class="nx-card-title" style="font-size: 16px;">Suggested Merges</h3>
+                  <div class="nx-muted">Similar groups suggested for manual review — never merged automatically.</div>
+                </div>
+                <span id="garden-suggestions-count" class="nx-pill-badge">0 suggestion(s)</span>
+              </div>
+              <div id="garden-suggestions-list" class="nx-suggest-list">
+                <p class="nx-muted" style="margin: 0;">No suggested merges.</p>
+              </div>
+            </div>
+
+            <div class="nx-card">
+              <div class="nx-card-header" style="flex-wrap: wrap;">
+                <div>
+                  <h3 class="nx-card-title" style="font-size: 16px;">People Group Cards</h3>
+                  <div id="garden-people-count-note" class="nx-muted">0 visible group(s)</div>
+                </div>
+                <div class="nx-action-inline">
+                  <label class="nx-sr-only" for="garden-people-query">Filter people groups</label>
+                  <input id="garden-people-query" class="nx-input" style="width: 210px;" type="search" placeholder="Search name, unnamed, review..." />
+                  <button id="garden-people-clear-btn" class="nx-btn" type="button">Clear</button>
+                  <label class="nx-sr-only" for="garden-people-sort">Sort people groups</label>
+                  <select id="garden-people-sort" class="nx-select">
+                    <option value="Largest first">Largest first</option>
+                    <option value="Smallest first">Smallest first</option>
+                    <option value="Name A-Z">Name A-Z</option>
+                    <option value="Needs review first">Needs review first</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="garden-people-loading" class="nx-lib-state-box" hidden>Loading people groups...</div>
+              <div id="garden-people-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
+              <div id="garden-people-empty" class="nx-lib-state-box" hidden></div>
+              <div id="garden-people-grid" class="nx-people-grid"></div>
+            </div>
+          </div>
+
+          <!-- Tab 2: Paginated Photo Gallery -->
+          <div id="garden-tab-gallery" role="tabpanel" hidden>
+            <div class="nx-card">
+              <div class="nx-card-header" style="flex-wrap: wrap;">
+                <div>
+                  <h3 class="nx-card-title" style="font-size: 16px;">Top-Level Photo Gallery</h3>
+                  <div id="garden-gallery-summary" class="nx-muted">Select a source folder to view thumbnails</div>
+                </div>
+                <div class="nx-action-inline">
+                  <label class="nx-sr-only" for="garden-gallery-query">Search gallery filenames</label>
+                  <input id="garden-gallery-query" class="nx-input" style="width: 210px;" type="search" placeholder="Filter photos by name..." />
+                  <button id="garden-gallery-clear-btn" class="nx-btn" type="button">Clear</button>
+                </div>
+              </div>
+
+              <div class="nx-filter-row" role="group" aria-label="Filter gallery images" style="margin-bottom: 12px;">
+                <button class="nx-filter-pill is-active" type="button" data-gallery-filter="all" aria-pressed="true">All Images <span class="nx-count-chip" id="gal-count-all">0</span></button>
+                <button class="nx-filter-pill" type="button" data-gallery-filter="with_faces" aria-pressed="false">With Faces <span class="nx-count-chip" id="gal-count-with_faces">0</span></button>
+                <button class="nx-filter-pill" type="button" data-gallery-filter="no_faces" aria-pressed="false">No Faces <span class="nx-count-chip" id="gal-count-no_faces">0</span></button>
+                <button class="nx-filter-pill" type="button" data-gallery-filter="unscanned" aria-pressed="false">Unscanned <span class="nx-count-chip" id="gal-count-unscanned">0</span></button>
+                <button class="nx-filter-pill" type="button" data-gallery-filter="unreadable" aria-pressed="false">Unreadable <span class="nx-count-chip" id="gal-count-unreadable">0</span></button>
+              </div>
+
+              <div id="garden-gallery-loading" class="nx-lib-state-box" hidden>Loading gallery thumbnails...</div>
+              <div id="garden-gallery-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
+              <div id="garden-gallery-empty" class="nx-lib-state-box" hidden>
+                <div id="garden-gallery-empty-title" class="nx-lib-state-title">No Source Folder Selected</div>
+                <p id="garden-gallery-empty-desc" class="nx-muted" style="margin: 6px 0 12px;">Select a source folder above to view real thumbnails.</p>
+                <div class="nx-quick-actions" style="justify-content: center; margin-top: 0;">
+                  <button id="garden-gallery-empty-pick" class="nx-btn nx-btn-primary" type="button">Select Source Folder</button>
+                  <button id="garden-gallery-empty-reset" class="nx-btn" type="button" hidden>Reset Gallery Filter</button>
+                </div>
+              </div>
+
+              <div id="garden-gallery-grid" class="nx-gallery-grid"></div>
+
+              <div id="garden-gallery-pagination" class="nx-lib-pagination" hidden>
+                <button id="garden-gallery-prev" class="nx-btn" type="button">← Previous</button>
+                <span id="garden-gallery-page-label" class="nx-muted">Page 1 of 1</span>
+                <button id="garden-gallery-next" class="nx-btn" type="button">Next →</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 3: Distinct Unreadable, Withheld, & No-Faces Reports -->
+          <div id="garden-tab-reports" role="tabpanel" hidden>
+            <div class="nx-reports-grid">
+              <div class="nx-report-card">
+                <div class="nx-lib-pane-head">
+                  <h3 class="nx-card-title" style="font-size: 15px;">Unreadable Images</h3>
+                  <span id="garden-unreadable-count" class="nx-pill-badge is-warn">0</span>
+                </div>
+                <p class="nx-muted" style="margin-top: 0;">Files OpenCV/Pillow could not decode. They remain untouched on disk.</p>
+                <div id="garden-unreadable-list" class="nx-file-chips"></div>
+              </div>
+
+              <div class="nx-report-card">
+                <div class="nx-lib-pane-head">
+                  <h3 class="nx-card-title" style="font-size: 15px;">Withheld Groups</h3>
+                </div>
+                <p class="nx-muted" style="margin-top: 0;">Detected groups excluded from person-folder placement until reviewed or named:</p>
+                <div style="font-size: 12.5px; font-weight: 700;">Needs review (large): <span id="garden-withheld-review-count">0</span></div>
+                <div id="garden-withheld-review-list" class="nx-file-chips" style="margin-bottom: 8px;"></div>
+                <div style="font-size: 12.5px; font-weight: 700;">Visible unnamed: <span id="garden-withheld-unnamed-count">0</span></div>
+                <div id="garden-withheld-unnamed-list" class="nx-file-chips" style="margin-bottom: 8px;"></div>
+                <div style="font-size: 12.5px; font-weight: 700;">Hidden (&lt;2 faces): <span id="garden-withheld-hidden-count">0</span></div>
+                <div id="garden-withheld-hidden-list" class="nx-file-chips"></div>
+              </div>
+
+              <div class="nx-report-card">
+                <div class="nx-lib-pane-head">
+                  <h3 class="nx-card-title" style="font-size: 15px;">No Usable Faces</h3>
+                  <span id="garden-no-faces-count" class="nx-pill-badge">0</span>
+                </div>
+                <p class="nx-muted" style="margin-top: 0;">Cached readable images with 0 usable face detections (sorted by Name/EXIF Date/Unsorted later).</p>
+                <div id="garden-no-faces-list" class="nx-file-chips"></div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -346,10 +512,24 @@
     </button>
   </div>
 
+  <!-- Explicit Confirmation Modal for Photo Garden Identity Actions -->
+  <div id="garden-confirm-modal" class="nx-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="garden-modal-title" hidden>
+    <div class="nx-modal-dialog">
+      <h3 id="garden-modal-title" class="nx-card-title" style="margin-top: 0;">Confirm Action</h3>
+      <p id="garden-modal-body" style="margin: 8px 0;"></p>
+      <div id="garden-modal-warning" class="nx-modal-warning" hidden></div>
+      <div class="nx-modal-actions">
+        <button id="garden-modal-cancel" class="nx-btn" type="button">Cancel</button>
+        <button id="garden-modal-confirm" class="nx-btn nx-btn-primary" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <script defer src="/static/js/api.js"></script>
   <script defer src="/static/js/fairy.js"></script>
   <script defer src="/static/js/scene.js"></script>
   <script defer src="/static/js/library.js"></script>
+  <script defer src="/static/js/garden.js"></script>
   <script defer src="/static/js/router.js"></script>
 </body>
 </html>

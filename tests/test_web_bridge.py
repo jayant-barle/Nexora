@@ -396,6 +396,20 @@ def test_web_app_static_routes_and_media_token_security(tmp_path: Path) -> None:
     assert st_lib_js.startswith("200")
     assert b"NexoraLibrary" in lib_js_body
 
+    st_gar_svg, _, gar_svg_body = call_wsgi("/static/assets/svg/photo-garden.svg")
+    assert st_gar_svg.startswith("200")
+    ET.fromstring(gar_svg_body.decode("utf-8"))
+
+    st_gar_js, _, gar_js_body = call_wsgi("/static/js/garden.js")
+    assert st_gar_js.startswith("200")
+    assert b"NexoraGarden" in gar_js_body
+
+    # Path traversal using '..' out of face_crops -> 403
+    trav_path = str(crops / ".." / ".." / "outside.jpg")
+    q_trav = urllib.parse.urlencode({"path": trav_path, "token": api.session_token})
+    st_trav, _, _ = call_wsgi("/api/media", q_trav)
+    assert st_trav.startswith("403")
+
     # /api/media without token or wrong token -> 403
     q_crop = urllib.parse.urlencode({"path": str(crop), "token": "wrong-token"})
     st_bad, _, _ = call_wsgi("/api/media", q_crop)
@@ -491,3 +505,156 @@ def test_bridge_library_empty_and_large_collection(tmp_path: Path) -> None:
     other_res = api.list_source_files(file_type="other")
     assert other_res["filtered_count"] == 40
     assert all(it["preview_url"] is None for it in other_res["files"])
+
+
+def test_bridge_garden_security_caches_and_scan_guards(tmp_path: Path) -> None:
+    """Verify Photo Garden validation, malformed caches, gallery security, and scan guards."""
+    import json
+
+    runs = tmp_path / "runs"
+    runs.mkdir()
+
+    # 1. Missing faces.json -> clean empty overview
+    api_empty = NexoraBridgeApi(runs_dir=runs)
+    empty_state = api_empty.get_people_state()
+    assert empty_state["ok"] is True
+    assert empty_state["overview"]["data_origin"] == "empty"
+    assert empty_state["cards"] == []
+
+    # Invalid group identifiers rejected safely across all group ops
+    assert api_empty.name_group("missing_group", "Alice")["ok"] is False
+    assert api_empty.name_group("", "Alice")["ok"] is False
+    assert api_empty.split_group("missing_group")["ok"] is False
+    assert api_empty.check_merge_guard("missing_a", "missing_b")["ok"] is False
+    assert api_empty.merge_groups("missing_a", "missing_b", confirmed_override=True)["ok"] is False
+    assert api_empty.dismiss_suggested_merge("missing_a", "missing_b")["ok"] is False
+
+    # Scan without source folder returns clean error
+    assert api_empty.start_scan()["ok"] is False
+
+    # 2. Malformed JSON cache safely backed up and replaced cleanly
+    bad_runs = tmp_path / "bad_runs"
+    bad_runs.mkdir()
+    (bad_runs / "faces.json").write_text("{corrupt json!!!", encoding="utf-8")
+    api_bad = NexoraBridgeApi(runs_dir=bad_runs)
+    bad_state = api_bad.get_people_state()
+    assert bad_state["ok"] is True
+    assert bad_state["overview"]["data_origin"] == "empty"
+    assert bad_state["overview"]["corrupt_backup"] is not None
+
+    # 3. Cached faces, unreadable, withheld, no-face images, symlink escape block, and repeated scan guard
+    g_runs = tmp_path / "garden_runs"
+    crops = g_runs / "face_crops"
+    crops.mkdir(parents=True)
+    crop_a = crops / "crop_a.jpg"
+    crop_b = crops / "crop_b.jpg"
+    Image.new("RGB", (60, 60), color="pink").save(crop_a)
+    Image.new("RGB", (60, 60), color="lavender").save(crop_b)
+
+    src = tmp_path / "garden_src"
+    src.mkdir()
+    p1 = src / "img_one.jpg"
+    p2 = src / "img_two.jpg"
+    p_noface = src / "landscape.jpg"
+    p_unread = src / "corrupt.jpg"
+    p_unscanned = src / "new_photo.jpg"
+    exif = Image.Exif()
+    exif[36867] = "2025:05:10 09:15:00"
+    Image.new("RGB", (40, 40), color="green").save(p1, exif=exif)
+    Image.new("RGB", (40, 40), color="green").save(p2)
+    Image.new("RGB", (40, 40), color="yellow").save(p_noface)
+    p_unread.write_bytes(b"broken")
+    Image.new("RGB", (40, 40), color="blue").save(p_unscanned)
+
+    outside_img = tmp_path / "outside_secret.jpg"
+    Image.new("RGB", (40, 40), color="red").save(outside_img)
+    symlink_in_src = src / "symlink_escape.jpg"
+    symlink_in_crops = crops / "symlink_crop.jpg"
+    try:
+        symlink_in_src.symlink_to(outside_img)
+        symlink_in_crops.symlink_to(outside_img)
+        symlink_created = True
+    except OSError:
+        symlink_created = False
+
+    emb_a = [1.0] + [0.0] * 127
+    cache_payload = {
+        "schema_version": 3,
+        "cache": {
+            str(p1.resolve()): {"status": "ok", "type": "image", "size": 50, "faces": [{"embedding": emb_a}]},
+            str(p2.resolve()): {"status": "ok", "type": "image", "size": 50, "faces": [{"embedding": emb_a}]},
+            str(p_noface.resolve()): {"status": "ok", "type": "image", "size": 50, "faces": []},
+            str(p_unread.resolve()): {"status": "could not read", "type": "image", "size": 6, "faces": []},
+        },
+        "groups": [
+            {"id": "group_001", "name": None, "display_name": None, "crop_paths": [str(crop_a)], "representative_embedding": emb_a, "needs_review": False},
+            {"id": "group_002", "name": None, "display_name": None, "crop_paths": [str(crop_b)], "representative_embedding": emb_a, "needs_review": False},
+            {"id": "group_003", "name": None, "display_name": None, "crop_paths": [], "representative_embedding": emb_a, "needs_review": False},
+        ],
+        "file_groups": {
+            str(p1.resolve()): ["group_001"],
+            str(p2.resolve()): ["group_002"],
+            str(p_noface.resolve()): ["group_003"],
+        },
+        "face_names": {},
+        "unreadable": [str(p_unread.resolve())],
+        "dismissed_merges": [],
+    }
+    # Give group_001 & group_002 2 faces each via file_groups so both are visible
+    cache_payload["file_groups"][str((src / "img_three.jpg").resolve())] = ["group_001", "group_002"]
+    Image.new("RGB", (40, 40), color="green").save(src / "img_three.jpg")
+    (g_runs / "faces.json").write_text(json.dumps(cache_payload), encoding="utf-8")
+
+    api = NexoraBridgeApi(runs_dir=g_runs)
+    assert api.set_folders(source_dir=str(src), dest_dir="")["ok"] is True
+
+    ps = api.get_people_state()
+    assert ps["overview"]["data_origin"] == "cached"
+    assert ps["overview"]["total_cached_images"] == 3
+    assert ps["overview"]["images_with_faces"] == 2
+    assert ps["overview"]["images_without_faces"] == 1
+    assert ps["withheld"]["unnamed_count"] >= 1
+    assert ps["withheld"]["hidden_group_count"] >= 1
+    assert ps["withheld"]["no_faces_samples"] == ["landscape.jpg"]
+    assert ps["unreadable_items"] == ["corrupt.jpg"]
+    assert all(c["crop_urls"] for c in ps["cards"] if c["id"] in ("group_001", "group_002"))
+
+    # Symlink escape rejected by allowlist & gallery
+    assert api.is_allowed_media_path(crop_a) is True
+    assert api.is_allowed_media_path(outside_img) is False
+    if symlink_created:
+        assert api.is_allowed_media_path(symlink_in_src) is False
+        assert api.is_allowed_media_path(symlink_in_crops) is False
+
+    # Gallery filtering, EXIF capture date, pagination, and zero raw local path leakage
+    gal_all = api.get_garden_gallery()
+    assert gal_all["has_source"] is True
+    assert all("path" not in item for item in gal_all["items"])
+    if symlink_created:
+        assert all(item["name"] != "symlink_escape.jpg" for item in gal_all["items"])
+
+    gal_faces = api.get_garden_gallery(image_filter="with_faces")
+    assert gal_faces["total_matching"] == 2
+    gal_nofaces = api.get_garden_gallery(image_filter="no_faces")
+    assert [it["name"] for it in gal_nofaces["items"]] == ["landscape.jpg"]
+    gal_unread = api.get_garden_gallery(image_filter="unreadable")
+    assert [it["name"] for it in gal_unread["items"]] == ["corrupt.jpg"]
+    assert gal_unread["items"][0]["thumbnail_url"] is None
+
+    gal_exif = api.get_garden_gallery(query="img_one")
+    assert gal_exif["items"][0]["capture_date"] == "2025-05-10 09:15"
+
+    # Dismiss suggested merge removes pair cleanly
+    assert len(ps["suggestions"]) >= 1
+    sug = ps["suggestions"][0]
+    assert api.dismiss_suggested_merge(sug["group_a_id"], sug["group_b_id"])["ok"] is True
+    ps_after_dismiss = api.get_people_state()
+    assert ps_after_dismiss["total_suggestions"] < ps["total_suggestions"]
+
+    # Repeated start_scan request blocked while a job is already running
+    assert api._begin_job("scan", "Running test scan") is True
+    try:
+        dup_res = api.start_scan()
+        assert dup_res["ok"] is False
+    finally:
+        api._finish_job("Done")

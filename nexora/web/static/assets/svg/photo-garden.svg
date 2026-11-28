@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 100" role="img" aria-label="Illustrated woodland photo garden trellis with pastel blossoms and portrait frames">
+  <defs>
+    <radialGradient id="gardenSunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F5D993" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#F5D993" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Soft sunlight cream & meadow garden frame -->
+  <rect x="4" y="4" width="312" height="92" rx="16" fill="#FAF4E6" stroke="#322116" stroke-width="2.5"/>
+  <path d="M6 68 Q90 54 176 68 Q250 78 314 64 L314 90 Q314 94 310 94 L10 94 Q6 94 6 90 Z" fill="#8EBB70"/>
+  <circle cx="48" cy="30" r="24" fill="url(#gardenSunGlow)"/>
+  <circle cx="48" cy="30" r="11" fill="#F5D993" stroke="#322116" stroke-width="2"/>
+
+  <!-- Wooden Garden Trellis Arch -->
+  <path d="M84 92 L84 36 C84 14, 244 14, 244 36 L244 92" fill="none" stroke="#79563C" stroke-width="8" stroke-linecap="round"/>
+  <path d="M84 92 L84 36 C84 14, 244 14, 244 36 L244 92" fill="none" stroke="#322116" stroke-width="2" stroke-linecap="round"/>
+  <line x1="88" y1="30" x2="240" y2="30" stroke="#79563C" stroke-width="4"/>
+
+  <!-- Hanging Cozy Wooden Photo Frames -->
+  <g transform="translate(110 34)">
+    <line x1="16" y1="-4" x2="16" y2="6" stroke="#322116" stroke-width="1.8"/>
+    <rect x="0" y="6" width="32" height="34" rx="5" fill="#F4EBD5" stroke="#322116" stroke-width="2"/>
+    <rect x="4" y="10" width="24" height="20" rx="3" fill="#A8D8E8" stroke="#322116" stroke-width="1.5"/>
+    <circle cx="16" cy="18" r="5" fill="#F5D993" stroke="#322116" stroke-width="1.4"/>
+    <path d="M9 29 Q16 22 23 29" fill="#8EBB70" stroke="#322116" stroke-width="1.4"/>
+  </g>
+
+  <g transform="translate(152 30)">
+    <line x1="16" y1="0" x2="16" y2="8" stroke="#322116" stroke-width="1.8"/>
+    <rect x="0" y="8" width="34" height="36" rx="5" fill="#F4EBD5" stroke="#322116" stroke-width="2"/>
+    <rect x="4" y="12" width="26" height="22" rx="3" fill="#E8DFFA" stroke="#322116" stroke-width="1.5"/>
+    <circle cx="17" cy="21" r="5.5" fill="#F2B8C6" stroke="#322116" stroke-width="1.4"/>
+    <path d="M10 33 Q17 25 24 33" fill="#B7A1DC" stroke="#322116" stroke-width="1.4"/>
+  </g>
+
+  <g transform="translate(196 34)">
+    <line x1="15" y1="-4" x2="15" y2="6" stroke="#322116" stroke-width="1.8"/>
+    <rect x="0" y="6" width="30" height="34" rx="5" fill="#F4EBD5" stroke="#322116" stroke-width="2"/>
+    <rect x="4" y="10" width="22" height="20" rx="3" fill="#D7EFF7" stroke="#322116" stroke-width="1.5"/>
+    <circle cx="12" cy="18" r="4" fill="#E8C477" stroke="#322116" stroke-width="1.4"/>
+    <circle cx="19" cy="19" r="3.6" fill="#F2B8C6" stroke="#322116" stroke-width="1.4"/>
+  </g>
+
+  <!-- Climbing Leafy Vines & Pastel Flowers -->
+  <path d="M84 82 Q74 60 88 40 Q106 20 140 16" fill="none" stroke="#315B3B" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M244 82 Q254 58 238 38 Q220 20 186 16" fill="none" stroke="#315B3B" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Pastel Pink, Lavender, and Soft Yellow Blossoms -->
+  <g stroke="#322116" stroke-width="1.5">
+    <circle cx="78" cy="48" r="6" fill="#F2B8C6"/>
+    <circle cx="78" cy="48" r="2.2" fill="#F5D993"/>
+
+    <circle cx="102" cy="22" r="5.5" fill="#B7A1DC"/>
+    <circle cx="102" cy="22" r="2" fill="#F5D993"/>
+
+    <circle cx="224" cy="22" r="5.5" fill="#F2B8C6"/>
+    <circle cx="224" cy="22" r="2" fill="#F5D993"/>
+
+    <circle cx="252" cy="52" r="6" fill="#B7A1DC"/>
+    <circle cx="252" cy="52" r="2.2" fill="#F5D993"/>
+
+    <circle cx="42" cy="78" r="6.5" fill="#F2B8C6"/>
+    <circle cx="42" cy="78" r="2.4" fill="#F5D993"/>
+
+    <circle cx="62" cy="83" r="5" fill="#F5D993"/>
+    <circle cx="62" cy="83" r="1.8" fill="#79563C"/>
+
+    <circle cx="274" cy="78" r="6.5" fill="#F2B8C6"/>
+    <circle cx="274" cy="78" r="2.4" fill="#F5D993"/>
+
+    <circle cx="292" cy="83" r="5" fill="#B7A1DC"/>
+    <circle cx="292" cy="83" r="1.8" fill="#F5D993"/>
+  </g>
+</svg>

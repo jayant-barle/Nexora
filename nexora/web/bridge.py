@@ -101,9 +101,15 @@ class NexoraBridgeApi:
 
         self._cluster_manager = FaceClusterManager(json_path=self._runs_dir / "faces.json")
         self._people_manager = PeopleManager(self._cluster_manager)
+        self._last_corrupt_backup_name: str | None = (
+            self._cluster_manager.corrupt_backup_path.name
+            if self._cluster_manager.corrupt_backup_path
+            else None
+        )
 
         self._job_lock = threading.Lock()
         self._scan_stop_event: threading.Event | None = None
+        self._fresh_scan_in_session = False
         self._job_state: dict[str, Any] = {
             "kind": None,
             "running": False,
@@ -667,11 +673,202 @@ class NexoraBridgeApi:
         }
 
     # ------------------------------------------------------------------
-    # Room 3: Photo Garden (People cards, search/sort, name/split/merge)
+    # Room 3: Photo Garden (Overview, Gallery, People cards, Guarded Ops)
     # ------------------------------------------------------------------
 
+    def _lookup_cache_and_faces(
+        self, resolved: Path, group_sizes: dict[str, int] | None = None, unnamed_nums: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """Look up existing faces.json cache, unreadable status, and labels for one resolved path."""
+        resolved_key = str(resolved)
+        norm_key = os.path.normcase(resolved_key)
+
+        cache_entry = self._cluster_manager.cache.get(resolved_key)
+        if cache_entry is None:
+            for k, val in self._cluster_manager.cache.items():
+                if os.path.normcase(k) == norm_key:
+                    cache_entry = val
+                    break
+
+        is_unreadable = resolved_key in self._cluster_manager.unreadable or any(
+            os.path.normcase(u) == norm_key for u in self._cluster_manager.unreadable
+        )
+        if cache_entry and cache_entry.get("status") == "could not read":
+            is_unreadable = True
+
+        matched_gids = self._people_manager.file_groups.get(resolved_key)
+        if matched_gids is None:
+            matched_gids = []
+            for k, gids in self._people_manager.file_groups.items():
+                if os.path.normcase(k) == norm_key:
+                    matched_gids = gids
+                    break
+
+        if group_sizes is None:
+            group_sizes = self._people_manager.get_group_sizes()
+        if unnamed_nums is None:
+            unnamed_nums = self._people_manager.get_unnamed_numbering(group_sizes=group_sizes)
+
+        people_labels: list[str] = []
+        for gid in matched_gids:
+            grp = next((g for g in self._cluster_manager.groups if g.get("id") == gid), None)
+            if not grp:
+                continue
+            label = grp.get("display_name") or grp.get("name") or unnamed_nums.get(gid, "Unnamed person")
+            people_labels.append(label)
+
+        faces_detected = len(cache_entry.get("faces", [])) if cache_entry else 0
+        if is_unreadable:
+            face_status = "unreadable"
+        elif cache_entry is not None:
+            face_status = "faces_found" if faces_detected > 0 else "no_faces"
+        else:
+            face_status = "unscanned"
+
+        return {
+            "cached": cache_entry is not None,
+            "is_unreadable": is_unreadable,
+            "faces_detected": faces_detected,
+            "face_status": face_status,
+            "people_labels": people_labels,
+        }
+
+    def get_garden_gallery(
+        self,
+        query: str = "",
+        image_filter: str = "all",
+        page: int = 1,
+        page_size: int = 48,
+    ) -> dict[str, Any]:
+        """Return paginated top-level source image gallery for Photo Garden.
+
+        Never exposes arbitrary filesystem paths; checks resolved symlinks strictly
+        remain inside active source directory and reads EXIF capture dates only for
+        the current page slice.
+        """
+        with self._state_lock:
+            src = self._source_dir
+
+        if src is None or not src.is_dir():
+            return {
+                "ok": True,
+                "has_source": False,
+                "items": [],
+                "total_matching": 0,
+                "page": 1,
+                "total_pages": 1,
+                "page_size": max(1, min(int(page_size or 48), 100)),
+                "filter_counts": {"all": 0, "with_faces": 0, "no_faces": 0, "unscanned": 0, "unreadable": 0},
+                "unsupported_source_count": 0,
+                "subfolders_skipped": 0,
+            }
+
+        self._cluster_manager.load()
+        group_sizes = self._people_manager.get_group_sizes()
+        unnamed_nums = self._people_manager.get_unnamed_numbering(group_sizes=group_sizes)
+
+        try:
+            src_resolved = src.resolve()
+            entries = sorted(src.iterdir(), key=lambda p: p.name.lower())
+        except OSError as err:
+            return {"ok": False, "has_source": True, "error": f"Could not read source folder: {err}"}
+
+        q = (query or "").strip().lower()
+        safe_page_size = max(1, min(int(page_size or 48), 100))
+        safe_page = max(1, int(page or 1))
+        valid_filter = image_filter if image_filter in ("all", "with_faces", "no_faces", "unscanned", "unreadable") else "all"
+
+        counts = {"all": 0, "with_faces": 0, "no_faces": 0, "unscanned": 0, "unreadable": 0}
+        unsupported_count = 0
+        subfolders_skipped = 0
+        matched_entries: list[tuple[Path, dict[str, Any]]] = []
+
+        for entry in entries:
+            if entry.is_dir():
+                subfolders_skipped += 1
+                continue
+            try:
+                resolved = entry.resolve()
+            except OSError:
+                continue
+            # Reject symlinks pointing outside active source directory and non-files
+            if resolved.parent != src_resolved or not resolved.is_file():
+                continue
+
+            ext = resolved.suffix.lower()
+            if ext not in IMAGE_EXTENSIONS:
+                if ext not in VIDEO_EXTENSIONS:
+                    unsupported_count += 1
+                continue
+
+            info = self._lookup_cache_and_faces(resolved, group_sizes=group_sizes, unnamed_nums=unnamed_nums)
+            counts["all"] += 1
+            if info["is_unreadable"]:
+                counts["unreadable"] += 1
+            elif not info["cached"]:
+                counts["unscanned"] += 1
+            elif info["faces_detected"] > 0:
+                counts["with_faces"] += 1
+            else:
+                counts["no_faces"] += 1
+
+            if valid_filter == "with_faces" and (info["is_unreadable"] or info["faces_detected"] <= 0):
+                continue
+            if valid_filter == "no_faces" and (info["is_unreadable"] or not info["cached"] or info["faces_detected"] != 0):
+                continue
+            if valid_filter == "unscanned" and (info["is_unreadable"] or info["cached"]):
+                continue
+            if valid_filter == "unreadable" and not info["is_unreadable"]:
+                continue
+
+            if q and q not in entry.name.lower():
+                continue
+
+            matched_entries.append((resolved, info))
+
+        total_matching = len(matched_entries)
+        total_pages = max(1, (total_matching + safe_page_size - 1) // safe_page_size)
+        if safe_page > total_pages:
+            safe_page = total_pages
+
+        start_idx = (safe_page - 1) * safe_page_size
+        page_slice = matched_entries[start_idx : start_idx + safe_page_size]
+        origin = "fresh_scan" if self._fresh_scan_in_session else ("cached" if self._cluster_manager.cache else "source_only")
+
+        items: list[dict[str, Any]] = []
+        for resolved, info in page_slice:
+            try:
+                sz = resolved.stat().st_size
+            except OSError:
+                sz = 0
+            dt = capture_date(resolved) if not info["is_unreadable"] else None
+            items.append({
+                "name": resolved.name,
+                "extension": resolved.suffix.lower() or "(none)",
+                "size_formatted": _format_size(sz),
+                "capture_date": dt.strftime("%Y-%m-%d %H:%M") if dt else None,
+                "face_status": info["face_status"],
+                "faces_detected": info["faces_detected"],
+                "people_labels": info["people_labels"],
+                "thumbnail_url": None if info["is_unreadable"] else self.media_url(resolved),
+                "data_origin": origin,
+            })
+
+        return {
+            "ok": True,
+            "has_source": True,
+            "items": items,
+            "total_matching": total_matching,
+            "page": safe_page,
+            "page_size": safe_page_size,
+            "total_pages": total_pages,
+            "filter_counts": counts,
+            "unsupported_source_count": unsupported_count,
+            "subfolders_skipped": subfolders_skipped,
+        }
+
     def get_people_state(self, query: str = "", sort_by: str = "Largest first") -> dict[str, Any]:
-        """Return visible face groups, merge suggestions, withheld report, and unreadable list."""
+        """Return visible face groups, garden overview stats, suggestions, withheld, and unreadable report."""
         self._cluster_manager.load()
         group_sizes = self._people_manager.get_group_sizes()
         visible = self._people_manager.get_visible_groups(group_sizes=group_sizes)
@@ -696,22 +893,28 @@ class NexoraBridgeApi:
             if needs_review and not folder_name:
                 placement_status = "Withheld (needs review - large group: name it to use it)"
                 placement_state = "needs_review"
+                identity_status = "detected_needs_review"
             elif not folder_name:
                 placement_status = "Withheld (unnamed - name it to use it)"
                 placement_state = "unnamed"
+                identity_status = "detected_unnamed"
             else:
-                placement_status = f"Active -> folder '{folder_name}/'"
+                placement_status = f"Confirmed -> folder '{folder_name}/'"
                 placement_state = "active"
+                identity_status = "confirmed"
 
+            face_count = group_sizes.get(gid, 0)
             cards.append({
                 "id": gid,
                 "display_name": display_name,
                 "folder_name": folder_name,
                 "assigned_name": g.get("display_name") or g.get("name") or "",
-                "size": group_sizes.get(gid, 0),
+                "size": face_count,
+                "face_count": face_count,
                 "needs_review": needs_review,
                 "placement_status": placement_status,
                 "placement_state": placement_state,
+                "identity_status": identity_status,
                 "crop_urls": crop_urls,
                 "sample_files": group_files[:6],
                 "total_files": len(group_files),
@@ -734,25 +937,109 @@ class NexoraBridgeApi:
             })
 
         withheld = self._people_manager.get_withheld_photos_report()
+
+        # Real cached overview counters (never invented)
+        total_cached_images = 0
+        images_with_faces = 0
+        no_faces_names: list[str] = []
+        unreadable_norm = {os.path.normcase(u) for u in self._cluster_manager.unreadable}
+
+        for ck, cval in self._cluster_manager.cache.items():
+            if not isinstance(cval, dict):
+                continue
+            ctype = cval.get("type")
+            is_video = ctype == "video" or (not ctype and Path(ck).suffix.lower() in VIDEO_EXTENSIONS)
+            if is_video:
+                continue
+            if os.path.normcase(ck) in unreadable_norm or cval.get("status") == "could not read":
+                continue
+            total_cached_images += 1
+            faces_list = cval.get("faces", []) or []
+            if len(faces_list) > 0:
+                images_with_faces += 1
+            else:
+                no_faces_names.append(Path(ck).name)
+
+        no_faces_names = sorted(set(no_faces_names))
+        named_people_count = sum(1 for g in visible if (g.get("name") or "").strip())
+        unnamed_groups_count = max(0, len(visible) - named_people_count)
+        needs_review_groups_count = sum(
+            1 for g in visible if g.get("needs_review") and not (g.get("name") or "").strip()
+        )
+
+        with self._state_lock:
+            src = self._source_dir
+        unsupported_count: int | None = None
+        has_source = src is not None and src.is_dir()
+        if has_source:
+            try:
+                unsupported_count = sum(
+                    1
+                    for p in src.iterdir()
+                    if p.is_file() and not is_image_or_video(p.name)
+                )
+            except OSError:
+                unsupported_count = None
+
+        cache_exists = self._cluster_manager.json_path.exists()
+        if self._fresh_scan_in_session:
+            data_origin = "fresh_scan"
+            cache_source_label = "Fresh scan completed in this session (saved to runs/faces.json)"
+        elif cache_exists and (self._cluster_manager.cache or self._cluster_manager.groups or self._cluster_manager.unreadable):
+            data_origin = "cached"
+            cache_source_label = "Loaded from saved cache (runs/faces.json)"
+        else:
+            data_origin = "empty"
+            cache_source_label = "No face scan cache recorded yet"
+
+        corrupt_name = (
+            self._cluster_manager.corrupt_backup_path.name
+            if self._cluster_manager.corrupt_backup_path
+            else self._last_corrupt_backup_name
+        )
+        if corrupt_name:
+            self._last_corrupt_backup_name = corrupt_name
+
         return {
             "ok": True,
             "total_visible": len(visible),
             "cards": cards,
             "suggestions": serialized_suggestions,
             "total_suggestions": total_suggestions,
+            "overview": {
+                "total_cached_images": total_cached_images,
+                "images_with_faces": images_with_faces,
+                "images_without_faces": len(no_faces_names),
+                "visible_people": len(visible),
+                "named_people": named_people_count,
+                "unnamed_awaiting_review": unnamed_groups_count,
+                "needs_review_groups": needs_review_groups_count,
+                "unreadable_count": len(self._cluster_manager.unreadable),
+                "unsupported_source_count": unsupported_count,
+                "has_source": has_source,
+                "cache_exists": cache_exists,
+                "data_origin": data_origin,
+                "cache_source_label": cache_source_label,
+                "corrupt_backup": corrupt_name,
+            },
             "withheld": {
                 "needs_review_count": len({x["file_key"] for x in withheld["needs_review"]}),
                 "unnamed_count": len({x["file_key"] for x in withheld["unnamed"]}),
                 "hidden_group_count": len({x["file_key"] for x in withheld["hidden_group"]}),
-                "needs_review_samples": sorted({x["file_name"] for x in withheld["needs_review"]})[:8],
-                "unnamed_samples": sorted({x["file_name"] for x in withheld["unnamed"]})[:8],
-                "hidden_group_samples": sorted({x["file_name"] for x in withheld["hidden_group"]})[:8],
+                "needs_review_samples": sorted({x["file_name"] for x in withheld["needs_review"]})[:12],
+                "unnamed_samples": sorted({x["file_name"] for x in withheld["unnamed"]})[:12],
+                "hidden_group_samples": sorted({x["file_name"] for x in withheld["hidden_group"]})[:12],
+                "no_faces_count": len(no_faces_names),
+                "no_faces_samples": no_faces_names[:20],
             },
             "unreadable": sorted(self._cluster_manager.unreadable),
+            "unreadable_items": sorted({Path(u).name for u in self._cluster_manager.unreadable}),
         }
 
     def name_group(self, group_id: str, name: str) -> dict[str, Any]:
         """Validate and assign a person name to a face group via PeopleManager."""
+        if not isinstance(group_id, str) or not group_id.strip():
+            return {"ok": False, "error": "Invalid group identifier."}
         try:
             saved = self._people_manager.name_group(group_id, name)
             return {"ok": True, "saved_name": saved}
@@ -761,6 +1048,8 @@ class NexoraBridgeApi:
 
     def split_group(self, group_id: str) -> dict[str, Any]:
         """Split a mixed face group into two clusters via PeopleManager."""
+        if not isinstance(group_id, str) or not group_id.strip():
+            return {"ok": False, "error": "Invalid group identifier."}
         try:
             orig_id, new_id = self._people_manager.split_group(group_id)
             return {"ok": True, "original_id": orig_id, "new_id": new_id}
@@ -768,16 +1057,36 @@ class NexoraBridgeApi:
             return {"ok": False, "error": str(err)}
 
     def check_merge_guard(self, target_group_id: str, source_group_id: str) -> dict[str, Any]:
-        """Check if merging source into target triggers small-cluster confirmation."""
+        """Validate group IDs and check if merging triggers small-cluster confirmation."""
+        if not isinstance(target_group_id, str) or not isinstance(source_group_id, str):
+            return {"ok": False, "error": "Invalid group identifier."}
+        existing_ids = {g.get("id") for g in self._cluster_manager.groups}
+        if target_group_id not in existing_ids:
+            return {"ok": False, "error": f"Target group not found: {target_group_id}"}
+        if source_group_id not in existing_ids:
+            return {"ok": False, "error": f"Source group not found: {source_group_id}"}
+        if target_group_id == source_group_id:
+            return {"ok": False, "error": "Cannot merge a group into itself."}
+
         refused = self._people_manager.would_guard_refuse_merge(target_group_id, source_group_id)
         n_faces = self._people_manager.get_group_size(source_group_id)
         m_faces = self._people_manager.get_group_size(target_group_id)
+        target_name = self._people_manager.get_group_display_name(target_group_id)
+        source_name = self._people_manager.get_group_display_name(source_group_id)
         return {
             "ok": True,
             "needs_confirmation": refused,
             "source_size": n_faces,
             "target_size": m_faces,
+            "source_name": source_name,
+            "target_name": target_name,
             "message": f"This merges {n_faces} faces into a group of {m_faces} faces. Continue?",
+            "risk_note": (
+                "Small-cluster safety warning: merging a larger cluster into a tiny (<=3 face) cluster "
+                "can mix two different people together if their faces do not truly match."
+                if refused
+                else ""
+            ),
         }
 
     def merge_groups(
@@ -786,8 +1095,10 @@ class NexoraBridgeApi:
         source_group_id: str,
         confirmed_override: bool = False,
     ) -> dict[str, Any]:
-        """Merge source_group into target_group, requiring explicit confirmation if guard fires."""
+        """Merge source_group into target_group, requiring explicit override if guard fires."""
         guard = self.check_merge_guard(target_group_id, source_group_id)
+        if not guard.get("ok"):
+            return guard
         if guard["needs_confirmation"] and not confirmed_override:
             return {
                 "ok": False,
@@ -795,6 +1106,7 @@ class NexoraBridgeApi:
                 "source_size": guard["source_size"],
                 "target_size": guard["target_size"],
                 "error": guard["message"],
+                "risk_note": guard["risk_note"],
             }
         merged_ok = self._people_manager.merge_groups(
             target_group_id, source_group_id, is_automatic=False
@@ -802,7 +1114,14 @@ class NexoraBridgeApi:
         return {"ok": bool(merged_ok), "target_group_id": target_group_id}
 
     def dismiss_suggested_merge(self, group_id_a: str, group_id_b: str) -> dict[str, Any]:
-        """Record a suggested merge pair as dismissed."""
+        """Validate group identifiers and record a suggested merge pair as dismissed."""
+        if not isinstance(group_id_a, str) or not isinstance(group_id_b, str):
+            return {"ok": False, "error": "Invalid group identifier."}
+        existing_ids = {g.get("id") for g in self._cluster_manager.groups}
+        if group_id_a not in existing_ids or group_id_b not in existing_ids:
+            return {"ok": False, "error": "One or both suggested groups were not found."}
+        if group_id_a == group_id_b:
+            return {"ok": False, "error": "Cannot dismiss a group paired with itself."}
         self._people_manager.dismiss_merge(group_id_a, group_id_b)
         return {"ok": True}
 
@@ -888,6 +1207,7 @@ class NexoraBridgeApi:
                     progress_callback=on_progress,
                     stop_event=self._scan_stop_event,
                 )
+                self._fresh_scan_in_session = True
                 msg = (
                     f"People scan complete: {summary['images_scanned']} files scanned, "
                     f"{summary['faces_found']} faces across {summary['groups_count']} groups."
