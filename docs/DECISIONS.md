@@ -220,6 +220,8 @@
   - Added an explicit empty-workspace banner and honest cache provenance labels on the Dashboard so previously saved `runs/faces.json` counts are clearly distinguished from an active workspace scan when no source folder is selected.
 - 2026-11-28: Default WebView2 entrypoint for built Nexora.exe:
   - Updated `app.py` so launching without flags starts `nexora.web.app.main_web()` (HTML/CSS/JS PyWebView desktop UI) directly, while preserving classic Tkinter fallback under `--classic` (`--web` remains accepted).
+- 2026-11-28: Hover-Only Ambient Green Lighting refinement:
+  - Removed persistent ambient radial lime glows and green light pools from `.nx-shell`, `.nx-kpi.is-lime-glow`, `.nx-glass-stage::before`, `.nx-glass-hero`, and `.nx-workspace-notice`, keeping cards charcoal/graphite at rest and revealing radial lime glow, layered hover shadows, and subtle border highlights strictly on `:hover` / `:focus-within` via CSS pseudo-elements (preserving functional lime icons, buttons, active sidebar indicator, progress rings, and chart gradients).
 
 
 
