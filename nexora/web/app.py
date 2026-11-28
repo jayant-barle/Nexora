@@ -87,7 +87,7 @@ def main_web(headless_probe_callback: Any | None = None) -> None:
         width=1240,
         height=820,
         min_size=(940, 640),
-        background_color="#111015",
+        background_color="#080909",
         hidden=hidden,
     )
     bridge.attach_window(window)

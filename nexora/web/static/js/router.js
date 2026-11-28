@@ -1,6 +1,9 @@
-/* NEXORA — Obsidian Lavender Workspace Router & Dashboard Presenter */
+/* NEXORA — Dark 3D Glassmorphism + Electric Lime Router & Dashboard Presenter */
 (function (global) {
   "use strict";
+
+  var RING_CIRCUMFERENCE = 87.96;
+  var ARC_CIRCUMFERENCE = 270.18;
 
   var ROOM_TITLES = {
     "dashboard": "Dashboard",
@@ -20,6 +23,18 @@
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function setRing(circleId, textId, pct, customText) {
+    var bounded = Math.max(0, Math.min(100, Math.round(pct || 0)));
+    var circle = el(circleId);
+    if (circle) {
+      circle.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - bounded / 100));
+    }
+    var txt = el(textId);
+    if (txt) {
+      txt.textContent = customText !== undefined ? customText : bounded + "%";
+    }
   }
 
   function navigateTo(roomId) {
@@ -118,27 +133,95 @@
     });
   }
 
+  function renderDistributionChart(metrics) {
+    var container = el("dash-barchart");
+    if (!container) return;
+    container.innerHTML = "";
+
+    var maxVal = 0;
+    var peakItem = null;
+    metrics.forEach(function (m) {
+      if (m.value > maxVal) {
+        maxVal = m.value;
+        peakItem = m;
+      }
+    });
+
+    var peakPill = el("dash-chart-peak-pill");
+    if (peakPill) {
+      peakPill.textContent = peakItem && maxVal > 0 ? ("Top: " + peakItem.label + " (" + peakItem.value + ")") : "No cache data";
+    }
+
+    metrics.forEach(function (m) {
+      var col = document.createElement("div");
+      col.className = "nx-bar-col";
+      if (peakItem && m === peakItem && m.value > 0) {
+        col.classList.add("is-peak");
+      }
+
+      var valSpan = document.createElement("span");
+      valSpan.className = "nx-bar-val";
+      valSpan.textContent = String(m.value);
+
+      var track = document.createElement("div");
+      track.className = "nx-bar-track";
+      track.title = m.label + ": " + m.value;
+
+      var fill = document.createElement("div");
+      fill.className = "nx-bar-fill";
+      var pct = maxVal > 0 ? Math.max(m.value > 0 ? 12 : 4, Math.round((m.value / maxVal) * 100)) : 4;
+      fill.style.height = pct + "%";
+      track.appendChild(fill);
+
+      var lbl = document.createElement("span");
+      lbl.className = "nx-bar-lbl";
+      lbl.textContent = m.label;
+
+      col.appendChild(valSpan);
+      col.appendChild(track);
+      col.appendChild(lbl);
+      container.appendChild(col);
+    });
+  }
+
   function renderDashboard(data) {
     if (!data || !data.ok) return;
     var appSt = data.app_state || {};
     var pCounts = appSt.plan_counts || {};
 
-    if (el("dash-kpi-indexed")) el("dash-kpi-indexed").textContent = String(data.indexed_total || 0);
+    var indexedTotal = Number(data.indexed_total || 0);
+    var indexedImages = Number(data.indexed_images || 0);
+    var indexedVideos = Number(data.indexed_videos || 0);
+    var visiblePeople = Number(data.visible_people || 0);
+    var namedPeople = Number(data.named_people || 0);
+    var unnamedPeople = Number(data.unnamed_people || 0);
+    var needsReview = Number(data.needs_review_count || 0);
+    var unreadableCount = Number(data.unreadable_count || 0);
+    var planTotal = Number(pCounts.total || 0);
+    var planReady = appSt.has_active_plan ? Number(pCounts.ready || 0) : 0;
+
+    if (el("dash-kpi-indexed")) el("dash-kpi-indexed").textContent = String(indexedTotal);
     if (el("dash-kpi-indexed-sub")) {
-      el("dash-kpi-indexed-sub").textContent = (data.indexed_images || 0) + " images · " + (data.indexed_videos || 0) + " videos";
+      el("dash-kpi-indexed-sub").textContent = indexedImages + " images · " + indexedVideos + " videos";
     }
+    var imageShare = indexedTotal > 0 ? (indexedImages / indexedTotal) * 100 : 0;
+    setRing("dash-ring-indexed", "dash-ring-indexed-txt", imageShare);
 
-    if (el("dash-kpi-people")) el("dash-kpi-people").textContent = String(data.visible_people || 0);
+    if (el("dash-kpi-people")) el("dash-kpi-people").textContent = String(visiblePeople);
     if (el("dash-kpi-people-sub")) {
-      el("dash-kpi-people-sub").textContent = (data.named_people || 0) + " confirmed · " + (data.unnamed_people || 0) + " unnamed";
+      el("dash-kpi-people-sub").textContent = namedPeople + " confirmed · " + unnamedPeople + " unnamed";
     }
+    var namedShare = visiblePeople > 0 ? (namedPeople / visiblePeople) * 100 : 0;
+    setRing("dash-ring-people", "dash-ring-people-txt", namedShare);
 
-    if (el("dash-kpi-ready")) el("dash-kpi-ready").textContent = String(appSt.has_active_plan ? (pCounts.ready || 0) : 0);
+    if (el("dash-kpi-ready")) el("dash-kpi-ready").textContent = String(planReady);
     if (el("dash-kpi-ready-sub")) {
       el("dash-kpi-ready-sub").textContent = appSt.has_active_plan
-        ? (pCounts.ready || 0) + " ready · " + (pCounts.skipped || 0) + " skipped"
-        : (appSt.source_dir && appSt.dest_dir ? "Ready to preview moves" : "Select source & destination");
+        ? planReady + " ready · " + (pCounts.skipped || 0) + " skipped"
+        : (appSt.source_dir && appSt.dest_dir ? "Ready to build preview" : "Select source & destination");
     }
+    var planShare = appSt.has_active_plan && planTotal > 0 ? (planReady / planTotal) * 100 : 0;
+    setRing("dash-ring-ready", "dash-ring-ready-txt", planShare);
 
     if (el("dash-kpi-undo")) el("dash-kpi-undo").textContent = appSt.can_undo ? "Available" : "None";
     if (el("dash-kpi-undo-sub")) {
@@ -146,6 +229,52 @@
         ? "Latest: " + appSt.active_undo_run
         : "Zero un-reversed runs";
     }
+    setRing("dash-ring-undo", "dash-ring-undo-txt", appSt.can_undo ? 100 : 0, appSt.can_undo ? "On" : "Off");
+
+    // Hero Frosted Glass Gauge: displays active plan readiness when previewed, else named-people ratio from cache
+    var heroPct = 0;
+    var heroLabel = "0 of 0 groups named";
+    var heroSub = "Real naming coverage from cache";
+    if (appSt.has_active_plan && planTotal > 0) {
+      heroPct = Math.round((planReady / planTotal) * 100);
+      heroLabel = planReady + " of " + planTotal + " planned files ready";
+      heroSub = "Active preview plan breakdown";
+      if (el("dash-hero-badge")) el("dash-hero-badge").textContent = "Move Plan";
+    } else {
+      heroPct = visiblePeople > 0 ? Math.round((namedPeople / visiblePeople) * 100) : 0;
+      heroLabel = visiblePeople > 0
+        ? namedPeople + " of " + visiblePeople + " groups named"
+        : "No visible people groups scanned yet";
+      heroSub = "Real naming coverage from cache";
+      if (el("dash-hero-badge")) el("dash-hero-badge").textContent = indexedTotal > 0 ? "Live Cache" : "Idle";
+    }
+
+    var arc = el("dash-gauge-arc");
+    if (arc) {
+      arc.style.strokeDashoffset = String(ARC_CIRCUMFERENCE * (1 - Math.max(0, Math.min(100, heroPct)) / 100));
+    }
+    if (el("dash-gauge-pct")) el("dash-gauge-pct").textContent = heroPct + "%";
+    if (el("dash-gauge-label")) el("dash-gauge-label").textContent = heroLabel;
+    if (el("dash-gauge-subtitle")) el("dash-gauge-subtitle").textContent = heroSub;
+    if (el("dash-cached-size")) el("dash-cached-size").textContent = data.indexed_size_formatted || "0.0 KB";
+    if (el("dash-unreadable-count")) el("dash-unreadable-count").textContent = String(unreadableCount);
+
+    // Stacked Metrics
+    if (el("dash-mix-images")) el("dash-mix-images").textContent = String(indexedImages);
+    if (el("dash-mix-videos")) el("dash-mix-videos").textContent = String(indexedVideos);
+    if (el("dash-media-bar")) el("dash-media-bar").style.width = Math.round(imageShare) + "%";
+    if (el("dash-needs-review")) el("dash-needs-review").textContent = String(needsReview);
+    if (el("dash-unnamed-count")) el("dash-unnamed-count").textContent = String(unnamedPeople);
+
+    // Lime Bar Chart using real backend counts
+    renderDistributionChart([
+      { label: "Images", value: indexedImages },
+      { label: "Videos", value: indexedVideos },
+      { label: "Groups", value: visiblePeople },
+      { label: "Named", value: namedPeople },
+      { label: "Review", value: needsReview },
+      { label: "Ready", value: planReady }
+    ]);
 
     var tbody = el("dash-activity-tbody");
     if (tbody) {

@@ -388,8 +388,9 @@ def test_web_app_static_routes_and_media_token_security(tmp_path: Path) -> None:
     st_css, hdrs_css, css_body = call_wsgi("/static/css/tokens.css")
     assert st_css.startswith("200")
     assert any("text/css" in v for k, v in hdrs_css if k.lower() == "content-type")
-    assert b"--nx-bg: #111015" in css_body
-    assert b"--nx-accent: #A78BFA" in css_body
+    assert b"--nx-bg: #080909" in css_body
+    assert b"--nx-accent: #B5FF3B" in css_body
+    assert b"--nx-card: #202321" in css_body
 
     st_lib_svg, _, lib_svg_body = call_wsgi("/static/assets/svg/library-shelf.svg")
     assert st_lib_svg.startswith("200")

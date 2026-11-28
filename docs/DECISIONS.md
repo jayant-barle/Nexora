@@ -211,6 +211,10 @@
   - Superseded whimsical treehouse/fairy visual direction with a dark Obsidian Lavender desktop SaaS design system (`--nx-bg: #111015`, `--nx-surface: #1B1921`, `--nx-surface-raised: #292432`, `--nx-surface-muted: #383244`, `--nx-accent: #A78BFA`, `--nx-accent-soft: #C9B8FF`, `--nx-text: #F4F1F8`, `--nx-text-secondary: #A6A1AE`, `--nx-border: #383244`) using Balanced Premium accent intensity.
   - Mapped navigation to desktop SaaS screens while preserving all existing Python backend contracts, bridge security checks, safety rules, and classic `--classic` Tkinter fallback: Dashboard (`dashboard` / alias `treehouse`), Workspace Overview (`main-hall`), File Explorer (`library`), Photos & People (`photo-garden`), File Organizer (`potion-workshop`), Activity & History (`memory-room`), Settings & Privacy (`secret-vault`), and restricted Crystal Chamber (`crystal-chamber`).
   - Staged rollout: Milestone 1 builds the global design tokens, shell (left sidebar, topbar, main area), and modern Dashboard first while keeping all existing screen panels recoverable for incremental migration after owner review.
+- 2026-11-28: Complete UI Redesign — Dark 3D Glassmorphism + Electric Lime Design System (owner decision):
+  - Visual direction updated per supplied Dark 3D Glassmorphism + Electric Lime reference (`--nx-bg: #080909`, `--nx-sidebar: #101210`, `--nx-surface: #151816`, `--nx-card: #202321`, `--nx-card-raised: #292D2A`, `--nx-border: #343936`, `--nx-accent: #B5FF3B`, `--nx-accent-start: #75CB32`, `--nx-accent-end: #D2FF70`, `--nx-text: #F5F7F2`, `--nx-text-secondary: #929793`, semantic `--nx-success`/`--nx-warning`/`--nx-danger`), superseding Obsidian Lavender.
+  - Designed original NEXORA orbital connected-node brand mark, floating layered charcoal cards, translucent glassmorphism hero progress card, soft radial lime edge illumination, and real-data SVG gauges/bars without hardcoding sample metrics.
+  - Preserved Milestone 1 stop gate: complete Dashboard and live WebView2 visual verification first before migrating remaining workspace screens.
 
 
 
