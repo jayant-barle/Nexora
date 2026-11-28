@@ -85,4 +85,10 @@ if __name__ == "__main__":
         sys.exit(0)
     if "--selftest" in sys.argv:
         sys.exit(run_selftest())
-    main()
+    if "--classic" in sys.argv and "--web" not in sys.argv:
+        main()
+        sys.exit(0)
+    from nexora.web.app import main_web
+
+    main_web()
+    sys.exit(0)

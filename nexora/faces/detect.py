@@ -119,15 +119,6 @@ def passes_quality_filter(
     if h > max_aspect * w or w > max_aspect * h:
         return False
     return True
-    w = float(face[2])
-    h = float(face[3])
-    if w < min_size or h < min_size:
-        return False
-    if w <= 0 or h <= 0:
-        return False
-    if h > max_aspect * w or w > max_aspect * h:
-        return False
-    return True
 
 
 def _invert_scale(faces: list[np.ndarray], scale_x: float, scale_y: float) -> list[np.ndarray]:
@@ -199,6 +190,34 @@ def get_face_box_and_score(face: np.ndarray) -> dict[str, Any]:
     }
 
 
+def _detect_with_rotations(
+    detector: cv2.FaceDetectorYN,
+    img_src: np.ndarray,
+    orig_w: int,
+    orig_h: int,
+    min_face_size: int,
+    max_aspect: float,
+    scale_to_1280: float = 1.0,
+) -> list[np.ndarray]:
+    """Run upright, 90° CW, and 270° CW face detection passes, returning upright coordinates."""
+    raw_up = _detect_raw(detector, img_src)
+    valid_up = [f for f in raw_up if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
+    if valid_up:
+        return valid_up
+
+    rot_passes = (
+        (cv2.ROTATE_90_CLOCKWISE, lambda faces: _invert_rot90(faces, orig_h)),
+        (cv2.ROTATE_90_COUNTERCLOCKWISE, lambda faces: _invert_rot270(faces, orig_w)),
+    )
+    for rot_flag, inv_fn in rot_passes:
+        rotated = cv2.rotate(img_src, rot_flag)
+        raw = _detect_raw(detector, rotated)
+        valid = [f for f in raw if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
+        if valid:
+            return inv_fn(valid)
+    return []
+
+
 def detect_faces(
     image_path: Path | str | np.ndarray,
     model_path: Path | None = None,
@@ -249,46 +268,19 @@ def detect_faces(
             sx = 1.0
             sy = 1.0
 
-        # Pass 1: Upright 1280px image
-        raw = _detect_raw(detector, img_target)
-        valid_faces = [f for f in raw if passes_quality_filter(f, min_face_size, max_aspect)]
-        if valid_faces:
-            return _invert_scale(valid_faces, sx, sy)
+        # Pass 1 & 2: 1280px normalized image (upright, then 90°/270° rotation fallback)
+        faces_target = _detect_with_rotations(
+            detector, img_target, w_target, h_target, min_face_size, max_aspect
+        )
+        if faces_target:
+            return _invert_scale(faces_target, sx, sy)
 
-        # Pass 2: If no face found, try rotation fallback: 90 and 270 degrees
-        rot90 = cv2.rotate(img_target, cv2.ROTATE_90_CLOCKWISE)
-        raw_90 = _detect_raw(detector, rot90)
-        valid_90 = [f for f in raw_90 if passes_quality_filter(f, min_face_size, max_aspect)]
-        if valid_90:
-            inv_90 = _invert_rot90(valid_90, img_target.shape[0])
-            return _invert_scale(inv_90, sx, sy)
-
-        rot270 = cv2.rotate(img_target, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        raw_270 = _detect_raw(detector, rot270)
-        valid_270 = [f for f in raw_270 if passes_quality_filter(f, min_face_size, max_aspect)]
-        if valid_270:
-            inv_270 = _invert_rot270(valid_270, img_target.shape[1])
-            return _invert_scale(inv_270, sx, sy)
-
-        # Pass 3: If original is smaller than 1280px, try at original resolution
+        # Pass 3: If original is smaller than 1280px, try upright + rotations at native resolution
         if longest < TARGET_SIZE and longest > 0:
             scale_to_1280 = TARGET_SIZE / float(longest)
-            raw_orig = _detect_raw(detector, img)
-            valid_orig = [f for f in raw_orig if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
-            if valid_orig:
-                return valid_orig
-
-            r90_orig = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-            raw_r90 = _detect_raw(detector, r90_orig)
-            valid_r90 = [f for f in raw_r90 if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
-            if valid_r90:
-                return _invert_rot90(valid_r90, orig_h)
-
-            r270_orig = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            raw_r270 = _detect_raw(detector, r270_orig)
-            valid_r270 = [f for f in raw_r270 if passes_quality_filter(f, min_face_size, max_aspect, scale_to_1280)]
-            if valid_r270:
-                return _invert_rot270(valid_r270, orig_w)
+            return _detect_with_rotations(
+                detector, img, orig_w, orig_h, min_face_size, max_aspect, scale_to_1280
+            )
 
         return []
     except Exception:

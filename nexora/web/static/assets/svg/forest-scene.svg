@@ -1,0 +1,311 @@
+<svg id="nx-forest-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 660" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Interactive Living Treehouse inside an Enchanted Forest">
+  <defs>
+    <!-- Sky and meadow gradients (soft storybook lighting) -->
+    <linearGradient id="nxSkyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A8D8E8"/>
+      <stop offset="68%" stop-color="#D7EFF7"/>
+      <stop offset="100%" stop-color="#F4EBD5"/>
+    </linearGradient>
+    <linearGradient id="nxMeadowGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8EBB70"/>
+      <stop offset="100%" stop-color="#6FA056"/>
+    </linearGradient>
+    <radialGradient id="nxWarmGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F5D993" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#E8C477" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nxMagicGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#B7A1DC" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#B7A1DC" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="nxBarkGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6B4A32"/>
+      <stop offset="45%" stop-color="#79563C"/>
+      <stop offset="100%" stop-color="#5E402B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 1. SKY, WARM SUN & DRIFTING CLOUDS -->
+  <rect x="0" y="0" width="1100" height="660" fill="url(#nxSkyGrad)"/>
+
+  <g class="nx-sun-group">
+    <circle cx="155" cy="112" r="78" fill="url(#nxWarmGlow)"/>
+    <circle cx="155" cy="112" r="38" fill="#E8C477" stroke="#322116" stroke-width="3"/>
+    <circle cx="144" cy="102" r="8" fill="#F5D993" opacity="0.85"/>
+  </g>
+
+  <g class="nx-cloud nx-cloud-a">
+    <path d="M230 112 Q242 82 276 86 Q296 64 330 76 Q362 72 372 98 Q396 102 392 122 Q308 128 230 120 Z" fill="#FAF4E6" stroke="#322116" stroke-width="2.5" stroke-linejoin="round" opacity="0.92"/>
+  </g>
+  <g class="nx-cloud nx-cloud-b">
+    <path d="M775 94 Q788 66 822 72 Q846 48 884 62 Q914 60 924 88 Q946 92 940 110 Q855 116 775 108 Z" fill="#FAF4E6" stroke="#322116" stroke-width="2.5" stroke-linejoin="round" opacity="0.9"/>
+  </g>
+
+  <!-- 2. DISTANT ENCHANTED FOREST SILHOUETTES -->
+  <path d="M0 445 Q170 385 370 432 Q550 462 750 416 Q935 375 1100 426 L1100 660 L0 660 Z" fill="#76A762" stroke="#322116" stroke-width="2.8"/>
+
+  <!-- Left distant whimsical trees -->
+  <g stroke="#322116" stroke-width="2.8" stroke-linejoin="round">
+    <rect x="64" y="346" width="22" height="98" rx="6" fill="#79563C"/>
+    <circle cx="75" cy="318" r="46" fill="#315B3B"/>
+    <circle cx="48" cy="340" r="30" fill="#8EBB70"/>
+    <circle cx="104" cy="336" r="28" fill="#8EBB70"/>
+
+    <rect x="172" y="370" width="18" height="72" rx="5" fill="#79563C"/>
+    <path d="M140 382 L181 292 L222 382 Z" fill="#315B3B"/>
+    <path d="M148 345 L181 268 L214 345 Z" fill="#8EBB70"/>
+  </g>
+
+  <!-- Right distant whimsical trees -->
+  <g stroke="#322116" stroke-width="2.8" stroke-linejoin="round">
+    <rect x="920" y="352" width="22" height="86" rx="6" fill="#79563C"/>
+    <circle cx="931" cy="322" r="44" fill="#315B3B"/>
+    <circle cx="956" cy="340" r="26" fill="#8EBB70"/>
+
+    <rect x="1014" y="324" width="24" height="114" rx="6" fill="#79563C"/>
+    <path d="M978 352 L1026 244 L1074 352 Z" fill="#315B3B"/>
+    <path d="M988 308 L1026 218 L1064 308 Z" fill="#8EBB70"/>
+  </g>
+
+  <!-- 3. FOREGROUND ROLLING MEADOW & WINDING CREAM PATH -->
+  <path d="M0 492 Q250 452 540 478 Q830 502 1100 462 L1100 660 L0 660 Z" fill="url(#nxMeadowGrad)" stroke="#322116" stroke-width="3"/>
+  <path d="M0 572 Q320 532 620 568 Q890 594 1100 554 L1100 660 L0 660 Z" fill="#315B3B" stroke="#322116" stroke-width="3"/>
+
+  <!-- Winding cobblestone / sandy footpath leading up to Main Hall door -->
+  <path d="M465 660 C475 612, 515 588, 535 552 C550 526, 540 504, 548 486 L588 486 C586 512, 594 542, 578 574 C562 606, 566 632, 576 660 Z" fill="#F4EBD5" stroke="#322116" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Stepping stones -->
+  <ellipse cx="556" cy="528" rx="14" ry="6" fill="#E8C477" stroke="#322116" stroke-width="2" opacity="0.8"/>
+  <ellipse cx="534" cy="574" rx="18" ry="7" fill="#E8C477" stroke="#322116" stroke-width="2" opacity="0.8"/>
+  <ellipse cx="522" cy="624" rx="22" ry="8" fill="#E8C477" stroke="#322116" stroke-width="2" opacity="0.8"/>
+
+  <!-- Cute wooden forest signpost near path -->
+  <g transform="translate(658, 520)" stroke="#322116" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="8" y="22" width="10" height="44" rx="3" fill="#79563C"/>
+    <path d="M-24 6 L46 6 L56 16 L46 26 L-24 26 Z" fill="#E8C477"/>
+    <text x="14" y="20" text-anchor="middle" font-family="Trebuchet MS, Segoe UI, sans-serif" font-size="11" font-weight="800" fill="#322116" stroke="none">NEXORA</text>
+  </g>
+
+  <!-- 4. GIANT LIVING TREEHOUSE TRUNK & MAIN BOUGHS -->
+  <g id="nx-tree-trunk">
+    <!-- Left & right thick structural branches -->
+    <path d="M474 288 C410 278, 336 276, 260 250 L276 212 C348 236, 412 238, 474 246 Z" fill="url(#nxBarkGrad)" stroke="#322116" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M622 292 C694 274, 774 268, 846 238 L830 202 C762 230, 690 236, 622 248 Z" fill="url(#nxBarkGrad)" stroke="#322116" stroke-width="3.5" stroke-linejoin="round"/>
+    <!-- Upper boughs -->
+    <path d="M492 204 C444 176, 396 150, 356 118 L384 96 C422 126, 466 150, 512 172 Z" fill="url(#nxBarkGrad)" stroke="#322116" stroke-width="3.2" stroke-linejoin="round"/>
+    <path d="M610 198 C658 172, 704 146, 742 114 L718 92 C682 122, 636 146, 594 168 Z" fill="url(#nxBarkGrad)" stroke="#322116" stroke-width="3.2" stroke-linejoin="round"/>
+
+    <!-- Massive trunk body & flared roots -->
+    <path d="M412 496 C444 468, 466 420, 468 352 L462 198 L636 198 L630 352 C632 422, 658 468, 708 504 C664 510, 632 498, 608 486 C580 502, 532 504, 502 486 C474 498, 442 506, 412 496 Z" fill="url(#nxBarkGrad)" stroke="#322116" stroke-width="3.8" stroke-linejoin="round"/>
+
+    <!-- Subtle hand-drawn bark grain, wood knot, and mossy root accents -->
+    <path d="M492 316 Q498 370 486 432 M608 320 Q602 375 616 440 M518 225 Q522 270 516 308 M584 228 Q580 268 586 306" fill="none" stroke="#4A3221" stroke-width="3" stroke-linecap="round" opacity="0.72"/>
+    <ellipse cx="590" cy="340" rx="9" ry="14" fill="#5A3E2A" stroke="#4A3221" stroke-width="2.2"/>
+    <ellipse cx="590" cy="340" rx="4" ry="7" fill="#79563C" stroke="#4A3221" stroke-width="1.5"/>
+    <path d="M446 472 Q462 456 478 474 Q492 464 504 476" fill="#8EBB70" stroke="#322116" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M624 468 Q640 452 656 470 Q670 462 682 478" fill="#8EBB70" stroke="#322116" stroke-width="2.2" stroke-linejoin="round"/>
+  </g>
+
+  <!-- 5. LUSH TIERED TREEHOUSE CANOPY & HANGING VINES -->
+  <g id="nx-tree-canopy">
+    <!-- Deep forest back foliage clouds -->
+    <g fill="#315B3B" stroke="#322116" stroke-width="3.4">
+      <circle cx="315" cy="188" r="76"/>
+      <circle cx="786" cy="186" r="80"/>
+      <circle cx="432" cy="126" r="84"/>
+      <circle cx="672" cy="124" r="84"/>
+      <circle cx="552" cy="108" r="88"/>
+    </g>
+    <!-- Sunlit bright leaf clusters (animated gentle sway) -->
+    <g class="nx-leaf-cluster nx-sway-a" fill="#8EBB70" stroke="#322116" stroke-width="3.2">
+      <circle cx="272" cy="180" r="46"/>
+      <circle cx="362" cy="148" r="50"/>
+      <circle cx="468" cy="96" r="54"/>
+      <circle cx="554" cy="84" r="56"/>
+    </g>
+    <g class="nx-leaf-cluster nx-sway-b" fill="#8EBB70" stroke="#322116" stroke-width="3.2">
+      <circle cx="642" cy="94" r="52"/>
+      <circle cx="746" cy="142" r="52"/>
+      <circle cx="834" cy="178" r="48"/>
+      <circle cx="552" cy="152" r="44" fill="#A7D485"/>
+    </g>
+
+    <!-- Hanging swaying vines & branch leaves -->
+    <g class="nx-vine-sway" fill="none" stroke="#315B3B" stroke-width="3.2" stroke-linecap="round">
+      <path d="M238 220 Q232 252 240 278"/>
+      <circle cx="240" cy="280" r="6" fill="#8EBB70" stroke="#322116" stroke-width="2"/>
+      <path d="M322 256 Q318 282 326 302"/>
+      <ellipse cx="326" cy="306" rx="5" ry="7" fill="#8EBB70" stroke="#322116" stroke-width="2"/>
+      <path d="M862 216 Q868 248 858 276"/>
+      <circle cx="858" cy="278" r="6" fill="#E8C477" stroke="#322116" stroke-width="2"/>
+      <path d="M718 258 Q724 282 715 304"/>
+      <ellipse cx="715" cy="307" rx="5" ry="7" fill="#A7D485" stroke="#322116" stroke-width="2"/>
+    </g>
+    <!-- Small canopy blossoms -->
+    <g stroke="#322116" stroke-width="1.8">
+      <circle cx="440" cy="84" r="5" fill="#F4EBD5"/>
+      <circle cx="676" cy="96" r="5" fill="#E8C477"/>
+      <circle cx="776" cy="148" r="4.5" fill="#E8DFFA"/>
+    </g>
+  </g>
+
+  <!-- 6. INTERACTIVE TREEHOUSE ROOMS (CLICKABLE HOTSPOTS) -->
+
+  <!-- HOTSPOT 1: MEMORY ROOM (Attic Star-Gazing Turret) -->
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="memory-room" data-room-title="Memory Room" data-room-desc="Read-only timeline of completed move runs and scan audit logs." aria-label="Enter Memory Room">
+    <rect x="498" y="96" width="108" height="82" rx="10" fill="#F4EBD5" stroke="#322116" stroke-width="3.2"/>
+    <path d="M482 104 L552 46 L622 104 Z" fill="#79563C" stroke="#322116" stroke-width="3.4" stroke-linejoin="round"/>
+    <line x1="552" y1="36" x2="552" y2="48" stroke="#322116" stroke-width="2.6" stroke-linecap="round"/>
+    <circle cx="552" cy="34" r="4.5" fill="#E8C477" stroke="#322116" stroke-width="2"/>
+    <!-- Attic clock / star window -->
+    <circle cx="552" cy="136" r="24" fill="#B7A1DC" stroke="#322116" stroke-width="3"/>
+    <circle cx="552" cy="136" r="17" fill="#E8DFFA" opacity="0.65"/>
+    <path d="M552 123 L552 136 L562 142" fill="none" stroke="#322116" stroke-width="2.6" stroke-linecap="round"/>
+    <!-- Room badge -->
+    <rect x="507" y="182" width="90" height="22" rx="11" fill="#F4EBD5" stroke="#322116" stroke-width="2.2"/>
+    <text x="552" y="197" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="11" font-weight="800" fill="#322116">Memory Room</text>
+  </g>
+
+  <!-- HOTSPOT 2: MAGICAL LIBRARY (Upper-Left Canopy Study) -->
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="library" data-room-title="Magical Library" data-room-desc="Browse top-level source images &amp; videos safely with rule hints." aria-label="Enter Magical Library">
+    <rect x="334" y="156" width="116" height="84" rx="12" fill="#F4EBD5" stroke="#322116" stroke-width="3.2"/>
+    <path d="M322 162 L392 118 L462 162 Z" fill="#315B3B" stroke="#322116" stroke-width="3.2" stroke-linejoin="round"/>
+    <!-- Book-filled arched window -->
+    <rect x="352" y="176" width="80" height="46" rx="8" fill="#A8D8E8" stroke="#322116" stroke-width="2.8"/>
+    <rect x="360" y="198" width="12" height="22" rx="2" fill="#79563C" stroke="#322116" stroke-width="1.8"/>
+    <rect x="374" y="192" width="11" height="28" rx="2" fill="#B7A1DC" stroke="#322116" stroke-width="1.8"/>
+    <rect x="387" y="196" width="12" height="24" rx="2" fill="#E8C477" stroke="#322116" stroke-width="1.8"/>
+    <rect x="401" y="190" width="12" height="30" rx="2" fill="#8EBB70" stroke="#322116" stroke-width="1.8"/>
+    <line x1="352" y1="221" x2="432" y2="221" stroke="#322116" stroke-width="2.4"/>
+    <rect x="339" y="244" width="106" height="22" rx="11" fill="#F4EBD5" stroke="#322116" stroke-width="2.2"/>
+    <text x="392" y="259" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="11" font-weight="800" fill="#322116">Magical Library</text>
+  </g>
+
+  <!-- HOTSPOT 3: POTION WORKSHOP (Left Bough Alchemist Loft) -->
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="potion-workshop" data-room-title="Potion Workshop" data-room-desc="Scan faces, build your organization preview, and Approve SHA-256 moves." aria-label="Enter Potion Workshop">
+    <!-- Chimney & tiny puff -->
+    <rect x="206" y="214" width="20" height="38" rx="4" fill="#79563C" stroke="#322116" stroke-width="2.8"/>
+    <circle class="nx-chimney-puff" cx="216" cy="198" r="10" fill="#E8DFFA" stroke="#322116" stroke-width="2" opacity="0.85"/>
+    <!-- Workshop Cabin -->
+    <rect x="178" y="246" width="136" height="94" rx="14" fill="#F4EBD5" stroke="#322116" stroke-width="3.2"/>
+    <path d="M164 254 L246 206 L328 254 Z" fill="#B7A1DC" stroke="#322116" stroke-width="3.4" stroke-linejoin="round"/>
+    <!-- Round bubbling potion window -->
+    <circle cx="246" cy="292" r="28" fill="#315B3B" stroke="#322116" stroke-width="3"/>
+    <circle cx="246" cy="292" r="21" fill="url(#nxMagicGlow)"/>
+    <!-- Flask icon inside window -->
+    <path d="M241 278 L251 278 L251 285 L259 299 A6 6 0 0 1 254 308 L238 308 A6 6 0 0 1 233 299 L241 285 Z" fill="#E8C477" stroke="#322116" stroke-width="2.2"/>
+    <!-- Wooden balcony rail & cozy spindles -->
+    <rect x="170" y="336" width="152" height="12" rx="5" fill="#79563C" stroke="#322116" stroke-width="2.6"/>
+    <line x1="190" y1="336" x2="190" y2="348" stroke="#322116" stroke-width="2"/>
+    <line x1="218" y1="336" x2="218" y2="348" stroke="#322116" stroke-width="2"/>
+    <line x1="274" y1="336" x2="274" y2="348" stroke="#322116" stroke-width="2"/>
+    <line x1="302" y1="336" x2="302" y2="348" stroke="#322116" stroke-width="2"/>
+    <rect x="186" y="352" width="120" height="22" rx="11" fill="#E8DFFA" stroke="#322116" stroke-width="2.2"/>
+    <text x="246" y="367" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="11" font-weight="800" fill="#322116">Potion Workshop</text>
+  </g>
+
+  <!-- HOTSPOT 4: PHOTO GARDEN (Right Flower-Draped Conservatory Balcony) -->
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="photo-garden" data-room-title="Photo Garden" data-room-desc="View discovered people cards, name groups, split or merge safely." aria-label="Enter Photo Garden">
+    <rect x="752" y="218" width="144" height="106" rx="14" fill="#F4EBD5" stroke="#322116" stroke-width="3.2"/>
+    <path d="M736 226 L824 172 L912 226 Z" fill="#8EBB70" stroke="#322116" stroke-width="3.4" stroke-linejoin="round"/>
+    <!-- Wide conservatory garden window -->
+    <rect x="774" y="238" width="100" height="58" rx="12" fill="#A8D8E8" stroke="#322116" stroke-width="3"/>
+    <line x1="824" y1="238" x2="824" y2="296" stroke="#322116" stroke-width="2.5"/>
+    <!-- Portrait silhouette inside frame -->
+    <circle cx="799" cy="260" r="9" fill="#E8C477" stroke="#322116" stroke-width="2"/>
+    <path d="M784 292 C785 276, 813 276, 814 292" fill="#315B3B" stroke="#322116" stroke-width="2"/>
+    <circle cx="849" cy="262" r="8" fill="#B7A1DC" stroke="#322116" stroke-width="2"/>
+    <path d="M836 292 C837 278, 861 278, 862 292" fill="#79563C" stroke="#322116" stroke-width="2"/>
+    <!-- Flower planter box & blossoms -->
+    <rect x="746" y="314" width="156" height="18" rx="6" fill="#79563C" stroke="#322116" stroke-width="2.6"/>
+    <circle cx="774" cy="312" r="7" fill="#E8C477" stroke="#322116" stroke-width="2"/>
+    <circle cx="806" cy="310" r="8" fill="#B7A1DC" stroke="#322116" stroke-width="2"/>
+    <circle cx="842" cy="312" r="7" fill="#FAF4E6" stroke="#322116" stroke-width="2"/>
+    <circle cx="874" cy="310" r="8" fill="#E8C477" stroke="#322116" stroke-width="2"/>
+    <rect x="768" y="338" width="112" height="22" rx="11" fill="#F4EBD5" stroke="#322116" stroke-width="2.2"/>
+    <text x="824" y="353" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="11" font-weight="800" fill="#322116">Photo Garden</text>
+  </g>
+
+  <!-- HOTSPOT 5: MAIN HALL (Trunk Front Arched Doorway) -->
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="main-hall" data-room-title="Main Hall" data-room-desc="Dashboard overview: indexed media counts, people summary, recent activity." aria-label="Enter Main Hall">
+    <!-- Cozy doorway awning -->
+    <path d="M484 366 Q552 332 620 366 Z" fill="#8EBB70" stroke="#322116" stroke-width="3.2" stroke-linejoin="round"/>
+    <!-- Warm arched wooden front door -->
+    <path d="M510 492 L510 410 A42 42 0 0 1 594 410 L594 492 Z" fill="#E8C477" stroke="#322116" stroke-width="3.5"/>
+    <path d="M522 490 L522 414 A30 30 0 0 1 582 414 L582 490 Z" fill="#79563C" stroke="#322116" stroke-width="2.6"/>
+    <!-- Door window + brass knob -->
+    <circle cx="552" cy="420" r="13" fill="#F5D993" stroke="#322116" stroke-width="2.4"/>
+    <circle cx="570" cy="454" r="4.5" fill="#E8C477" stroke="#322116" stroke-width="2"/>
+    <!-- Glowing hanging porch lantern -->
+    <g transform="translate(494, 384)">
+      <circle cx="8" cy="14" r="18" fill="url(#nxWarmGlow)"/>
+      <rect x="2" y="6" width="12" height="16" rx="4" fill="#F5D993" stroke="#322116" stroke-width="2.2"/>
+    </g>
+    <rect x="506" y="498" width="92" height="22" rx="11" fill="#F5D993" stroke="#322116" stroke-width="2.2"/>
+    <text x="552" y="513" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="11" font-weight="800" fill="#322116">Main Hall</text>
+  </g>
+
+  <!-- HOTSPOT 6: CRYSTAL CHAMBER (Lower-Left Safe Mossy Crystal Shrine) -->
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="crystal-chamber" data-room-title="Crystal Chamber (Safe Guard)" data-room-desc="Policy lock: duplicate detection &amp; file deletion are intentionally disabled." aria-label="Enter Crystal Chamber">
+    <circle cx="350" cy="462" r="42" fill="url(#nxMagicGlow)"/>
+    <g stroke="#322116" stroke-width="2.6" stroke-linejoin="round">
+      <polygon points="326,488 338,442 354,444 358,488" fill="#B7A1DC"/>
+      <polygon points="350,490 364,452 378,460 374,490" fill="#E8DFFA"/>
+      <polygon points="312,490 320,462 332,468 332,490" fill="#A8D8E8"/>
+    </g>
+    <rect x="292" y="494" width="116" height="22" rx="11" fill="#E8DFFA" stroke="#322116" stroke-width="2.2"/>
+    <text x="350" y="509" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="10.5" font-weight="800" fill="#322116">Crystal Chamber</text>
+  </g>
+
+  <!-- HOTSPOT 7: SECRET VAULT (Lower-Right Root-Hollow Vault Door) -->
+  <g class="nx-scene-room" tabindex="0" role="button" data-room-target="secret-vault" data-room-title="Secret Vault" data-room-desc="Safely reverse the previous run with SHA-256 verification (Undo)." aria-label="Enter Secret Vault">
+    <path d="M674 494 L674 446 A28 28 0 0 1 730 446 L730 494 Z" fill="#4A3221" stroke="#322116" stroke-width="3.2"/>
+    <circle cx="702" cy="458" r="14" fill="#E8C477" stroke="#322116" stroke-width="2.5"/>
+    <circle cx="702" cy="456" r="4" fill="#322116"/>
+    <path d="M700 459 L704 459 L705 466 L699 466 Z" fill="#322116"/>
+    <rect x="652" y="498" width="100" height="22" rx="11" fill="#F4EBD5" stroke="#322116" stroke-width="2.2"/>
+    <text x="702" y="513" text-anchor="middle" font-family="Trebuchet MS, sans-serif" font-size="11" font-weight="800" fill="#322116">Secret Vault</text>
+  </g>
+
+  <!-- 7. FOREGROUND COZY FOREST DETAILS: MUSHROOMS & SWAYING WILDFLOWERS -->
+  <g class="nx-mushrooms" stroke="#322116" stroke-width="2.4" stroke-linejoin="round">
+    <!-- Left glowing mushroom cluster -->
+    <circle cx="152" cy="548" r="32" fill="url(#nxMagicGlow)" stroke="none"/>
+    <rect x="136" y="556" width="11" height="22" rx="4" fill="#F4EBD5"/>
+    <path d="M122 558 C124 532, 160 532, 162 558 Z" fill="#B7A1DC"/>
+    <circle cx="136" cy="546" r="3" fill="#FAF4E6" stroke="none"/>
+    <circle cx="149" cy="542" r="2.5" fill="#FAF4E6" stroke="none"/>
+
+    <rect x="164" y="566" width="8" height="14" rx="3" fill="#F4EBD5"/>
+    <path d="M156 568 C158 552, 178 552, 180 568 Z" fill="#E8C477"/>
+
+    <!-- Right glowing mushroom -->
+    <circle cx="942" cy="554" r="30" fill="url(#nxWarmGlow)" stroke="none"/>
+    <rect x="936" y="560" width="11" height="20" rx="4" fill="#F4EBD5"/>
+    <path d="M922 562 C924 538, 960 538, 962 562 Z" fill="#E8C477"/>
+    <circle cx="938" cy="550" r="3" fill="#FAF4E6" stroke="none"/>
+  </g>
+
+  <!-- Gently swaying wildflower tufts & meadow grass details -->
+  <g class="nx-flower nx-sway-a" transform="translate(262, 578)">
+    <path d="M0 24 Q-4 10 2 0" fill="none" stroke="#315B3B" stroke-width="2.8" stroke-linecap="round"/>
+    <circle cx="2" cy="-2" r="7" fill="#FAF4E6" stroke="#322116" stroke-width="2"/>
+    <circle cx="2" cy="-2" r="3" fill="#E8C477"/>
+  </g>
+  <g class="nx-flower nx-sway-b" transform="translate(392, 594)">
+    <path d="M0 20 Q-3 9 1 0" fill="none" stroke="#315B3B" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="1" cy="-1" r="6" fill="#E8C477" stroke="#322116" stroke-width="1.8"/>
+    <circle cx="1" cy="-1" r="2.5" fill="#FAF4E6"/>
+  </g>
+  <g class="nx-flower nx-sway-a" transform="translate(744, 598)">
+    <path d="M0 18 Q3 8 -1 0" fill="none" stroke="#315B3B" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="-1" cy="-1" r="6" fill="#FAF4E6" stroke="#322116" stroke-width="1.8"/>
+    <circle cx="-1" cy="-1" r="2.5" fill="#B7A1DC"/>
+  </g>
+  <g class="nx-flower nx-sway-b" transform="translate(838, 576)">
+    <path d="M0 24 Q4 12 -2 0" fill="none" stroke="#315B3B" stroke-width="2.8" stroke-linecap="round"/>
+    <circle cx="-2" cy="-2" r="7" fill="#B7A1DC" stroke="#322116" stroke-width="2"/>
+    <circle cx="-2" cy="-2" r="3" fill="#FAF4E6"/>
+  </g>
+  <!-- Grass blade tufts along meadow edge -->
+  <path d="M98 548 L104 536 L108 548 M104 548 L113 538 L116 549 M872 522 L878 510 L882 522 M878 522 L886 512 L889 523" fill="none" stroke="#315B3B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

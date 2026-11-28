@@ -22,6 +22,29 @@ def compute_sha256(path: Path | str) -> str:
     return hasher.hexdigest()
 
 
+def format_size(size_bytes: int) -> str:
+    """Format byte size for human display (KB, MB, GB)."""
+    kb = size_bytes / 1024.0
+    if kb < 1024.0:
+        return f"{kb:.1f} KB"
+    mb = kb / 1024.0
+    if mb < 1024.0:
+        return f"{mb:.1f} MB"
+    gb = mb / 1024.0
+    return f"{gb:.1f} GB"
+
+
+def create_unique_run_folder(runs_dir: Path) -> Path:
+    """Create a unique run_<YYYYMMDD_HHMMSS>[_N] folder path under runs_dir."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_folder = runs_dir / f"run_{timestamp}"
+    suffix = 1
+    while run_folder.exists():
+        run_folder = runs_dir / f"run_{timestamp}_{suffix}"
+        suffix += 1
+    return run_folder
+
+
 def run_plan(plan: list[PlannedMove], log_path: Path | str) -> dict[str, Any]:
     """Execute planned moves in order.
     

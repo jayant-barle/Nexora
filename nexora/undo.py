@@ -11,6 +11,26 @@ from typing import Any
 from nexora.mover import compute_sha256
 
 
+def find_latest_active_run_log(runs_dir: Path) -> Path | None:
+    """Find newest non-empty run_<ts>/run.log that has not already been undone."""
+    if not runs_dir.exists():
+        return None
+    run_dirs = sorted(
+        (d for d in runs_dir.iterdir() if d.is_dir() and d.name.startswith("run_")),
+        key=lambda d: d.name,
+        reverse=True,
+    )
+    for rdir in run_dirs:
+        log_file = rdir / "run.log"
+        if log_file.is_file() and not (rdir / "undone.json").exists():
+            try:
+                if log_file.stat().st_size > 0:
+                    return log_file
+            except OSError:
+                continue
+    return None
+
+
 def undo_run(log_path: Path | str) -> dict[str, Any]:
     """Reverse a previous run from its log file.
     
@@ -37,6 +57,8 @@ def undo_run(log_path: Path | str) -> dict[str, Any]:
     skipped_entries: list[dict[str, str]] = []
     missing_entries: list[dict[str, str]] = []
     mismatched_entries: list[dict[str, str]] = []
+    stopped = False
+    stop_reason = ""
 
     # Process in reverse order
     for entry in reversed(entries):
@@ -60,19 +82,31 @@ def undo_run(log_path: Path | str) -> dict[str, Any]:
             })
             continue
 
-        # Recreate original parent folder if needed
-        orig_path.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(moved_path, orig_path)
+        try:
+            # Recreate original parent folder if needed
+            orig_path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(moved_path, orig_path)
 
-        restored_sha = compute_sha256(orig_path)
+            restored_sha = compute_sha256(orig_path)
+        except OSError as err:
+            stopped = True
+            stop_reason = f"Cannot restore {moved_path} to {orig_path}: {err}"
+            break
+
         if restored_sha != expected_sha:
             mismatched_entries.append({
                 "original": str(orig_path),
                 "expected": expected_sha,
                 "actual": restored_sha,
             })
-        else:
-            restored_count += 1
+            stopped = True
+            stop_reason = (
+                f"SHA-256 mismatch for restored file {orig_path} "
+                f"(expected {expected_sha}, got {restored_sha}). Undo halted."
+            )
+            break
+
+        restored_count += 1
 
     summary = {
         "undone_at": datetime.now(timezone.utc).isoformat(),
@@ -81,10 +115,13 @@ def undo_run(log_path: Path | str) -> dict[str, Any]:
         "skipped": len(skipped_entries),
         "missing": len(missing_entries),
         "mismatched": len(mismatched_entries),
+        "stopped": stopped,
+        "reason": stop_reason,
         "skipped_entries": skipped_entries,
         "missing_entries": missing_entries,
         "mismatched_entries": mismatched_entries,
     }
 
-    undone_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    if not stopped:
+        undone_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary

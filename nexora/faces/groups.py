@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sys
@@ -10,12 +9,13 @@ import multiprocessing
 import threading
 import time
 from datetime import datetime
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Any
 import cv2
 import numpy as np
 
+from nexora.mover import compute_sha256 as compute_file_sha256
 from nexora.names import is_image_or_video, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from nexora.faces.detect import (
     SCORE_THRESHOLD,
@@ -35,6 +35,11 @@ from nexora.faces.recognize import (
     embed_face,
     get_recognizer,
 )
+from nexora.faces.people import (
+    MERGE_GUARD_MAX_RATIO,
+    MERGE_GUARD_SMALL_CLUSTER_MAX,
+    to_folder_name,
+)
 
 # Named constants for drift mitigation and giant cluster safeguard
 MAX_REPRESENTATIVE_MEMBERS = 5  # M: freeze comparison representative after first M members to stop centroid drift
@@ -45,8 +50,6 @@ CLUSTER_CAP_MAX = 200           # Flag cluster as "needs review" if it exceeds 2
 CLUSTER_CAP_FLOOR = 20          # Floor threshold so small test clusters are not falsely flagged
 
 PASS2_ENABLED = False           # Turn pass 2 off by default; keep code for analysis and evaluation
-MERGE_GUARD_SMALL_CLUSTER_MAX = 3  # A cluster with <= 3 faces must not absorb a cluster > 2x its size
-MERGE_GUARD_MAX_RATIO = 2.0        # Max ratio of absorbed to absorber for small clusters
 
 
 def get_runs_dir() -> Path:
@@ -56,27 +59,122 @@ def get_runs_dir() -> Path:
     return Path(__file__).resolve().parent.parent.parent / "runs"
 
 
-def compute_file_sha256(path: Path) -> str:
-    """Compute SHA-256 of a file using 1 MB chunks."""
-    hasher = hashlib.sha256()
-    with open(path, "rb") as f:
-        while chunk := f.read(1024 * 1024):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+def _persist_face_records(
+    crops_dir: Path,
+    sha_prefix: str,
+    records: list[dict[str, Any]],
+    *,
+    filename_prefix: str = "crop_",
+    include_frame_idx: bool = False,
+) -> list[dict[str, Any]]:
+    """Save face crop thumbnails once and return JSON-serializable face records."""
+    serializable: list[dict[str, Any]] = []
+    for idx, r in enumerate(records):
+        crop_p = None
+        c_path = crops_dir / f"{filename_prefix}{sha_prefix}_{idx}.jpg"
+        cb = r.get("crop_bytes")
+        crop_arr = r.get("crop")
+        if cb:
+            try:
+                with open(c_path, "wb") as f_crop:
+                    f_crop.write(cb)
+                crop_p = str(c_path)
+            except Exception:
+                pass
+        elif crop_arr is not None:
+            try:
+                cv2.imwrite(str(c_path), crop_arr)
+                crop_p = str(c_path)
+            except Exception:
+                pass
 
-
-_worker_detector = None
-_worker_recognizer = None
+        entry: dict[str, Any] = {
+            "box": r["box"],
+            "box_w": r.get("box_w"),
+            "box_h": r.get("box_h"),
+            "score": r.get("score", 1.0),
+            "det_score": r.get("det_score", r.get("score", 1.0)),
+            "embedding": r["embedding"],
+            "crop_path": crop_p,
+        }
+        if include_frame_idx:
+            entry["frame_idx"] = r.get("frame_idx", 0)
+        serializable.append(entry)
+    return serializable
 
 
 def _worker_init(yunet_path_str: str | None, sface_path_str: str | None, score_threshold: float) -> None:
     """Initialize detector and recognizer models once per worker process."""
-    global _worker_detector, _worker_recognizer
     multiprocessing.current_process().name = f"NexoraScanWorker-{multiprocessing.current_process().pid}"
     y_path = Path(yunet_path_str) if yunet_path_str else None
     s_path = Path(sface_path_str) if sface_path_str else None
-    _worker_detector = get_detector(y_path, score_threshold=score_threshold)
-    _worker_recognizer = get_recognizer(s_path)
+    get_detector(y_path, score_threshold=score_threshold)
+    get_recognizer(s_path)
+
+
+def _extract_face_record(
+    frame: np.ndarray,
+    face: np.ndarray,
+    s_path: Path | None = None,
+    *,
+    frame_idx: int | None = None,
+    include_crop_bytes: bool = False,
+) -> dict[str, Any] | None:
+    """Build one serializable face record including quality metrics from a detection."""
+    emb = embed_face(frame, face, model_path=s_path) if s_path is not None else embed_face(frame, face)
+    if emb is None:
+        return None
+    crop = align_and_crop(frame, face, model_path=s_path) if s_path is not None else align_and_crop(frame, face)
+    box = [int(v) for v in face[0:4]]
+    score = float(face[14]) if len(face) > 14 else 1.0
+    rec: dict[str, Any] = {
+        "box": box,
+        "box_w": int(round(float(face[2]))) if len(face) > 2 else (box[2] if len(box) > 2 else 0),
+        "box_h": int(round(float(face[3]))) if len(face) > 3 else (box[3] if len(box) > 3 else 0),
+        "score": score,
+        "det_score": score,
+        "embedding": [float(x) for x in emb],
+    }
+    if frame_idx is not None:
+        rec["frame_idx"] = frame_idx
+    if include_crop_bytes:
+        crop_bytes = None
+        if crop is not None:
+            try:
+                _, buf = cv2.imencode(".jpg", crop)
+                crop_bytes = buf.tobytes()
+            except Exception:
+                pass
+        rec["crop_bytes"] = crop_bytes
+    else:
+        rec["crop"] = crop
+    return rec
+
+
+def _extract_video_frames(video_path: Path) -> list[np.ndarray] | None:
+    """Sample up to 5 evenly spaced 1280px frames; returns None if unreadable."""
+    cap = cv2.VideoCapture(str(video_path))
+    try:
+        if not cap.isOpened():
+            return None
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames <= 0:
+            return None
+        indices = [min(int((i + 0.5) * total_frames / 5), total_frames - 1) for i in range(5)]
+        frames: list[np.ndarray] = []
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                fh, fw = frame.shape[:2]
+                longest = max(fh, fw)
+                if longest != TARGET_SIZE and longest > 0:
+                    scale = TARGET_SIZE / float(longest)
+                    frame = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
+                frames.append(frame)
+        return frames if frames else None
+    finally:
+        cap.release()
 
 
 def _worker_process_file(task_args: tuple) -> dict[str, Any]:
@@ -91,50 +189,8 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
 
     if is_video:
         try:
-            cap = cv2.VideoCapture(str(file_path))
-            try:
-                if not cap.isOpened():
-                    return {
-                        "resolved_key": file_path_str,
-                        "type": "video",
-                        "size": curr_size,
-                        "sha256": curr_sha,
-                        "status": "could not read",
-                        "frame_faces": [],
-                    }
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                if total_frames <= 0:
-                    return {
-                        "resolved_key": file_path_str,
-                        "type": "video",
-                        "size": curr_size,
-                        "sha256": curr_sha,
-                        "status": "could not read",
-                        "frame_faces": [],
-                    }
-
-                indices = [
-                    min(int((i + 0.5) * total_frames / 5), total_frames - 1)
-                    for i in range(5)
-                ]
-                frames: list[np.ndarray] = []
-                for idx in indices:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                    ret, frame = cap.read()
-                    if ret and frame is not None:
-                        # Normalize frame to 1280px
-                        fh, fw = frame.shape[:2]
-                        longest = max(fh, fw)
-                        if longest != TARGET_SIZE and longest > 0:
-                            scale = TARGET_SIZE / float(longest)
-                            frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
-                        else:
-                            frame_1280 = frame
-                        frames.append(frame_1280)
-            finally:
-                cap.release()
-
-            if len(frames) == 0:
+            frames = _extract_video_frames(file_path)
+            if not frames:
                 return {
                     "resolved_key": file_path_str,
                     "type": "video",
@@ -143,37 +199,14 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
                     "status": "could not read",
                     "frame_faces": [],
                 }
-
             frame_faces = []
             for frame in frames:
                 detected = detect_faces(frame, model_path=y_path, score_threshold=SCORE_THRESHOLD)
-                faces_in_frame = []
-                for face in detected:
-                    emb = embed_face(frame, face, model_path=s_path)
-                    if emb is None:
-                        continue
-                    crop = align_and_crop(frame, face, model_path=s_path)
-                    crop_bytes = None
-                    if crop is not None:
-                        try:
-                            _, buf = cv2.imencode(".jpg", crop)
-                            crop_bytes = buf.tobytes()
-                        except Exception:
-                            pass
-
-                    box = [int(v) for v in face[0:4]]
-                    score = float(face[14]) if len(face) > 14 else 1.0
-                    box_w = int(round(float(face[2]))) if len(face) > 2 else (box[2] if len(box) > 2 else 0)
-                    box_h = int(round(float(face[3]))) if len(face) > 3 else (box[3] if len(box) > 3 else 0)
-                    faces_in_frame.append({
-                        "box": box,
-                        "box_w": box_w,
-                        "box_h": box_h,
-                        "score": score,
-                        "det_score": score,
-                        "embedding": [float(x) for x in emb],
-                        "crop_bytes": crop_bytes,
-                    })
+                faces_in_frame = [
+                    rec
+                    for face in detected
+                    if (rec := _extract_face_record(frame, face, s_path, include_crop_bytes=True)) is not None
+                ]
                 frame_faces.append(faces_in_frame)
 
             return {
@@ -208,34 +241,11 @@ def _worker_process_file(task_args: tuple) -> dict[str, Any]:
                 }
 
             detected = detect_faces(img_bgr, model_path=y_path, score_threshold=SCORE_THRESHOLD)
-            face_records = []
-
-            for face in detected:
-                emb = embed_face(img_bgr, face, model_path=s_path)
-                if emb is None:
-                    continue
-                crop = align_and_crop(img_bgr, face, model_path=s_path)
-                crop_bytes = None
-                if crop is not None:
-                    try:
-                        _, buf = cv2.imencode(".jpg", crop)
-                        crop_bytes = buf.tobytes()
-                    except Exception:
-                        pass
-
-                box = [int(v) for v in face[0:4]]
-                score = float(face[14]) if len(face) > 14 else 1.0
-                box_w = int(round(float(face[2]))) if len(face) > 2 else (box[2] if len(box) > 2 else 0)
-                box_h = int(round(float(face[3]))) if len(face) > 3 else (box[3] if len(box) > 3 else 0)
-                face_records.append({
-                    "box": box,
-                    "box_w": box_w,
-                    "box_h": box_h,
-                    "score": score,
-                    "det_score": score,
-                    "embedding": [float(x) for x in emb],
-                    "crop_bytes": crop_bytes,
-                })
+            face_records = [
+                rec
+                for face in detected
+                if (rec := _extract_face_record(img_bgr, face, s_path, include_crop_bytes=True)) is not None
+            ]
 
             return {
                 "resolved_key": file_path_str,
@@ -356,20 +366,6 @@ class FaceClusterManager:
             f.flush()
             os.fsync(f.fileno())
         os.replace(temp_path, self.json_path)
-
-    def _find_matching_group(self, embedding: np.ndarray, threshold: float = DEFAULT_THRESHOLD) -> dict | None:
-        """Find the group with highest cosine similarity >= threshold."""
-        best_group = None
-        best_sim = threshold
-        for group in self.groups:
-            rep = np.array(group.get("representative_embedding", []), dtype=np.float32)
-            if rep.size == 0:
-                continue
-            sim = cosine_similarity(embedding, rep)
-            if sim >= best_sim:
-                best_sim = sim
-                best_group = group
-        return best_group
 
     def cluster_all_faces(self, threshold: float = DEFAULT_THRESHOLD, pass2_enabled: bool | None = None) -> None:
         """Cluster all faces across self.cache in fixed canonical order.
@@ -605,7 +601,7 @@ class FaceClusterManager:
             assigned_folder = None
             if member_names:
                 assigned_display = collections.Counter(member_names).most_common(1)[0][0]
-                assigned_folder = assigned_display.strip().lower()
+                assigned_folder = to_folder_name(assigned_display)
                 for m_fk, m_idx in c["members"]:
                     self.face_names[f"{m_fk}:{m_idx}"] = assigned_display
 
@@ -723,27 +719,51 @@ class FaceClusterManager:
         log_f = open(log_path, "w", encoding="utf-8")
 
         try:
-            # Separate candidates into cached (unchanged) and uncached
+            # Separate candidates into cached (unchanged) and uncached; hash size-matched files cleanly
             cached_tasks: list[tuple[Path, int, str, bool]] = []
             uncached_tasks: list[tuple[Path, int, str, bool]] = []
+            prep_items: list[tuple[Path, str, int, bool, dict | None]] = []
 
             for p in candidates:
+                if stop_event and stop_event.is_set():
+                    break
                 resolved_key = str(p.resolve())
                 try:
                     curr_size = p.stat().st_size
                 except OSError:
                     curr_size = 0
                 is_video = p.suffix.lower() in VIDEO_EXTENSIONS
+                prep_items.append((p, resolved_key, curr_size, is_video, self.cache.get(resolved_key)))
 
-                cached_entry = self.cache.get(resolved_key)
-                if cached_entry and cached_entry.get("size") == curr_size:
+            def _hash_one(item: tuple[Path, str, int, bool, dict | None]) -> tuple[Path, str, int, bool, dict | None, str]:
+                p_obj, r_key, c_sz, is_vid, c_ent = item
+                return (p_obj, r_key, c_sz, is_vid, c_ent, compute_file_sha256(p_obj))
+
+            io_workers = max(1, min(4, max_workers or max(1, (os.cpu_count() or 2) - 1)))
+            if io_workers > 1 and len(prep_items) > 8:
+                with ThreadPoolExecutor(max_workers=io_workers) as hash_pool:
+                    for prep_idx in range(0, len(prep_items), 50):
+                        if stop_event and stop_event.is_set():
+                            break
+                        chunk = prep_items[prep_idx : prep_idx + 50]
+                        for p, resolved_key, curr_size, is_video, cached_entry, curr_sha in hash_pool.map(_hash_one, chunk):
+                            if cached_entry and cached_entry.get("size") == curr_size and cached_entry.get("sha256") == curr_sha:
+                                cached_tasks.append((p, curr_size, curr_sha, is_video))
+                            else:
+                                uncached_tasks.append((p, curr_size, curr_sha, is_video))
+                        if progress_callback:
+                            progress_callback(0, total_items, 0)
+            else:
+                for prep_idx, (p, resolved_key, curr_size, is_video, cached_entry) in enumerate(prep_items, start=1):
+                    if stop_event and stop_event.is_set():
+                        break
                     curr_sha = compute_file_sha256(p)
-                    if cached_entry.get("sha256") == curr_sha:
+                    if cached_entry and cached_entry.get("size") == curr_size and cached_entry.get("sha256") == curr_sha:
                         cached_tasks.append((p, curr_size, curr_sha, is_video))
-                        continue
-                else:
-                    curr_sha = compute_file_sha256(p)
-                uncached_tasks.append((p, curr_size, curr_sha, is_video))
+                    else:
+                        uncached_tasks.append((p, curr_size, curr_sha, is_video))
+                    if progress_callback and prep_idx % 50 == 0:
+                        progress_callback(0, total_items, 0)
 
             # First, process cached hits quickly
             for p, curr_size, curr_sha, is_video in cached_tasks:
@@ -799,7 +819,10 @@ class FaceClusterManager:
                                     serializable_faces = [
                                         {
                                             "box": r["box"],
+                                            "box_w": r.get("box_w"),
+                                            "box_h": r.get("box_h"),
                                             "score": r.get("score", 1.0),
+                                            "det_score": r.get("det_score", r.get("score", 1.0)),
                                             "embedding": r["embedding"],
                                             "crop_path": r.get("crop_path"),
                                         }
@@ -898,25 +921,13 @@ class FaceClusterManager:
                                             face_rec["frame_idx"] = frame_idx
                                             all_video_faces.append(face_rec)
 
-                                    serializable_faces = []
-                                    for f_idx, r in enumerate(all_video_faces):
-                                        crop_p = None
-                                        cb = r.get("crop_bytes")
-                                        if cb:
-                                            c_path = self.crops_dir / f"crop_vid_{curr_sha[:10]}_{f_idx}.jpg"
-                                            try:
-                                                with open(c_path, "wb") as f_crop:
-                                                    f_crop.write(cb)
-                                                crop_p = str(c_path)
-                                            except Exception:
-                                                pass
-                                        serializable_faces.append({
-                                            "box": r["box"],
-                                            "score": r["score"],
-                                            "embedding": r["embedding"],
-                                            "crop_path": crop_p,
-                                            "frame_idx": r.get("frame_idx", 0),
-                                        })
+                                    serializable_faces = _persist_face_records(
+                                        self.crops_dir,
+                                        curr_sha[:10],
+                                        all_video_faces,
+                                        filename_prefix="crop_vid_",
+                                        include_frame_idx=True,
+                                    )
                                     self.cache[resolved_key] = {
                                         "size": curr_size,
                                         "sha256": curr_sha,
@@ -939,24 +950,11 @@ class FaceClusterManager:
                                     face_records = result.get("faces", [])
                                     total_faces_found += len(face_records)
 
-                                    serializable_faces = []
-                                    for idx, r in enumerate(face_records):
-                                        crop_p = None
-                                        cb = r.get("crop_bytes")
-                                        if cb:
-                                            c_path = self.crops_dir / f"crop_{curr_sha[:10]}_{idx}.jpg"
-                                            try:
-                                                with open(c_path, "wb") as f_crop:
-                                                    f_crop.write(cb)
-                                                crop_p = str(c_path)
-                                            except Exception:
-                                                pass
-                                        serializable_faces.append({
-                                            "box": r["box"],
-                                            "score": r["score"],
-                                            "embedding": r["embedding"],
-                                            "crop_path": crop_p,
-                                        })
+                                    serializable_faces = _persist_face_records(
+                                        self.crops_dir,
+                                        curr_sha[:10],
+                                        face_records,
+                                    )
                                     self.cache[resolved_key] = {
                                         "size": curr_size,
                                         "sha256": curr_sha,
@@ -1015,92 +1013,6 @@ class FaceClusterManager:
             "log_path": str(log_path),
         }
 
-    def _create_group(self, face_rec: dict) -> dict:
-        """Create a new face group and save initial crop."""
-        group_id = f"group_{len(self.groups) + 1:03d}"
-        crop_filename = f"crop_{group_id}_0.jpg"
-        crop_path = self.crops_dir / crop_filename
-
-        raw_crop = face_rec.get("crop")
-        crops_saved: list[str] = []
-        if raw_crop is not None:
-            try:
-                cv2.imwrite(str(crop_path), raw_crop)
-                crops_saved.append(str(crop_path))
-            except Exception:
-                pass
-
-        group = {
-            "id": group_id,
-            "name": None,
-            "display_name": None,
-            "crop_path": str(crop_path) if crop_path.exists() else "",
-            "crop_paths": crops_saved,
-            "representative_embedding": face_rec["embedding"],
-        }
-        self.groups.append(group)
-        return group
-
-    def _create_group_from_bytes(self, face_rec: dict) -> dict:
-        """Create a new face group from encoded crop bytes."""
-        group_id = f"group_{len(self.groups) + 1:03d}"
-        crop_filename = f"crop_{group_id}_0.jpg"
-        crop_path = self.crops_dir / crop_filename
-
-        crop_bytes = face_rec.get("crop_bytes")
-        crops_saved: list[str] = []
-        if crop_bytes:
-            try:
-                with open(crop_path, "wb") as f:
-                    f.write(crop_bytes)
-                crops_saved.append(str(crop_path))
-            except Exception:
-                pass
-
-        group = {
-            "id": group_id,
-            "name": None,
-            "display_name": None,
-            "crop_path": str(crop_path) if crop_path.exists() else "",
-            "crop_paths": crops_saved,
-            "representative_embedding": face_rec["embedding"],
-        }
-        self.groups.append(group)
-        return group
-
-    def _append_crop(self, group: dict, crop: np.ndarray | None) -> None:
-        """Save additional sample crops up to 6 per group."""
-        if crop is None:
-            return
-        crops_list = group.setdefault("crop_paths", [])
-        if len(crops_list) < 6:
-            crop_filename = f"crop_{group['id']}_{len(crops_list)}.jpg"
-            crop_path = self.crops_dir / crop_filename
-            try:
-                cv2.imwrite(str(crop_path), crop)
-                crops_list.append(str(crop_path))
-                if not group.get("crop_path"):
-                    group["crop_path"] = str(crop_path)
-            except Exception:
-                pass
-
-    def _append_crop_bytes(self, group: dict, crop_bytes: bytes | None) -> None:
-        """Save additional sample crops up to 6 per group from bytes."""
-        if not crop_bytes:
-            return
-        crops_list = group.setdefault("crop_paths", [])
-        if len(crops_list) < 6:
-            crop_filename = f"crop_{group['id']}_{len(crops_list)}.jpg"
-            crop_path = self.crops_dir / crop_filename
-            try:
-                with open(crop_path, "wb") as f:
-                    f.write(crop_bytes)
-                crops_list.append(str(crop_path))
-                if not group.get("crop_path"):
-                    group["crop_path"] = str(crop_path)
-            except Exception:
-                pass
-
     def _process_image(self, img_path: Path, size: int, sha256: str) -> list[dict]:
         """Detect faces and compute embeddings for an image, updating cache."""
         resolved_key = str(img_path.resolve())
@@ -1119,41 +1031,13 @@ class FaceClusterManager:
 
         self.unreadable.discard(resolved_key)
         faces = detect_faces(img_bgr)
-        face_records = []
-
-        for face in faces:
-            emb = embed_face(img_bgr, face)
-            if emb is None:
-                continue
-            crop = align_and_crop(img_bgr, face)
-
-            box = [int(v) for v in face[0:4]]
-            score = float(face[14]) if len(face) > 14 else 1.0
-
-            face_records.append({
-                "box": box,
-                "score": score,
-                "embedding": [float(x) for x in emb],
-                "crop": crop,
-            })
-
-        serializable_faces = [
-            {
-                "box": r["box"],
-                "score": r["score"],
-                "embedding": r["embedding"],
-                "crop_path": str(self.crops_dir / f"crop_{sha256[:10]}_{idx}.jpg") if r.get("crop") is not None else None,
-            }
-            for idx, r in enumerate(face_records)
+        face_records = [
+            rec
+            for face in faces
+            if (rec := _extract_face_record(img_bgr, face)) is not None
         ]
-        # Save crops to disk
-        for idx, r in enumerate(face_records):
-            if r.get("crop") is not None:
-                c_path = self.crops_dir / f"crop_{sha256[:10]}_{idx}.jpg"
-                try:
-                    cv2.imwrite(str(c_path), r["crop"])
-                except Exception:
-                    pass
+
+        serializable_faces = _persist_face_records(self.crops_dir, sha256[:10], face_records)
 
         self.cache[resolved_key] = {
             "size": size,
@@ -1165,58 +1049,11 @@ class FaceClusterManager:
         return face_records
 
     def _process_video(self, video_path: Path, size: int, sha256: str, threshold: float) -> int:
-        """Sample 5 frames from video, detect faces, match to groups, and update cache."""
+        """Sample 5 frames from video, detect faces, and update cache."""
         resolved_key = str(video_path.resolve())
         try:
-            cap = cv2.VideoCapture(str(video_path))
-            try:
-                if not cap.isOpened():
-                    self.cache[resolved_key] = {
-                        "size": size,
-                        "sha256": sha256,
-                        "type": "video",
-                        "status": "could not read",
-                        "faces": [],
-                    }
-                    self.file_groups[resolved_key] = []
-                    self.unreadable.add(resolved_key)
-                    return 0
-
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                if total_frames <= 0:
-                    self.cache[resolved_key] = {
-                        "size": size,
-                        "sha256": sha256,
-                        "type": "video",
-                        "status": "could not read",
-                        "faces": [],
-                    }
-                    self.file_groups[resolved_key] = []
-                    self.unreadable.add(resolved_key)
-                    return 0
-
-                indices = [
-                    min(int((i + 0.5) * total_frames / 5), total_frames - 1)
-                    for i in range(5)
-                ]
-                frames: list[np.ndarray] = []
-                for idx in indices:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                    ret, frame = cap.read()
-                    if ret and frame is not None:
-                        # Normalize frame to 1280px
-                        fh, fw = frame.shape[:2]
-                        longest = max(fh, fw)
-                        if longest != TARGET_SIZE and longest > 0:
-                            scale = TARGET_SIZE / float(longest)
-                            frame_1280 = cv2.resize(frame, (int(round(fw * scale)), int(round(fh * scale))))
-                        else:
-                            frame_1280 = frame
-                        frames.append(frame_1280)
-            finally:
-                cap.release()
-
-            if len(frames) == 0:
+            frames = _extract_video_frames(video_path)
+            if not frames:
                 self.cache[resolved_key] = {
                     "size": size,
                     "sha256": sha256,
@@ -1230,44 +1067,19 @@ class FaceClusterManager:
 
             self.unreadable.discard(resolved_key)
             all_video_faces: list[dict] = []
-
             for frame_idx, frame in enumerate(frames):
-                detected = detect_faces(frame)
-                for face in detected:
-                    emb = embed_face(frame, face)
-                    if emb is None:
-                        continue
-                    crop = align_and_crop(frame, face)
-                    box = [int(v) for v in face[0:4]]
-                    score = float(face[14]) if len(face) > 14 else 1.0
+                for face in detect_faces(frame):
+                    rec = _extract_face_record(frame, face, frame_idx=frame_idx)
+                    if rec is not None:
+                        all_video_faces.append(rec)
 
-                    face_rec = {
-                        "box": box,
-                        "score": score,
-                        "embedding": [float(x) for x in emb],
-                        "crop": crop,
-                        "frame_idx": frame_idx,
-                    }
-                    all_video_faces.append(face_rec)
-
-            serializable_faces = []
-            for f_idx, r in enumerate(all_video_faces):
-                crop_p = None
-                raw_crop = r.get("crop")
-                if raw_crop is not None:
-                    c_path = self.crops_dir / f"crop_vid_{sha256[:10]}_{f_idx}.jpg"
-                    try:
-                        cv2.imwrite(str(c_path), raw_crop)
-                        crop_p = str(c_path)
-                    except Exception:
-                        pass
-                serializable_faces.append({
-                    "box": r["box"],
-                    "score": r["score"],
-                    "embedding": r["embedding"],
-                    "crop_path": crop_p,
-                    "frame_idx": r.get("frame_idx", 0),
-                })
+            serializable_faces = _persist_face_records(
+                self.crops_dir,
+                sha256[:10],
+                all_video_faces,
+                filename_prefix="crop_vid_",
+                include_frame_idx=True,
+            )
             self.cache[resolved_key] = {
                 "size": size,
                 "sha256": sha256,
