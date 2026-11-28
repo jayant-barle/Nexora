@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import os
-import sys
 import multiprocessing
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Any
+from typing import Any
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
@@ -18,7 +17,7 @@ from nexora.mover import create_unique_run_folder, format_size, run_plan
 from nexora.undo import find_latest_active_run_log as _find_latest_run_log, undo_run
 from nexora import theme
 from nexora.faces.groups import FaceClusterManager, get_runs_dir
-from nexora.faces.people import PeopleManager, validate_person_name
+from nexora.faces.people import PeopleManager
 
 
 def find_latest_active_run_log() -> Path | None:

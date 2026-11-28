@@ -13,8 +13,6 @@ from nexora.faces.recognize import cosine_similarity
 from nexora.faces.suggestions import (
     MERGE_SUGGEST_THRESHOLD,
     MAX_MERGE_SUGGESTIONS,
-    DISMISSAL_OVERLAP_MIN,
-    compute_pair_dismissal_key,
     create_dismissal_record,
     is_pair_dismissed,
     find_merge_suggestions,

@@ -24,9 +24,7 @@
   --nx-danger: #E47F7F;
 
   /* Surface & Semantic Aliases */
-  --nx-surface-raised: var(--nx-card-raised);
   --nx-surface-muted: #2E3330;
-  --nx-accent-soft: var(--nx-accent-end);
   --nx-good: var(--nx-success);
   --nx-warn: var(--nx-warning);
   --nx-good-bg: rgba(143, 234, 136, 0.12);
@@ -34,25 +32,6 @@
   --nx-danger-bg: rgba(228, 127, 127, 0.14);
   --nx-accent-bg: rgba(181, 255, 59, 0.13);
   --nx-glass-bg: rgba(32, 35, 33, 0.72);
-  --nx-glass-border: rgba(255, 255, 255, 0.11);
-
-  /* Compatibility Aliases for Recoverable Existing Screens */
-  --nx-forest: #202321;
-  --nx-forest-deep: #D2FF70;
-  --nx-leaf: #B5FF3B;
-  --nx-leaf-bright: rgba(181, 255, 59, 0.2);
-  --nx-cream: #151816;
-  --nx-cream-soft: #202321;
-  --nx-wood: #292D2A;
-  --nx-wood-dark: #080909;
-  --nx-ink: #343936;
-  --nx-sky: #151816;
-  --nx-sky-soft: #202321;
-  --nx-lavender: #B5FF3B;
-  --nx-lavender-soft: rgba(181, 255, 59, 0.16);
-  --nx-gold: #E7B95E;
-  --nx-gold-warm: rgba(231, 185, 94, 0.18);
-  --nx-muted: #929793;
 
   /* Typography Stacks */
   --nx-font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
