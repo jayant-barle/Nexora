@@ -81,13 +81,13 @@ def main_web(headless_probe_callback: Any | None = None) -> None:
 
     hidden = headless_probe_callback is not None
     window = webview.create_window(
-        "Nexora — Enchanted File Treehouse",
+        "Nexora",
         wsgi_app,
         js_api=bridge,
         width=1240,
         height=820,
         min_size=(940, 640),
-        background_color="#F4EBD5",
+        background_color="#111015",
         hidden=hidden,
     )
     bridge.attach_window(window)

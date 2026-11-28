@@ -366,7 +366,8 @@ def test_web_app_static_routes_and_media_token_security(tmp_path: Path) -> None:
 
     st_idx, _, idx_body = call_wsgi("/")
     assert st_idx.startswith("200")
-    assert b"treehouse-canvas-mount" in idx_body
+    assert b"dashboard-panel" in idx_body
+    assert b"nx-sidebar" in idx_body
 
     st_svg, hdrs_svg, svg_body = call_wsgi("/static/assets/svg/forest-scene.svg")
     assert st_svg.startswith("200")
@@ -384,9 +385,11 @@ def test_web_app_static_routes_and_media_token_security(tmp_path: Path) -> None:
     ):
         assert room in svg_body
 
-    st_css, hdrs_css, _ = call_wsgi("/static/css/tokens.css")
+    st_css, hdrs_css, css_body = call_wsgi("/static/css/tokens.css")
     assert st_css.startswith("200")
     assert any("text/css" in v for k, v in hdrs_css if k.lower() == "content-type")
+    assert b"--nx-bg: #111015" in css_body
+    assert b"--nx-accent: #A78BFA" in css_body
 
     st_lib_svg, _, lib_svg_body = call_wsgi("/static/assets/svg/library-shelf.svg")
     assert st_lib_svg.startswith("200")

@@ -3,20 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nexora — Enchanted File Treehouse</title>
+  <title>Nexora</title>
   <link rel="stylesheet" href="/static/css/tokens.css" />
   <link rel="stylesheet" href="/static/css/base.css" />
-  <link rel="stylesheet" href="/static/css/animations.css" />
 </head>
-<body data-room="treehouse">
+<body data-room="dashboard">
   <div class="nx-shell">
-    <!-- Conventional Fallback Navigation Sidebar -->
-    <aside class="nx-sidebar" aria-label="Treehouse Rooms Navigation">
+    <!-- Persistent Obsidian Left Sidebar -->
+    <aside class="nx-sidebar" aria-label="Primary Workspace Navigation">
       <div class="nx-brand">
         <div class="nx-brand-badge" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#322116" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L4 9h3v11h10V9h3L12 2z" fill="#8EBB70"/>
-            <circle cx="12" cy="14" r="2.2" fill="#F4EBD5"/>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#C9B8FF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 19V5l7 7 7-7v14" />
+            <path d="M9 19h6" />
           </svg>
         </div>
         <div>
@@ -25,75 +24,235 @@
         </div>
       </div>
 
+      <div class="nx-nav-section-label">Workspace</div>
       <nav class="nx-nav-list">
-        <button class="nx-nav-item is-active" data-room-target="treehouse">
-          <span class="nx-nav-icon">🌳</span> Treehouse Hub
+        <button class="nx-nav-item is-active" type="button" data-room-target="dashboard">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          Dashboard
         </button>
-        <button class="nx-nav-item" data-room-target="main-hall">
-          <span class="nx-nav-icon">🏠</span> Main Hall
+        <button class="nx-nav-item" type="button" data-room-target="main-hall">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h8V3H3z"/><path d="M13 21h8V11h-8z"/><path d="M13 3h8v4h-8z"/><path d="M3 17h8v4H3z"/></svg>
+          Workspace Overview
         </button>
-        <button class="nx-nav-item" data-room-target="library">
-          <span class="nx-nav-icon">📚</span> Magical Library
+        <button class="nx-nav-item" type="button" data-room-target="library">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          File Explorer
         </button>
-        <button class="nx-nav-item" data-room-target="photo-garden">
-          <span class="nx-nav-icon">🌸</span> Photo Garden
+        <button class="nx-nav-item" type="button" data-room-target="photo-garden">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
+          Photos &amp; People
         </button>
-        <button class="nx-nav-item" data-room-target="potion-workshop">
-          <span class="nx-nav-icon">🧪</span> Potion Workshop
+        <button class="nx-nav-item" type="button" data-room-target="potion-workshop">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
+          File Organizer
         </button>
-        <button class="nx-nav-item" data-room-target="memory-room">
-          <span class="nx-nav-icon">📜</span> Memory Room
+        <button class="nx-nav-item" type="button" data-room-target="memory-room">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Activity &amp; History
         </button>
-        <button class="nx-nav-item" data-room-target="secret-vault">
-          <span class="nx-nav-icon">🔐</span> Secret Vault
-        </button>
-        <button class="nx-nav-item" data-room-target="crystal-chamber">
-          <span class="nx-nav-icon">💎</span> Crystal Chamber
-          <span class="nx-nav-tag">Safe</span>
+        <button class="nx-nav-item" type="button" data-room-target="secret-vault">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Settings &amp; Privacy
         </button>
       </nav>
 
       <div class="nx-sidebar-foot">
-        <strong>Enchanted Treehouse</strong><br />
-        Click any doorway or use this fallback sidebar anytime.
+        <button class="nx-nav-item" type="button" data-room-target="crystal-chamber">
+          <svg class="nx-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Safety Policy
+          <span class="nx-nav-tag">Restricted</span>
+        </button>
+        <div class="nx-safety-card-mini">
+          Local-first processing. Files are moved with SHA-256 verification and never deleted.
+        </div>
       </div>
     </aside>
 
-    <!-- Main Workspace Column -->
+    <!-- Main Column: Top Bar + Workspace Stage -->
     <div class="nx-main-wrap">
       <header class="nx-topbar">
-        <div class="nx-folder-strip">
-          <button id="btn-pick-source" class="nx-btn nx-btn-primary">Select Source</button>
-          <span id="source-path-pill" class="nx-pill-path" title="Source Folder">No source folder chosen</span>
-          <button id="btn-pick-dest" class="nx-btn">Select Destination</button>
-          <span id="dest-path-pill" class="nx-pill-path" title="Destination Folder">No destination folder chosen</span>
+        <div class="nx-topbar-left">
+          <h1 id="topbar-page-title" class="nx-page-title">Dashboard</h1>
+          <label class="nx-topbar-search" title="Press Enter to search top-level files in File Explorer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="topbar-search-input" type="search" placeholder="Search source files..." aria-label="Search source files" />
+          </label>
+        </div>
+
+        <div class="nx-topbar-right">
+          <div class="nx-workspace-pill" id="topbar-workspace-pill" title="Active Source Workspace">
+            <span id="topbar-workspace-dot" class="nx-workspace-dot"></span>
+            <span id="topbar-workspace-text" class="nx-workspace-text">No source selected</span>
+          </div>
+          <span id="topbar-status-badge" class="nx-pill-badge is-accent">Ready</span>
+          <button class="nx-icon-btn" type="button" data-room-target="secret-vault" title="Settings &amp; Privacy" aria-label="Settings and Privacy">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
         </div>
       </header>
 
-      <main id="main-stage" class="nx-stage nx-stage-home">
-        <!-- Hub: Interactive Living Giant Treehouse & Enchanted Forest -->
-        <section class="nx-room-view" data-room-panel="treehouse">
-          <div class="nx-treehouse-world">
-            <div id="treehouse-fireflies" class="nx-firefly-layer" aria-hidden="true"></div>
-            <div id="treehouse-canvas-mount" class="nx-canvas-mount">
-              <div class="nx-card" style="margin: 24px;">Loading the Living Treehouse...</div>
+      <main id="main-stage" class="nx-stage">
+        <!-- Milestone 1 Primary Screen: SaaS Dashboard -->
+        <section id="dashboard-panel" class="nx-room-view" data-room-panel="dashboard">
+          <div class="nx-dash-header">
+            <div>
+              <h2 class="nx-card-title" style="font-size: 20px;">Library Workspace Overview</h2>
+              <p class="nx-dash-subtitle">Inspect indexed media, discovered people clusters, and recent SHA-256 verified organization runs.</p>
+            </div>
+            <div class="nx-action-inline">
+              <button class="nx-btn" type="button" data-room-target="library">Open File Explorer</button>
+              <button class="nx-btn nx-btn-primary" type="button" data-room-target="photo-garden">Open Photos &amp; People</button>
             </div>
           </div>
-          <div class="nx-scene-plaque" aria-live="polite">
-            <div id="scene-hover-title" class="nx-scene-plaque-title">Living Giant Treehouse</div>
-            <div id="scene-hover-desc" class="nx-scene-plaque-desc">Hover any cozy door, balcony, or window to preview its room — click to enter.</div>
+
+          <!-- Source & Destination Workspace Selectors -->
+          <div class="nx-dash-folder-bar">
+            <div class="nx-folder-slot">
+              <div class="nx-folder-slot-info">
+                <div class="nx-folder-slot-label">Source Workspace (Top-Level Only)</div>
+                <div id="source-path-pill" class="nx-folder-slot-path" title="Source Folder">No source folder chosen</div>
+              </div>
+              <button id="btn-pick-source" class="nx-btn nx-btn-primary" type="button">Select Source</button>
+            </div>
+
+            <div class="nx-folder-slot">
+              <div class="nx-folder-slot-info">
+                <div class="nx-folder-slot-label">Destination Folder (Same Drive Required)</div>
+                <div id="dest-path-pill" class="nx-folder-slot-path" title="Destination Folder">No destination folder chosen</div>
+              </div>
+              <button id="btn-pick-dest" class="nx-btn" type="button">Select Destination</button>
+            </div>
+          </div>
+
+          <!-- Real Backend KPI Statistic Cards -->
+          <div class="nx-kpi-grid">
+            <div class="nx-kpi">
+              <div class="nx-kpi-top">
+                <span class="nx-kpi-label">Indexed Media</span>
+                <span class="nx-kpi-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </span>
+              </div>
+              <div class="nx-kpi-num" id="dash-kpi-indexed">0</div>
+              <div class="nx-kpi-sub" id="dash-kpi-indexed-sub">0 images · 0 videos</div>
+            </div>
+
+            <div class="nx-kpi">
+              <div class="nx-kpi-top">
+                <span class="nx-kpi-label">People Discovered</span>
+                <span class="nx-kpi-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+                </span>
+              </div>
+              <div class="nx-kpi-num" id="dash-kpi-people">0</div>
+              <div class="nx-kpi-sub" id="dash-kpi-people-sub">0 confirmed names</div>
+            </div>
+
+            <div class="nx-kpi">
+              <div class="nx-kpi-top">
+                <span class="nx-kpi-label">Move Plan Status</span>
+                <span class="nx-kpi-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </span>
+              </div>
+              <div class="nx-kpi-num" id="dash-kpi-ready">0</div>
+              <div class="nx-kpi-sub" id="dash-kpi-ready-sub">No preview built yet</div>
+            </div>
+
+            <div class="nx-kpi">
+              <div class="nx-kpi-top">
+                <span class="nx-kpi-label">Undo Recovery</span>
+                <span class="nx-kpi-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                </span>
+              </div>
+              <div class="nx-kpi-num" id="dash-kpi-undo">None</div>
+              <div class="nx-kpi-sub" id="dash-kpi-undo-sub">Zero files modified</div>
+            </div>
+          </div>
+
+          <!-- Main Two-Column Content Grid -->
+          <div class="nx-dash-grid">
+            <div class="nx-card">
+              <div class="nx-card-header">
+                <div>
+                  <h3 class="nx-card-title">Recent Operations &amp; Audit Logs</h3>
+                  <div class="nx-muted">Recorded locally in your <span class="nx-mono">runs/</span> directory</div>
+                </div>
+                <button class="nx-btn" type="button" data-room-target="memory-room">View All</button>
+              </div>
+              <div class="nx-table-wrap">
+                <table class="nx-table">
+                  <thead>
+                    <tr>
+                      <th>Run / Log</th>
+                      <th>Details</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dash-activity-tbody">
+                    <tr>
+                      <td colspan="3" class="nx-muted">Loading recent activity...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="nx-card">
+              <div class="nx-card-header">
+                <div>
+                  <h3 class="nx-card-title">Workflow &amp; People Identities</h3>
+                  <div class="nx-muted">Authoritative Python pipeline controls</div>
+                </div>
+              </div>
+
+              <div class="nx-step-list">
+                <div class="nx-step-item">
+                  <div>
+                    <strong>1. Browse Top-Level Source</strong>
+                    <div class="nx-muted">Inspect EXIF dates, name rules, and previews</div>
+                  </div>
+                  <button class="nx-btn" type="button" data-room-target="library">Explore</button>
+                </div>
+                <div class="nx-step-item">
+                  <div>
+                    <strong>2. Scan &amp; Confirm People</strong>
+                    <div class="nx-muted">Name, split, or merge with small-cluster guard</div>
+                  </div>
+                  <button class="nx-btn nx-btn-lavender" type="button" data-room-target="photo-garden">Manage</button>
+                </div>
+                <div class="nx-step-item">
+                  <div>
+                    <strong>3. Preview &amp; Approve Moves</strong>
+                    <div class="nx-muted">SHA-256 verified moves and full-run Undo</div>
+                  </div>
+                  <button class="nx-btn" type="button" data-room-target="potion-workshop">Organize</button>
+                </div>
+              </div>
+
+              <div class="nx-muted" style="font-weight: 600; margin-bottom: 8px;">Discovered Identities (Cache)</div>
+              <div id="dash-people-chips" class="nx-people-chips">
+                <span class="nx-muted">Loading cached identities...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="nx-safety-strip">
+            <span>Subfolders are intentionally skipped · File modified dates are never used for placement · Preview &amp; Approve required before moving</span>
+            <button class="nx-btn" type="button" data-room-target="crystal-chamber">Safety Rules</button>
           </div>
         </section>
 
-        <!-- Room 1: Main Hall -->
+        <!-- Recoverable Existing Screens (Preserved intact during staged migration) -->
         <section class="nx-room-view" data-room-panel="main-hall" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
               <div>
-                <h2 class="nx-card-title">Main Hall — Enchanted Library Overview</h2>
+                <h2 class="nx-card-title">Workspace Overview</h2>
                 <div class="nx-muted">Live metrics and audit records read directly from your local runs folder.</div>
               </div>
-              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+              <button class="nx-btn" type="button" data-room-target="dashboard">← Back to Dashboard</button>
             </div>
             <div class="nx-kpi-grid" style="margin-bottom: 0;">
               <div class="nx-kpi"><div class="nx-kpi-num" id="kpi-indexed">0</div><div class="nx-kpi-label">Indexed Media (Cache)</div></div>
@@ -106,8 +265,8 @@
           <div class="nx-hall-grid">
             <div class="nx-card">
               <div class="nx-card-header">
-                <h3 class="nx-card-title" style="font-size: 16px;">Cached Media &amp; People Groups</h3>
-                <button class="nx-btn" data-room-target="photo-garden">Open Photo Garden</button>
+                <h3 class="nx-card-title">Cached Media &amp; People Groups</h3>
+                <button class="nx-btn" type="button" data-room-target="photo-garden">Open Photos &amp; People</button>
               </div>
               <div class="nx-stat-rows">
                 <div class="nx-stat-row"><span>Cached Images</span><span class="nx-stat-val" id="hall-images-count">0</span></div>
@@ -120,26 +279,26 @@
 
             <div class="nx-card">
               <div class="nx-card-header">
-                <h3 class="nx-card-title" style="font-size: 16px;">Workspace Status &amp; Quick Actions</h3>
+                <h3 class="nx-card-title">Workspace Status &amp; Quick Actions</h3>
               </div>
-              <div class="nx-stat-rows" style="grid-template-columns: 1fr;">
+              <div class="nx-stat-rows">
                 <div class="nx-stat-row"><span>Source Folder</span><span class="nx-stat-val" id="hall-source-status">Not selected</span></div>
                 <div class="nx-stat-row"><span>Destination Folder</span><span class="nx-stat-val" id="hall-dest-status">Not selected</span></div>
                 <div class="nx-stat-row"><span>Active Preview Plan</span><span class="nx-stat-val" id="hall-plan-status">No preview built</span></div>
                 <div class="nx-stat-row"><span>Undo Recovery</span><span class="nx-stat-val" id="hall-undo-status">No active run log</span></div>
               </div>
               <div class="nx-quick-actions">
-                <button class="nx-btn nx-btn-primary" data-room-target="potion-workshop">🧪 Potion Workshop</button>
-                <button class="nx-btn" data-room-target="library">📚 Magical Library</button>
-                <button class="nx-btn nx-btn-lavender" data-room-target="secret-vault">🔐 Secret Vault</button>
+                <button class="nx-btn nx-btn-primary" type="button" data-room-target="potion-workshop">File Organizer</button>
+                <button class="nx-btn" type="button" data-room-target="library">File Explorer</button>
+                <button class="nx-btn nx-btn-lavender" type="button" data-room-target="secret-vault">Settings &amp; Privacy</button>
               </div>
             </div>
           </div>
 
           <div class="nx-card">
             <div class="nx-card-header">
-              <h3 class="nx-card-title" style="font-size: 16px;">Recent Organization &amp; Scan Activity</h3>
-              <button class="nx-btn" data-room-target="memory-room">Open Memory Room</button>
+              <h3 class="nx-card-title">Recent Organization &amp; Scan Activity</h3>
+              <button class="nx-btn" type="button" data-room-target="memory-room">Open Activity &amp; History</button>
             </div>
             <div id="hall-activity-list" class="nx-activity-list">
               <p class="nx-muted" style="margin: 0;">Loading recent logs...</p>
@@ -147,19 +306,19 @@
           </div>
         </section>
 
-        <!-- Room 2: Magical Library (Top-Level File Explorer & Reading Desk) -->
+        <!-- File Explorer (Recoverable existing library screen) -->
         <section class="nx-room-view" data-room-panel="library" hidden>
           <div class="nx-card nx-lib-header-card">
             <div class="nx-lib-banner">
-              <div class="nx-lib-banner-text">
+              <div class="nx-lib-banner-text" style="width: 100%;">
                 <div class="nx-card-header" style="margin-bottom: 6px;">
                   <div>
-                    <h2 class="nx-card-title">Magical Library — Archive &amp; Reading Desk</h2>
+                    <h2 class="nx-card-title">File Explorer — Top-Level Archive &amp; Inspector</h2>
                     <div class="nx-muted">Top-level source browser &amp; metadata reader. Subfolders stay skipped and untouched.</div>
                   </div>
                   <div class="nx-lib-top-actions">
                     <button id="lib-refresh-btn" class="nx-btn" type="button">↻ Refresh Shelf</button>
-                    <button class="nx-btn" type="button" data-room-target="treehouse">← Back to Treehouse</button>
+                    <button class="nx-btn" type="button" data-room-target="dashboard">← Back to Dashboard</button>
                   </div>
                 </div>
                 <div class="nx-lib-source-strip">
@@ -168,56 +327,41 @@
                   <span class="nx-pill-badge is-good">Read-only browsing</span>
                 </div>
               </div>
-              <div class="nx-lib-shelf-art" aria-hidden="true">
-                <img src="/static/assets/svg/library-shelf.svg" alt="" width="290" height="87" />
-              </div>
+              <div class="nx-lib-shelf-art" aria-hidden="true"></div>
             </div>
 
             <div class="nx-lib-controls">
               <div class="nx-lib-search-wrap">
                 <label class="nx-sr-only" for="lib-search-input">Search files by filename</label>
-                <input id="lib-search-input" class="nx-input" type="search" placeholder="Search scrolls &amp; files by filename..." />
+                <input id="lib-search-input" class="nx-input" type="search" placeholder="Search files by filename..." />
                 <button id="lib-clear-search-btn" class="nx-btn" type="button" title="Reset search and filters">Clear</button>
               </div>
               <div class="nx-filter-row" role="group" aria-label="Filter files by category">
-                <button class="nx-filter-pill is-active" type="button" data-lib-type="all" aria-pressed="true">
-                  All <span class="nx-count-chip" id="lib-count-all">0</span>
-                </button>
-                <button class="nx-filter-pill" type="button" data-lib-type="image" aria-pressed="false">
-                  Images <span class="nx-count-chip" id="lib-count-image">0</span>
-                </button>
-                <button class="nx-filter-pill" type="button" data-lib-type="video" aria-pressed="false">
-                  Videos <span class="nx-count-chip" id="lib-count-video">0</span>
-                </button>
-                <button class="nx-filter-pill" type="button" data-lib-type="other" aria-pressed="false">
-                  Other <span class="nx-count-chip" id="lib-count-other">0</span>
-                </button>
+                <button class="nx-filter-pill is-active" type="button" data-lib-type="all" aria-pressed="true">All <span class="nx-count-chip" id="lib-count-all">0</span></button>
+                <button class="nx-filter-pill" type="button" data-lib-type="image" aria-pressed="false">Images <span class="nx-count-chip" id="lib-count-image">0</span></button>
+                <button class="nx-filter-pill" type="button" data-lib-type="video" aria-pressed="false">Videos <span class="nx-count-chip" id="lib-count-video">0</span></button>
+                <button class="nx-filter-pill" type="button" data-lib-type="other" aria-pressed="false">Other <span class="nx-count-chip" id="lib-count-other">0</span></button>
               </div>
             </div>
           </div>
 
           <div class="nx-library-desk">
-            <!-- Left Column: Top-level Bookshelf Collection -->
             <div class="nx-card nx-lib-shelf-pane">
               <div class="nx-lib-pane-head">
-                <h3 class="nx-card-title" style="font-size: 16px;">Bookshelf Collection</h3>
+                <h3 class="nx-card-title">Top-Level Files</h3>
                 <span id="lib-summary-bar" class="nx-muted">No source folder chosen</span>
               </div>
-
-              <div id="lib-loading" class="nx-lib-state-box" hidden>Reading source shelf...</div>
+              <div id="lib-loading" class="nx-lib-state-box" hidden>Reading source folder...</div>
               <div id="lib-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
-
               <div id="lib-empty" class="nx-lib-state-box" hidden>
-                <div id="lib-empty-title" class="nx-lib-state-title">No Source Folder Selected Yet</div>
+                <div id="lib-empty-title" class="nx-card-title" style="font-size: 15px;">No Source Folder Selected Yet</div>
                 <p id="lib-empty-desc" class="nx-muted" style="margin: 6px 0 12px;">Choose a folder above to browse top-level files safely.</p>
                 <div class="nx-quick-actions" style="justify-content: center; margin-top: 0;">
                   <button id="lib-empty-pick-btn" class="nx-btn nx-btn-primary" type="button">Select Source Folder</button>
                   <button id="lib-empty-reset-btn" class="nx-btn" type="button" hidden>Reset Search &amp; Filters</button>
                 </div>
               </div>
-
               <div id="lib-file-list" class="nx-lib-file-list" role="region" aria-label="Source files"></div>
-
               <div id="lib-pagination" class="nx-lib-pagination" hidden>
                 <button id="lib-prev-page" class="nx-btn" type="button">← Previous</button>
                 <span id="lib-page-label" class="nx-muted">Page 1 of 1</span>
@@ -225,27 +369,22 @@
               </div>
             </div>
 
-            <!-- Right Column: Cozy Reading Desk & Metadata Ledger -->
             <div class="nx-card nx-lib-desk-pane">
               <div class="nx-lib-pane-head">
-                <h3 class="nx-card-title" style="font-size: 16px;">Reading Desk &amp; Metadata</h3>
+                <h3 class="nx-card-title">Metadata Inspector</h3>
                 <span class="nx-pill-badge">OS Dates Ignored</span>
               </div>
-
               <div id="lib-desk-idle" class="nx-lib-state-box">
-                <div class="nx-lib-state-title">Open Any Scroll to Inspect</div>
-                <p id="lib-desk-idle-text" class="nx-muted" style="margin: 6px 0 0;">Select any photo, video, or other file on the shelf to preview supported media and view authoritative Nexora metadata.</p>
+                <div class="nx-card-title" style="font-size: 15px;">Select a File to Inspect</div>
+                <p id="lib-desk-idle-text" class="nx-muted" style="margin: 6px 0 0;">Select any photo, video, or other file to inspect previews and authoritative Nexora metadata.</p>
               </div>
-
               <div id="lib-desk-loading" class="nx-lib-state-box" hidden>Reading file metadata...</div>
               <div id="lib-desk-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
-
               <div id="lib-desk-content" hidden>
                 <div id="lib-desk-media-box" class="nx-lib-media-box">
                   <img id="lib-desk-img" alt="" hidden />
                   <p id="lib-desk-preview-note" class="nx-muted" style="margin: 0;" hidden></p>
                 </div>
-
                 <dl class="nx-meta-ledger">
                   <div class="nx-meta-row"><dt>File Name</dt><dd id="lib-meta-name">—</dd></div>
                   <div class="nx-meta-row"><dt>Category</dt><dd id="lib-meta-type">—</dd></div>
@@ -256,11 +395,10 @@
                   <div class="nx-meta-row"><dt>Face Scan Cache</dt><dd id="lib-meta-faces">—</dd></div>
                   <div class="nx-meta-row"><dt>Rule Preview</dt><dd id="lib-meta-rule">—</dd></div>
                 </dl>
-
                 <div class="nx-banner-safe" style="margin-top: 12px; font-size: 13px;">
                   <div id="lib-meta-safety-note" style="font-weight: 600;"></div>
                   <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px;">
-                    <button class="nx-btn nx-btn-primary" type="button" data-room-target="potion-workshop">🧪 Open Potion Workshop</button>
+                    <button class="nx-btn nx-btn-primary" type="button" data-room-target="potion-workshop">Open File Organizer</button>
                   </div>
                 </div>
               </div>
@@ -268,29 +406,21 @@
           </div>
         </section>
 
-        <!-- Room 3: Photo Garden (Phase 5: Overview, Gallery, People Management, Guarded Actions) -->
+        <!-- Photos & People (Recoverable existing people workspace) -->
         <section class="nx-room-view" data-room-panel="photo-garden" hidden>
-          <div class="nx-card nx-garden-hero">
-            <div class="nx-lib-banner">
-              <div class="nx-lib-banner-text">
-                <div class="nx-card-header" style="margin-bottom: 6px;">
-                  <div>
-                    <h2 class="nx-card-title">Photo Garden — Portraits &amp; People Sanctuary</h2>
-                    <div class="nx-muted">Review detected face groups, confirm names explicitly, and inspect top-level photos without auto-moving or deleting anything.</div>
-                  </div>
-                  <div class="nx-lib-top-actions">
-                    <button id="garden-refresh-btn" class="nx-btn" type="button">↻ Refresh Garden</button>
-                    <button class="nx-btn" type="button" data-room-target="treehouse">← Back to Treehouse</button>
-                  </div>
-                </div>
-                <span id="garden-provenance-pill" class="nx-garden-provenance is-empty">Checking face scan cache...</span>
+          <div class="nx-card">
+            <div class="nx-card-header" style="margin-bottom: 6px;">
+              <div>
+                <h2 class="nx-card-title">Photos &amp; People — Recognition &amp; Identity Review</h2>
+                <div class="nx-muted">Review detected face groups, confirm names explicitly, and inspect top-level photos without auto-moving or deleting anything.</div>
               </div>
-              <div class="nx-lib-shelf-art" aria-hidden="true">
-                <img src="/static/assets/svg/photo-garden.svg" alt="" width="280" height="88" />
+              <div class="nx-lib-top-actions">
+                <button id="garden-refresh-btn" class="nx-btn" type="button">↻ Refresh</button>
+                <button class="nx-btn" type="button" data-room-target="dashboard">← Back to Dashboard</button>
               </div>
             </div>
+            <span id="garden-provenance-pill" class="nx-pill-badge is-accent">Checking face scan cache...</span>
 
-            <!-- A. Garden Overview Metrics -->
             <div class="nx-garden-kpi-grid" style="margin-top: 14px;">
               <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-indexed">0</div><div class="nx-kpi-label">Cached Images</div></div>
               <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-faces">0</div><div class="nx-kpi-label">With Detected Faces</div></div>
@@ -300,7 +430,6 @@
               <div class="nx-kpi"><div class="nx-kpi-num" id="garden-kpi-unreadable">0</div><div class="nx-kpi-label">Unreadable / Other</div></div>
             </div>
 
-            <!-- User-Initiated Scan Controls (Never auto-started) -->
             <div class="nx-garden-scan-box">
               <div class="nx-action-inline">
                 <button id="garden-scan-start-btn" class="nx-btn nx-btn-primary" type="button">Scan People</button>
@@ -315,19 +444,17 @@
             </div>
           </div>
 
-          <!-- Garden Section Sub-Tabs -->
-          <div class="nx-garden-subtabs" role="tablist" aria-label="Photo Garden Sections">
-            <button class="nx-garden-tab is-active" type="button" role="tab" aria-selected="true" data-garden-tab="people">🌸 People &amp; Merge Suggestions</button>
-            <button class="nx-garden-tab" type="button" role="tab" aria-selected="false" data-garden-tab="gallery">🖼 Photo Gallery</button>
-            <button class="nx-garden-tab" type="button" role="tab" aria-selected="false" data-garden-tab="reports">🔎 Unreadable &amp; Withheld Reports</button>
+          <div class="nx-garden-subtabs" role="tablist" aria-label="Photos and People Sections">
+            <button class="nx-garden-tab is-active" type="button" role="tab" aria-selected="true" data-garden-tab="people">People &amp; Merge Suggestions</button>
+            <button class="nx-garden-tab" type="button" role="tab" aria-selected="false" data-garden-tab="gallery">Photo Gallery</button>
+            <button class="nx-garden-tab" type="button" role="tab" aria-selected="false" data-garden-tab="reports">Unreadable &amp; Withheld Reports</button>
           </div>
 
-          <!-- Tab 1: People Group Cards & Separate Suggested Merges -->
           <div id="garden-tab-people" role="tabpanel">
             <div class="nx-card" id="garden-suggestions-card" style="margin-bottom: 14px;">
               <div class="nx-card-header">
                 <div>
-                  <h3 class="nx-card-title" style="font-size: 16px;">Suggested Merges</h3>
+                  <h3 class="nx-card-title">Suggested Merges</h3>
                   <div class="nx-muted">Similar groups suggested for manual review — never merged automatically.</div>
                 </div>
                 <span id="garden-suggestions-count" class="nx-pill-badge">0 suggestion(s)</span>
@@ -340,7 +467,7 @@
             <div class="nx-card">
               <div class="nx-card-header" style="flex-wrap: wrap;">
                 <div>
-                  <h3 class="nx-card-title" style="font-size: 16px;">People Group Cards</h3>
+                  <h3 class="nx-card-title">People Group Cards</h3>
                   <div id="garden-people-count-note" class="nx-muted">0 visible group(s)</div>
                 </div>
                 <div class="nx-action-inline">
@@ -356,7 +483,6 @@
                   </select>
                 </div>
               </div>
-
               <div id="garden-people-loading" class="nx-lib-state-box" hidden>Loading people groups...</div>
               <div id="garden-people-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
               <div id="garden-people-empty" class="nx-lib-state-box" hidden></div>
@@ -364,12 +490,11 @@
             </div>
           </div>
 
-          <!-- Tab 2: Paginated Photo Gallery -->
           <div id="garden-tab-gallery" role="tabpanel" hidden>
             <div class="nx-card">
               <div class="nx-card-header" style="flex-wrap: wrap;">
                 <div>
-                  <h3 class="nx-card-title" style="font-size: 16px;">Top-Level Photo Gallery</h3>
+                  <h3 class="nx-card-title">Top-Level Photo Gallery</h3>
                   <div id="garden-gallery-summary" class="nx-muted">Select a source folder to view thumbnails</div>
                 </div>
                 <div class="nx-action-inline">
@@ -390,7 +515,7 @@
               <div id="garden-gallery-loading" class="nx-lib-state-box" hidden>Loading gallery thumbnails...</div>
               <div id="garden-gallery-error" class="nx-lib-state-box is-error" role="alert" hidden></div>
               <div id="garden-gallery-empty" class="nx-lib-state-box" hidden>
-                <div id="garden-gallery-empty-title" class="nx-lib-state-title">No Source Folder Selected</div>
+                <div id="garden-gallery-empty-title" class="nx-card-title" style="font-size: 15px;">No Source Folder Selected</div>
                 <p id="garden-gallery-empty-desc" class="nx-muted" style="margin: 6px 0 12px;">Select a source folder above to view real thumbnails.</p>
                 <div class="nx-quick-actions" style="justify-content: center; margin-top: 0;">
                   <button id="garden-gallery-empty-pick" class="nx-btn nx-btn-primary" type="button">Select Source Folder</button>
@@ -408,7 +533,6 @@
             </div>
           </div>
 
-          <!-- Tab 3: Distinct Unreadable, Withheld, & No-Faces Reports -->
           <div id="garden-tab-reports" role="tabpanel" hidden>
             <div class="nx-reports-grid">
               <div class="nx-report-card">
@@ -445,45 +569,45 @@
           </div>
         </section>
 
-        <!-- Room 4: Potion Workshop (Connected in Phase 4/5) -->
+        <!-- File Organizer (Screen scheduled after Dashboard approval) -->
         <section class="nx-room-view" data-room-panel="potion-workshop" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
-              <h2 class="nx-card-title">Potion Workshop</h2>
-              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+              <h2 class="nx-card-title">File Organizer</h2>
+              <button class="nx-btn" type="button" data-room-target="dashboard">← Back to Dashboard</button>
             </div>
-            <p class="nx-muted">Workshop loft ready. Full AI scan progress, preview table, Approve/Reject, and SHA-256 move workflow connect in Phase 4 &amp; 5.</p>
+            <p class="nx-muted">Ready for migration after Dashboard review: Preview plan, Approve, Reject, and SHA-256 verified moves.</p>
           </div>
         </section>
 
-        <!-- Room 5: Memory Room (Connected in Phase 4/5) -->
+        <!-- Activity & History (Screen scheduled after Dashboard approval) -->
         <section class="nx-room-view" data-room-panel="memory-room" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
-              <h2 class="nx-card-title">Memory Room</h2>
-              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+              <h2 class="nx-card-title">Activity &amp; History</h2>
+              <button class="nx-btn" type="button" data-room-target="dashboard">← Back to Dashboard</button>
             </div>
-            <p class="nx-muted">Attic study ready. Run history &amp; scan log timeline connect in Phase 4 &amp; 5.</p>
+            <p class="nx-muted">Ready for migration after Dashboard review: full run log and scan history view.</p>
           </div>
         </section>
 
-        <!-- Room 6: Secret Vault (Connected in Phase 4/5) -->
+        <!-- Settings & Privacy (Screen scheduled after Dashboard approval) -->
         <section class="nx-room-view" data-room-panel="secret-vault" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
-              <h2 class="nx-card-title">Secret Vault</h2>
-              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+              <h2 class="nx-card-title">Settings &amp; Privacy</h2>
+              <button class="nx-btn" type="button" data-room-target="dashboard">← Back to Dashboard</button>
             </div>
-            <p class="nx-muted">Root vault ready. Full-run Undo &amp; corrupt backup inspection connect in Phase 4 &amp; 5.</p>
+            <p class="nx-muted">Ready for migration after Dashboard review: full-run Undo recovery and corrupt backup inspection.</p>
           </div>
         </section>
 
-        <!-- Room 7: Crystal Chamber -->
+        <!-- Crystal Chamber (Restricted policy disclosure) -->
         <section class="nx-room-view" data-room-panel="crystal-chamber" hidden>
           <div class="nx-card">
             <div class="nx-card-header">
-              <h2 class="nx-card-title">Crystal Chamber — Safety Policy</h2>
-              <button class="nx-btn" data-room-target="treehouse">← Back to Treehouse</button>
+              <h2 class="nx-card-title">Safety &amp; Restrictions Policy</h2>
+              <button class="nx-btn" type="button" data-room-target="dashboard">← Back to Dashboard</button>
             </div>
             <div class="nx-banner-safe">
               <p id="crystal-summary" style="margin-top: 0; font-weight: 700;"></p>
@@ -494,25 +618,14 @@
       </main>
     </div>
 
-    <!-- Status Bar & Safety Rule Footer -->
+    <!-- Bottom Status Bar & Safety Footer -->
     <footer class="nx-statusbar">
       <span id="status-text">Connecting to Nexora Python bridge...</span>
       <span id="safety-footer" class="nx-safety-footer">Files are moved, not copied. Nothing is deleted.</span>
     </footer>
   </div>
 
-  <!-- Non-blocking Multi-Expression Woodland Fairy Corner Dock -->
-  <div id="fairy-dock" class="nx-fairy-dock nx-fairy-state-idle" data-mood="idle" aria-live="polite">
-    <div id="fairy-bubble" class="nx-fairy-bubble">
-      <button id="fairy-close-btn" class="nx-fairy-close" title="Hide speech bubble" aria-label="Hide fairy tip">×</button>
-      <span id="fairy-bubble-text">Welcome to the Living Treehouse! Hover any cozy window or door to explore, or use the sidebar.</span>
-    </div>
-    <button id="fairy-toggle-btn" class="nx-fairy-btn nx-fairy-float" title="Click woodland fairy for help">
-      <span id="fairy-avatar-slot"></span>
-    </button>
-  </div>
-
-  <!-- Explicit Confirmation Modal for Photo Garden Identity Actions -->
+  <!-- Explicit Confirmation Modal for Identity Operations -->
   <div id="garden-confirm-modal" class="nx-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="garden-modal-title" hidden>
     <div class="nx-modal-dialog">
       <h3 id="garden-modal-title" class="nx-card-title" style="margin-top: 0;">Confirm Action</h3>
@@ -526,8 +639,6 @@
   </div>
 
   <script defer src="/static/js/api.js"></script>
-  <script defer src="/static/js/fairy.js"></script>
-  <script defer src="/static/js/scene.js"></script>
   <script defer src="/static/js/library.js"></script>
   <script defer src="/static/js/garden.js"></script>
   <script defer src="/static/js/router.js"></script>

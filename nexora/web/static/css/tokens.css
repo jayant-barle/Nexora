@@ -1,50 +1,60 @@
-/* NEXORA — Magical World Design Tokens
- * Storybook forest palette inspired by hand-drawn 2D fantasy worlds.
- */
+/* NEXORA — Obsidian Lavender Design Tokens (Balanced Premium Dark SaaS) */
 
 :root {
   /* Core Palette */
-  --nx-forest: #315B3B;
-  --nx-forest-deep: #214029;
-  --nx-leaf: #8EBB70;
-  --nx-leaf-bright: #A7D485;
-  --nx-cream: #F4EBD5;
-  --nx-cream-soft: #FAF4E6;
-  --nx-wood: #79563C;
-  --nx-wood-dark: #4A3221;
-  --nx-ink: #322116;
-  --nx-sky: #A8D8E8;
-  --nx-sky-soft: #D7EFF7;
-  --nx-lavender: #B7A1DC;
-  --nx-lavender-soft: #E8DFFA;
-  --nx-gold: #E8C477;
-  --nx-gold-warm: #F5D993;
+  --nx-bg: #111015;
+  --nx-surface: #1B1921;
+  --nx-surface-raised: #292432;
+  --nx-surface-muted: #383244;
+  --nx-accent: #A78BFA;
+  --nx-accent-soft: #C9B8FF;
+  --nx-text: #F4F1F8;
+  --nx-text-secondary: #A6A1AE;
+  --nx-border: #383244;
 
-  /* Semantic Status */
-  --nx-good: #2E6F40;
-  --nx-warn: #B86B1B;
-  --nx-danger: #A63A32;
-  --nx-muted: #6C5A4B;
+  /* Semantic Status (Balanced for dark surfaces) */
+  --nx-good: #34D399;
+  --nx-good-bg: rgba(52, 211, 153, 0.12);
+  --nx-warn: #FBBF24;
+  --nx-warn-bg: rgba(251, 191, 36, 0.14);
+  --nx-danger: #F87171;
+  --nx-danger-bg: rgba(248, 113, 113, 0.14);
+  --nx-accent-bg: rgba(167, 139, 250, 0.14);
+
+  /* Compatibility Aliases for Recoverable Existing Screens */
+  --nx-forest: #292432;
+  --nx-forest-deep: #C9B8FF;
+  --nx-leaf: #A78BFA;
+  --nx-leaf-bright: rgba(167, 139, 250, 0.2);
+  --nx-cream: #1B1921;
+  --nx-cream-soft: #292432;
+  --nx-wood: #292432;
+  --nx-wood-dark: #111015;
+  --nx-ink: #383244;
+  --nx-sky: #1B1921;
+  --nx-sky-soft: #292432;
+  --nx-lavender: #A78BFA;
+  --nx-lavender-soft: rgba(167, 139, 250, 0.16);
+  --nx-gold: #C9B8FF;
+  --nx-gold-warm: rgba(251, 191, 36, 0.18);
+  --nx-muted: #A6A1AE;
 
   /* Typography */
-  --nx-font-display: "Trebuchet MS", "Segoe UI Rounded", "Segoe UI", system-ui, sans-serif;
+  --nx-font-display: "Segoe UI", system-ui, -apple-system, sans-serif;
   --nx-font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
   --nx-font-mono: Consolas, "Cascadia Mono", monospace;
 
-  /* Organic Cartoon Borders & Radii */
-  --nx-radius-sm: 10px;
-  --nx-radius-md: 16px;
-  --nx-radius-lg: 24px;
+  /* Radii, Borders & Subtle Elevation */
+  --nx-radius-sm: 8px;
+  --nx-radius-md: 12px;
+  --nx-radius-lg: 14px;
   --nx-radius-pill: 999px;
-  --nx-outline: 2.5px solid var(--nx-ink);
-  --nx-outline-soft: 2px solid rgba(50, 33, 22, 0.22);
-
-  /* Storybook Layered Shadows */
-  --nx-shadow-card: 0 5px 0 rgba(50, 33, 22, 0.16), 0 12px 24px rgba(33, 64, 41, 0.12);
-  --nx-shadow-btn: 0 3px 0 var(--nx-wood-dark);
-  --nx-shadow-float: 0 10px 26px rgba(33, 64, 41, 0.2);
+  --nx-outline: 1px solid var(--nx-border);
+  --nx-outline-soft: 1px solid var(--nx-border);
+  --nx-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.24);
+  --nx-shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.35);
 
   /* Layout */
-  --nx-sidebar-w: 244px;
-  --nx-topbar-h: 58px;
+  --nx-sidebar-w: 248px;
+  --nx-topbar-h: 64px;
 }
