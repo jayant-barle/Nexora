@@ -31,24 +31,12 @@ except Exception:
 from nexora.faces.groups import FaceClusterManager, get_runs_dir
 from nexora.faces.people import PeopleManager
 from nexora.metadata import capture_date
-from nexora.mover import run_plan
+from nexora.mover import create_unique_run_folder, format_size as _format_size, run_plan
 from nexora.names import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, extract_name, is_image_or_video
 from nexora.plan import PlannedMove, build_plan
 from nexora.undo import find_latest_active_run_log, undo_run
 
 SAFETY_FOOTER_TEXT = "Files are moved, not copied. Nothing is deleted."
-
-
-def _format_size(size_bytes: int) -> str:
-    """Format byte size for human display (KB, MB, GB)."""
-    kb = size_bytes / 1024.0
-    if kb < 1024.0:
-        return f"{kb:.1f} KB"
-    mb = kb / 1024.0
-    if mb < 1024.0:
-        return f"{mb:.1f} MB"
-    gb = mb / 1024.0
-    return f"{gb:.1f} GB"
 
 
 def _read_app_version() -> str:
@@ -108,6 +96,7 @@ class NexoraBridgeApi:
         )
 
         self._faces_lock = threading.RLock()
+        self._last_faces_stat = self._read_faces_stat()
         self._job_lock = threading.Lock()
         self._scan_stop_event: threading.Event | None = None
         self._fresh_scan_in_session = False
@@ -143,7 +132,7 @@ class NexoraBridgeApi:
             visible = self._people_manager.get_visible_groups()
             m_scanned = len(self._cluster_manager.cache)
             return f"Found {len(visible)} people from {m_scanned} scanned images"
-        return "Ready inside the Living Treehouse"
+        return "Ready"
 
     def _validate_clean_path_input(self, raw_path: str) -> Path:
         """Validate path string contains no null bytes and resolves cleanly."""
@@ -159,11 +148,22 @@ class NexoraBridgeApi:
         with self._job_lock:
             return bool(self._job_state["running"] and self._job_state["kind"] == "scan")
 
+    def _read_faces_stat(self) -> tuple[int, int] | None:
+        try:
+            st = self._cluster_manager.json_path.stat()
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
+
     def _reload_faces_if_idle(self) -> None:
-        # Skip reloading faces.json while scan_source holds unsaved checkpoints in memory
+        # Skip reloading faces.json while scan_source holds unsaved checkpoints or file stat is unchanged
         if not self._is_scan_running():
             with self._faces_lock:
+                curr_stat = self._read_faces_stat()
+                if curr_stat is not None and curr_stat == self._last_faces_stat:
+                    return
                 self._cluster_manager.load()
+                self._last_faces_stat = self._read_faces_stat()
 
     def _find_latest_active_run_log(self) -> Path | None:
         """Find newest non-empty run_<ts>/run.log that has not already been undone."""
@@ -396,6 +396,11 @@ class NexoraBridgeApi:
 
         recent_logs = self.list_activity_logs().get("entries", [])[:6]
         app_state = self.get_app_state()
+        size_label = (
+            "Unknown"
+            if len(cache_items) > 0 and total_cached_bytes == 0
+            else _format_size(total_cached_bytes)
+        )
 
         return {
             "ok": True,
@@ -403,7 +408,7 @@ class NexoraBridgeApi:
             "indexed_images": cached_images,
             "indexed_videos": cached_videos,
             "indexed_bytes": total_cached_bytes,
-            "indexed_size_formatted": _format_size(total_cached_bytes),
+            "indexed_size_formatted": size_label,
             "visible_people": len(visible_groups),
             "named_people": named_people,
             "unnamed_people": unnamed_people,
@@ -418,10 +423,17 @@ class NexoraBridgeApi:
     # Room 2: Magical Library (Top-level source file browser)
     # ------------------------------------------------------------------
 
-    def list_source_files(self, query: str = "", file_type: str = "all") -> dict[str, Any]:
+    def list_source_files(
+        self,
+        query: str = "",
+        file_type: str = "all",
+        page: int | None = None,
+        page_size: int = 60,
+    ) -> dict[str, Any]:
         """List top-level files in selected source directory (top-level scan only).
 
-        Supports search by filename and type filter ('all', 'image', 'video', 'other').
+        Supports search by filename, type filter ('all', 'image', 'video', 'other'),
+        and optional pagination (`page`, `page_size`) to avoid serializing huge directories.
         Subfolders are intentionally skipped per Nexora's top-level safety rule.
         """
         with self._state_lock:
@@ -435,6 +447,8 @@ class NexoraBridgeApi:
                 "files": [],
                 "total_top_level": 0,
                 "filtered_count": 0,
+                "page": 1,
+                "total_pages": 1,
                 "type_counts": {"all": 0, "image": 0, "video": 0, "other": 0},
                 "subfolders_skipped": 0,
                 "note": "Top-level files only. Subfolders are skipped by placement policy.",
@@ -451,12 +465,14 @@ class NexoraBridgeApi:
                 "files": [],
                 "total_top_level": 0,
                 "filtered_count": 0,
+                "page": 1,
+                "total_pages": 1,
                 "type_counts": {"all": 0, "image": 0, "video": 0, "other": 0},
                 "subfolders_skipped": 0,
                 "error": f"Could not read source folder: {err}",
             }
 
-        items: list[dict[str, Any]] = []
+        matched_entries: list[tuple[Path, str, str]] = []
         subfolders_skipped = 0
         total_files = 0
         type_counts = {"all": 0, "image": 0, "video": 0, "other": 0}
@@ -484,7 +500,22 @@ class NexoraBridgeApi:
                 continue
             if q and q not in entry.name.lower():
                 continue
+            matched_entries.append((entry, ftype, ext))
 
+        filtered_total = len(matched_entries)
+        if page is not None:
+            safe_size = max(1, min(int(page_size or 60), 200))
+            total_pages = max(1, (filtered_total + safe_size - 1) // safe_size)
+            safe_page = max(1, min(int(page or 1), total_pages))
+            start_idx = (safe_page - 1) * safe_size
+            slice_entries = matched_entries[start_idx : start_idx + safe_size]
+        else:
+            safe_page = 1
+            total_pages = 1
+            slice_entries = matched_entries
+
+        items: list[dict[str, Any]] = []
+        for entry, ftype, ext in slice_entries:
             try:
                 sz = entry.stat().st_size
             except OSError:
@@ -514,7 +545,9 @@ class NexoraBridgeApi:
             "source_dir": str(src),
             "files": items,
             "total_top_level": total_files,
-            "filtered_count": len(items),
+            "filtered_count": filtered_total,
+            "page": safe_page,
+            "total_pages": total_pages,
             "type_counts": type_counts,
             "subfolders_skipped": subfolders_skipped,
             "note": "Top-level files only. Subfolders are skipped by placement policy.",
@@ -672,32 +705,48 @@ class NexoraBridgeApi:
     # ------------------------------------------------------------------
 
     def _lookup_cache_and_faces(
-        self, resolved: Path, group_sizes: dict[str, int] | None = None, unnamed_nums: dict[str, str] | None = None
+        self,
+        resolved: Path,
+        group_sizes: dict[str, int] | None = None,
+        unnamed_nums: dict[str, str] | None = None,
+        *,
+        cache_by_norm: dict[str, dict[str, Any]] | None = None,
+        file_groups_norm: dict[str, list[str]] | None = None,
+        unreadable_norm: set[str] | None = None,
+        groups_by_id: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Look up existing faces.json cache, unreadable status, and labels for one resolved path."""
         resolved_key = str(resolved)
         norm_key = os.path.normcase(resolved_key)
 
-        cache_entry = self._cluster_manager.cache.get(resolved_key)
-        if cache_entry is None:
-            for k, val in self._cluster_manager.cache.items():
-                if os.path.normcase(k) == norm_key:
-                    cache_entry = val
-                    break
+        if cache_by_norm is not None:
+            cache_entry = cache_by_norm.get(norm_key)
+        else:
+            cache_entry = self._cluster_manager.cache.get(resolved_key)
+            if cache_entry is None:
+                cache_entry = next(
+                    (val for k, val in self._cluster_manager.cache.items() if os.path.normcase(k) == norm_key),
+                    None,
+                )
 
-        is_unreadable = resolved_key in self._cluster_manager.unreadable or any(
-            os.path.normcase(u) == norm_key for u in self._cluster_manager.unreadable
-        )
+        if unreadable_norm is not None:
+            is_unreadable = norm_key in unreadable_norm
+        else:
+            is_unreadable = resolved_key in self._cluster_manager.unreadable or any(
+                os.path.normcase(u) == norm_key for u in self._cluster_manager.unreadable
+            )
         if cache_entry and cache_entry.get("status") == "could not read":
             is_unreadable = True
 
-        matched_gids = self._people_manager.file_groups.get(resolved_key)
-        if matched_gids is None:
-            matched_gids = []
-            for k, gids in self._people_manager.file_groups.items():
-                if os.path.normcase(k) == norm_key:
-                    matched_gids = gids
-                    break
+        if file_groups_norm is not None:
+            matched_gids = file_groups_norm.get(norm_key, [])
+        else:
+            matched_gids = self._people_manager.file_groups.get(resolved_key)
+            if matched_gids is None:
+                matched_gids = next(
+                    (gids for k, gids in self._people_manager.file_groups.items() if os.path.normcase(k) == norm_key),
+                    [],
+                )
 
         if group_sizes is None:
             group_sizes = self._people_manager.get_group_sizes()
@@ -706,7 +755,11 @@ class NexoraBridgeApi:
 
         people_labels: list[str] = []
         for gid in matched_gids:
-            grp = next((g for g in self._cluster_manager.groups if g.get("id") == gid), None)
+            grp = (
+                groups_by_id.get(gid)
+                if groups_by_id is not None
+                else next((g for g in self._cluster_manager.groups if g.get("id") == gid), None)
+            )
             if not grp:
                 continue
             label = grp.get("display_name") or grp.get("name") or unnamed_nums.get(gid, "Unnamed person")
@@ -762,6 +815,10 @@ class NexoraBridgeApi:
             self._reload_faces_if_idle()
             group_sizes = self._people_manager.get_group_sizes()
             unnamed_nums = self._people_manager.get_unnamed_numbering(group_sizes=group_sizes)
+            cache_by_norm = {os.path.normcase(k): v for k, v in self._cluster_manager.cache.items()}
+            file_groups_norm = {os.path.normcase(k): gids for k, gids in self._people_manager.file_groups.items()}
+            unreadable_norm = {os.path.normcase(u) for u in self._cluster_manager.unreadable}
+            groups_by_id = {g["id"]: g for g in self._cluster_manager.groups if isinstance(g, dict) and g.get("id")}
 
             try:
                 src_resolved = src.resolve()
@@ -797,7 +854,15 @@ class NexoraBridgeApi:
                         unsupported_count += 1
                     continue
 
-                info = self._lookup_cache_and_faces(resolved, group_sizes=group_sizes, unnamed_nums=unnamed_nums)
+                info = self._lookup_cache_and_faces(
+                    resolved,
+                    group_sizes=group_sizes,
+                    unnamed_nums=unnamed_nums,
+                    cache_by_norm=cache_by_norm,
+                    file_groups_norm=file_groups_norm,
+                    unreadable_norm=unreadable_norm,
+                    groups_by_id=groups_by_id,
+                )
                 counts["all"] += 1
                 if info["is_unreadable"]:
                     counts["unreadable"] += 1
@@ -1046,6 +1111,7 @@ class NexoraBridgeApi:
         try:
             with self._faces_lock:
                 saved = self._people_manager.name_group(group_id, name)
+                self._last_faces_stat = self._read_faces_stat()
             return {"ok": True, "saved_name": saved}
         except ValueError as err:
             return {"ok": False, "error": str(err)}
@@ -1059,6 +1125,7 @@ class NexoraBridgeApi:
         try:
             with self._faces_lock:
                 orig_id, new_id = self._people_manager.split_group(group_id)
+                self._last_faces_stat = self._read_faces_stat()
             return {"ok": True, "original_id": orig_id, "new_id": new_id}
         except ValueError as err:
             return {"ok": False, "error": str(err)}
@@ -1123,6 +1190,7 @@ class NexoraBridgeApi:
             merged_ok = self._people_manager.merge_groups(
                 target_group_id, source_group_id, is_automatic=False
             )
+            self._last_faces_stat = self._read_faces_stat()
             return {"ok": bool(merged_ok), "target_group_id": target_group_id}
 
     def dismiss_suggested_merge(self, group_id_a: str, group_id_b: str) -> dict[str, Any]:
@@ -1138,6 +1206,7 @@ class NexoraBridgeApi:
             if group_id_a == group_id_b:
                 return {"ok": False, "error": "Cannot dismiss a group paired with itself."}
             self._people_manager.dismiss_merge(group_id_a, group_id_b)
+            self._last_faces_stat = self._read_faces_stat()
         return {"ok": True}
 
     # ------------------------------------------------------------------
@@ -1222,6 +1291,8 @@ class NexoraBridgeApi:
                     progress_callback=on_progress,
                     stop_event=self._scan_stop_event,
                 )
+                with self._faces_lock:
+                    self._last_faces_stat = self._read_faces_stat()
                 self._fresh_scan_in_session = True
                 msg = (
                     f"People scan complete: {summary['images_scanned']} files scanned, "
@@ -1332,12 +1403,7 @@ class NexoraBridgeApi:
         if not self._begin_job("move", "Moving files with SHA-256 verification..."):
             return {"ok": False, "error": "Another task is currently running."}
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_folder = self._runs_dir / f"run_{timestamp}"
-        suffix = 1
-        while run_folder.exists():
-            run_folder = self._runs_dir / f"run_{timestamp}_{suffix}"
-            suffix += 1
+        run_folder = create_unique_run_folder(self._runs_dir)
         log_path = run_folder / "run.log"
 
         def worker() -> None:
@@ -1486,10 +1552,17 @@ class NexoraBridgeApi:
         def worker() -> None:
             try:
                 summary = undo_run(latest_log)
-                self._finish_job(
-                    f"Undo completed: {summary.get('restored')} files restored.",
-                    result=summary,
-                )
+                if summary.get("stopped"):
+                    self._finish_job(
+                        f"Undo stopped: {summary.get('reason')}",
+                        result=summary,
+                        error=summary.get("reason"),
+                    )
+                else:
+                    self._finish_job(
+                        f"Undo completed: {summary.get('restored')} files restored.",
+                        result=summary,
+                    )
             except Exception as err:
                 self._finish_job("Undo failed", error=str(err))
 

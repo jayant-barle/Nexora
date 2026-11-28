@@ -415,12 +415,20 @@ class PeopleManager:
                 if mf not in target_members:
                     target_members.append(mf)
 
-            # When merging into a named target, record target name in cm.face_names for moved faces
+            # When merging into an unnamed target, inherit confirmed name from source if present
             target_name = target_group.get("display_name") or target_group.get("name")
+            source_name = source_group.get("display_name") or source_group.get("name")
+            if not target_name and source_name:
+                target_group["name"] = source_group.get("name") or to_folder_name(source_name)
+                target_group["display_name"] = source_group.get("display_name") or source_name
+                target_group["needs_review"] = False
+                target_name = target_group["display_name"]
+
+            # Sync target name in cm.face_names for all member faces so it survives rescan
             if target_name:
                 if not hasattr(self.cm, "face_names"):
                     self.cm.face_names = {}
-                for mf in moved_faces:
+                for mf in set(target_members) | set(moved_faces):
                     self.cm.face_names[mf] = target_name
 
             crops = target_group.get("crop_paths", [])
@@ -476,19 +484,21 @@ class PeopleManager:
         For videos:
           {"video_person": person_display_name_if_matched}
         """
+        sizes = self.get_group_sizes()
+
         # Count total faces per named person across all groups sharing that name (case-insensitive)
         person_counts: dict[str, int] = {}
         for g in self.groups:
             folder_name = (g.get("name") or "").strip().lower()
             if folder_name:
-                person_counts[folder_name] = person_counts.get(folder_name, 0) + self.get_group_size(g["id"])
+                person_counts[folder_name] = person_counts.get(folder_name, 0) + sizes.get(g["id"], 0)
 
         group_person: dict[str, str | None] = {}
         for g in self.groups:
             gid = g["id"]
             pname = g.get("display_name") or g.get("name")
             folder_name = (g.get("name") or "").strip().lower()
-            size = self.get_group_size(gid)
+            size = sizes.get(gid, 0)
             needs_review = g.get("needs_review", False)
 
             # If marked needs review and not yet named or split by owner, withhold from automatic placement

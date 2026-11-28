@@ -31,6 +31,12 @@
     if (node) node.innerHTML = "";
   }
 
+  function toast(msg, kind) {
+    if (global.NexoraRouter && global.NexoraRouter.notify) {
+      global.NexoraRouter.notify(msg, kind);
+    }
+  }
+
   /* ------------------------------------------------------------------
    * Storybook Confirmation Modal (Explicit Approval for Name/Split/Merge)
    * ------------------------------------------------------------------ */
@@ -175,9 +181,9 @@
         refreshPeopleAndReports();
         if (state.activeTab === "gallery") refreshGallery(true);
         if (job.kind === "scan" && job.error) {
-          if (global.NexoraFairy) global.NexoraFairy.say("Scan stopped with error: " + job.error, "error");
+          toast("Scan stopped with error: " + job.error, "error");
         } else if (job.kind === "scan" && job.last_result) {
-          if (global.NexoraFairy) global.NexoraFairy.say(job.status_text || "Scan complete!", "celebrate");
+          toast(job.status_text || "Scan complete!", "celebrate");
         }
       }
       return job;
@@ -199,12 +205,10 @@
         if (startBtn) startBtn.disabled = false;
         var errMsg = (res && res.error) || "Unable to start scan.";
         if (el("garden-scan-status-text")) el("garden-scan-status-text").textContent = errMsg;
-        if (global.NexoraFairy) global.NexoraFairy.say(errMsg, "error");
+        toast(errMsg, "error");
         return;
       }
-      if (global.NexoraFairy) {
-        global.NexoraFairy.say("Scanning top-level photos and videos for people...", "working");
-      }
+      toast("Scanning top-level photos and videos for people...", "info");
       pollScanStatusOnce();
       startScanPolling();
     }).catch(function (err) {
@@ -312,10 +316,10 @@
         global.NexoraApi.call("dismiss_suggested_merge", sug.group_a_id, sug.group_b_id)
           .then(function (res) {
             if (!res || !res.ok) {
-              if (global.NexoraFairy) global.NexoraFairy.say((res && res.error) || "Dismiss failed.", "error");
+              toast((res && res.error) || "Dismiss failed.", "error");
               return;
             }
-            if (global.NexoraFairy) global.NexoraFairy.say("Suggestion dismissed and remembered.", "idle");
+            toast("Suggestion dismissed and remembered.", "info");
             refreshPeopleAndReports();
           });
       });
@@ -335,7 +339,7 @@
   function requestNameGroup(cardData, rawInputName) {
     var trimmed = (rawInputName || "").trim();
     if (!trimmed) {
-      if (global.NexoraFairy) global.NexoraFairy.say("Enter a person's name before saving.", "error");
+      toast("Enter a person's name before saving.", "error");
       return;
     }
     var currentLabel = cardData.assigned_name
@@ -353,12 +357,10 @@
         global.NexoraApi.call("name_group", cardData.id, trimmed).then(function (res) {
           closeModal();
           if (!res || !res.ok) {
-            if (global.NexoraFairy) global.NexoraFairy.say((res && res.error) || "Invalid name.", "error");
+            toast((res && res.error) || "Invalid name.", "error");
             return;
           }
-          if (global.NexoraFairy) {
-            global.NexoraFairy.say("Saved confirmed identity \"" + res.saved_name + "\"!", "celebrate");
-          }
+          toast("Saved confirmed identity \"" + res.saved_name + "\".", "celebrate");
           refreshPeopleAndReports();
           if (state.activeTab === "gallery") refreshGallery(true);
         });
@@ -375,12 +377,10 @@
         global.NexoraApi.call("split_group", cardData.id).then(function (res) {
           closeModal();
           if (!res || !res.ok) {
-            if (global.NexoraFairy) global.NexoraFairy.say((res && res.error) || "Could not split group.", "error");
+            toast((res && res.error) || "Could not split group.", "error");
             return;
           }
-          if (global.NexoraFairy) {
-            global.NexoraFairy.say("Split into " + res.original_id + " and " + res.new_id + ".", "curious");
-          }
+          toast("Split into " + res.original_id + " and " + res.new_id + ".", "info");
           refreshPeopleAndReports();
         });
       }
@@ -391,7 +391,7 @@
     if (!targetGroupId || !sourceGroupId) return;
     global.NexoraApi.call("check_merge_guard", targetGroupId, sourceGroupId).then(function (guard) {
       if (!guard || !guard.ok) {
-        if (global.NexoraFairy) global.NexoraFairy.say((guard && guard.error) || "Cannot merge these groups.", "error");
+        toast((guard && guard.error) || "Cannot merge these groups.", "error");
         return;
       }
 
@@ -409,12 +409,10 @@
             .then(function (res) {
               closeModal();
               if (!res || !res.ok) {
-                if (global.NexoraFairy) global.NexoraFairy.say((res && res.error) || "Merge aborted.", "error");
+                toast((res && res.error) || "Merge aborted.", "error");
                 return;
               }
-              if (global.NexoraFairy) {
-                global.NexoraFairy.say("Merged groups into " + guard.target_name + ".", "celebrate");
-              }
+              toast("Merged groups into " + guard.target_name + ".", "celebrate");
               refreshPeopleAndReports();
             });
         }

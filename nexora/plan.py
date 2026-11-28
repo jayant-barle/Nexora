@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -72,6 +73,34 @@ def resolve_collision(
     return candidate
 
 
+def _build_norm_path_lookup(mapping: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize full-path keys cleanly using os.path.normcase while preserving exact fallback keys."""
+    if not mapping:
+        return {}
+    return {os.path.normcase(k): v for k, v in mapping.items()}
+
+
+def _lookup_path_entry(
+    mapping: dict[str, Any] | None,
+    norm_mapping: dict[str, Any],
+    file_path: Path,
+    resolved_str: str,
+) -> Any:
+    if not mapping:
+        return None
+    norm_res = os.path.normcase(resolved_str)
+    norm_raw = os.path.normcase(str(file_path))
+    if norm_res in norm_mapping:
+        return norm_mapping[norm_res]
+    if norm_raw in norm_mapping:
+        return norm_mapping[norm_raw]
+    # Basename-only lookup is allowed strictly for synthetic basename-only keys (no path separators)
+    bare = mapping.get(file_path.name)
+    if bare is not None:
+        return bare
+    return None
+
+
 def build_plan(
     source: Path,
     dest: Path,
@@ -122,6 +151,8 @@ def build_plan(
     planned_moves: list[PlannedMove] = []
     reserved_targets: set[Path] = set()
     collision_counters: dict[tuple[Path, str, str], int] = {}
+    norm_face_data = _build_norm_path_lookup(face_data)
+    norm_face_map = _build_norm_path_lookup(face_map)
 
     # Scan only top-level files in source, ignore subfolders
     entries = sorted([p for p in source.iterdir() if p.is_file()], key=lambda p: p.name.lower())
@@ -151,11 +182,7 @@ def build_plan(
 
         # Check if Stage 4 face_data is provided
         if face_data is not None:
-            file_face_info = (
-                face_data.get(resolved_str)
-                or face_data.get(str(file_path))
-                or face_data.get(file_path.name)
-            )
+            file_face_info = _lookup_path_entry(face_data, norm_face_data, file_path, resolved_str)
 
             if is_video:
                 # Video placement in Stage 4
@@ -249,11 +276,7 @@ def build_plan(
                 else:
                     face_person = None
                     if face_map and file_path.suffix.lower() in IMAGE_EXTENSIONS:
-                        face_person = (
-                            face_map.get(resolved_str)
-                            or face_map.get(str(file_path))
-                            or face_map.get(file_path.name)
-                        )
+                        face_person = _lookup_path_entry(face_map, norm_face_map, file_path, resolved_str)
 
                     if face_person:
                         folder_rel = Path(face_person)

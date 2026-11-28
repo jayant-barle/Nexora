@@ -1617,6 +1617,58 @@ body {
   margin-top: 16px;
 }
 
+/* Toast Notifications */
+.nx-toast-region {
+  position: fixed;
+  right: 22px;
+  bottom: 44px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+.nx-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--nx-card-raised);
+  border: 1px solid var(--nx-border);
+  border-left: 3px solid var(--nx-accent);
+  color: var(--nx-text);
+  font-size: 12.5px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.6);
+}
+
+.nx-toast.is-error {
+  border-left-color: var(--nx-danger);
+  background: #281B1D;
+}
+
+.nx-toast.is-good {
+  border-left-color: var(--nx-success);
+}
+
+.nx-toast-close {
+  background: transparent;
+  border: none;
+  color: var(--nx-text-secondary);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.nx-toast-close:hover {
+  color: var(--nx-text);
+}
+
 /* Status Bar */
 .nx-statusbar {
   min-width: 0;

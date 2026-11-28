@@ -15,6 +15,9 @@
     sourceDir: "",
     files: [],
     totalTopLevel: 0,
+    totalMatching: 0,
+    totalPages: 1,
+    serverPaginated: false,
     subfoldersSkipped: 0,
     typeCounts: { all: 0, image: 0, video: 0, other: 0 },
     selectedPath: null,
@@ -89,8 +92,8 @@
         el("lib-desk-error").hidden = false;
         el("lib-desk-error").textContent = (res && res.error) || "Unable to inspect file metadata.";
       }
-      if (global.NexoraFairy) {
-        global.NexoraFairy.say((res && res.error) || "Hmm, I could not open that scroll.", "error");
+      if (global.NexoraRouter && global.NexoraRouter.notify) {
+        global.NexoraRouter.notify((res && res.error) || "Could not open file metadata.", "error");
       }
       return;
     }
@@ -147,13 +150,6 @@
     el("lib-meta-faces").textContent = scanText;
     el("lib-meta-rule").textContent = f.placement_summary || "Unsorted";
     el("lib-meta-safety-note").textContent = res.safety_note || "";
-
-    if (global.NexoraFairy) {
-      global.NexoraFairy.say(
-        "Inspecting " + f.name + " (" + formatCategoryLabel(f.type).toLowerCase() + "). Files stay untouched here!",
-        "curious"
-      );
-    }
   }
 
   function inspectFile(filePath) {
@@ -222,7 +218,8 @@
     var prevBtn = el("lib-prev-page");
     var nextBtn = el("lib-next-page");
 
-    if (!state.hasSource || state.files.length === 0) {
+    var total = state.totalMatching || state.files.length;
+    if (!state.hasSource || total === 0 || state.files.length === 0) {
       if (summaryEl) {
         summaryEl.textContent = state.hasSource
           ? state.totalTopLevel + " top-level file(s) (" + state.subfoldersSkipped + " subfolder(s) skipped)"
@@ -232,14 +229,13 @@
       return;
     }
 
-    var total = state.files.length;
-    var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    var totalPages = state.totalPages || Math.max(1, Math.ceil(total / PAGE_SIZE));
     if (state.page > totalPages) state.page = totalPages;
     if (state.page < 1) state.page = 1;
 
     var startIdx = (state.page - 1) * PAGE_SIZE;
-    var endIdx = Math.min(total, startIdx + PAGE_SIZE);
-    var slice = state.files.slice(startIdx, endIdx);
+    var slice = state.serverPaginated ? state.files : state.files.slice(startIdx, startIdx + PAGE_SIZE);
+    var endIdx = startIdx + slice.length;
 
     if (summaryEl) {
       var skipText = state.subfoldersSkipped > 0
@@ -323,14 +319,14 @@
     var srcBadge = el("lib-source-badge");
     showShelfState("loading");
 
-    return global.NexoraApi.call("list_source_files", state.query, state.fileType)
+    return global.NexoraApi.call("list_source_files", state.query, state.fileType, state.page, PAGE_SIZE)
       .then(function (res) {
         if (!res || !res.ok) {
           updateCategoryCounts({ all: 0, image: 0, video: 0, other: 0 });
           showShelfState("error", (res && res.error) || "Could not load source folder.");
           resetDesk("Resolve the source folder error to inspect files.");
-          if (global.NexoraFairy && res && res.error) {
-            global.NexoraFairy.say(res.error, "error");
+          if (global.NexoraRouter && global.NexoraRouter.notify && res && res.error) {
+            global.NexoraRouter.notify(res.error, "error");
           }
           return res;
         }
@@ -339,6 +335,10 @@
         state.sourceDir = res.source_dir || "";
         state.files = res.files || [];
         state.totalTopLevel = res.total_top_level || 0;
+        state.totalMatching = typeof res.filtered_count === "number" ? res.filtered_count : state.files.length;
+        state.serverPaginated = typeof res.total_pages === "number";
+        state.totalPages = res.total_pages || Math.max(1, Math.ceil(state.totalMatching / PAGE_SIZE));
+        if (typeof res.page === "number") state.page = res.page;
         state.subfoldersSkipped = res.subfolders_skipped || 0;
         state.typeCounts = res.type_counts || {
           all: state.totalTopLevel,
@@ -433,17 +433,17 @@
       el("lib-prev-page").addEventListener("click", function () {
         if (state.page > 1) {
           state.page -= 1;
-          renderPage();
+          refreshLibrary(true);
         }
       });
     }
 
     if (el("lib-next-page")) {
       el("lib-next-page").addEventListener("click", function () {
-        var totalPages = Math.max(1, Math.ceil(state.files.length / PAGE_SIZE));
+        var totalPages = state.totalPages || Math.max(1, Math.ceil(state.files.length / PAGE_SIZE));
         if (state.page < totalPages) {
           state.page += 1;
-          renderPage();
+          refreshLibrary(true);
         }
       });
     }

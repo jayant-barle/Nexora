@@ -10,12 +10,13 @@ import multiprocessing
 import threading
 import time
 from datetime import datetime
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Any
 import cv2
 import numpy as np
 
+from nexora.mover import compute_sha256 as compute_file_sha256
 from nexora.names import is_image_or_video, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from nexora.faces.detect import (
     SCORE_THRESHOLD,
@@ -35,7 +36,11 @@ from nexora.faces.recognize import (
     embed_face,
     get_recognizer,
 )
-from nexora.faces.people import to_folder_name
+from nexora.faces.people import (
+    MERGE_GUARD_MAX_RATIO,
+    MERGE_GUARD_SMALL_CLUSTER_MAX,
+    to_folder_name,
+)
 
 # Named constants for drift mitigation and giant cluster safeguard
 MAX_REPRESENTATIVE_MEMBERS = 5  # M: freeze comparison representative after first M members to stop centroid drift
@@ -46,8 +51,6 @@ CLUSTER_CAP_MAX = 200           # Flag cluster as "needs review" if it exceeds 2
 CLUSTER_CAP_FLOOR = 20          # Floor threshold so small test clusters are not falsely flagged
 
 PASS2_ENABLED = False           # Turn pass 2 off by default; keep code for analysis and evaluation
-MERGE_GUARD_SMALL_CLUSTER_MAX = 3  # A cluster with <= 3 faces must not absorb a cluster > 2x its size
-MERGE_GUARD_MAX_RATIO = 2.0        # Max ratio of absorbed to absorber for small clusters
 
 
 def get_runs_dir() -> Path:
@@ -57,13 +60,48 @@ def get_runs_dir() -> Path:
     return Path(__file__).resolve().parent.parent.parent / "runs"
 
 
-def compute_file_sha256(path: Path) -> str:
-    """Compute SHA-256 of a file using 1 MB chunks."""
-    hasher = hashlib.sha256()
-    with open(path, "rb") as f:
-        while chunk := f.read(1024 * 1024):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+def _persist_face_records(
+    crops_dir: Path,
+    sha_prefix: str,
+    records: list[dict[str, Any]],
+    *,
+    filename_prefix: str = "crop_",
+    include_frame_idx: bool = False,
+) -> list[dict[str, Any]]:
+    """Save face crop thumbnails once and return JSON-serializable face records."""
+    serializable: list[dict[str, Any]] = []
+    for idx, r in enumerate(records):
+        crop_p = None
+        c_path = crops_dir / f"{filename_prefix}{sha_prefix}_{idx}.jpg"
+        cb = r.get("crop_bytes")
+        crop_arr = r.get("crop")
+        if cb:
+            try:
+                with open(c_path, "wb") as f_crop:
+                    f_crop.write(cb)
+                crop_p = str(c_path)
+            except Exception:
+                pass
+        elif crop_arr is not None:
+            try:
+                cv2.imwrite(str(c_path), crop_arr)
+                crop_p = str(c_path)
+            except Exception:
+                pass
+
+        entry: dict[str, Any] = {
+            "box": r["box"],
+            "box_w": r.get("box_w"),
+            "box_h": r.get("box_h"),
+            "score": r.get("score", 1.0),
+            "det_score": r.get("det_score", r.get("score", 1.0)),
+            "embedding": r["embedding"],
+            "crop_path": crop_p,
+        }
+        if include_frame_idx:
+            entry["frame_idx"] = r.get("frame_idx", 0)
+        serializable.append(entry)
+    return serializable
 
 
 def _worker_init(yunet_path_str: str | None, sface_path_str: str | None, score_threshold: float) -> None:
@@ -682,11 +720,12 @@ class FaceClusterManager:
         log_f = open(log_path, "w", encoding="utf-8")
 
         try:
-            # Separate candidates into cached (unchanged) and uncached
+            # Separate candidates into cached (unchanged) and uncached; hash size-matched files cleanly
             cached_tasks: list[tuple[Path, int, str, bool]] = []
             uncached_tasks: list[tuple[Path, int, str, bool]] = []
+            prep_items: list[tuple[Path, str, int, bool, dict | None]] = []
 
-            for prep_idx, p in enumerate(candidates, start=1):
+            for p in candidates:
                 if stop_event and stop_event.is_set():
                     break
                 resolved_key = str(p.resolve())
@@ -695,19 +734,37 @@ class FaceClusterManager:
                 except OSError:
                     curr_size = 0
                 is_video = p.suffix.lower() in VIDEO_EXTENSIONS
+                prep_items.append((p, resolved_key, curr_size, is_video, self.cache.get(resolved_key)))
 
-                cached_entry = self.cache.get(resolved_key)
-                if cached_entry and cached_entry.get("size") == curr_size:
+            def _hash_one(item: tuple[Path, str, int, bool, dict | None]) -> tuple[Path, str, int, bool, dict | None, str]:
+                p_obj, r_key, c_sz, is_vid, c_ent = item
+                return (p_obj, r_key, c_sz, is_vid, c_ent, compute_file_sha256(p_obj))
+
+            io_workers = max(1, min(4, max_workers or max(1, (os.cpu_count() or 2) - 1)))
+            if io_workers > 1 and len(prep_items) > 8:
+                with ThreadPoolExecutor(max_workers=io_workers) as hash_pool:
+                    for prep_idx in range(0, len(prep_items), 50):
+                        if stop_event and stop_event.is_set():
+                            break
+                        chunk = prep_items[prep_idx : prep_idx + 50]
+                        for p, resolved_key, curr_size, is_video, cached_entry, curr_sha in hash_pool.map(_hash_one, chunk):
+                            if cached_entry and cached_entry.get("size") == curr_size and cached_entry.get("sha256") == curr_sha:
+                                cached_tasks.append((p, curr_size, curr_sha, is_video))
+                            else:
+                                uncached_tasks.append((p, curr_size, curr_sha, is_video))
+                        if progress_callback:
+                            progress_callback(0, total_items, 0)
+            else:
+                for prep_idx, (p, resolved_key, curr_size, is_video, cached_entry) in enumerate(prep_items, start=1):
+                    if stop_event and stop_event.is_set():
+                        break
                     curr_sha = compute_file_sha256(p)
-                    if cached_entry.get("sha256") == curr_sha:
+                    if cached_entry and cached_entry.get("size") == curr_size and cached_entry.get("sha256") == curr_sha:
                         cached_tasks.append((p, curr_size, curr_sha, is_video))
                     else:
                         uncached_tasks.append((p, curr_size, curr_sha, is_video))
-                else:
-                    curr_sha = compute_file_sha256(p)
-                    uncached_tasks.append((p, curr_size, curr_sha, is_video))
-                if progress_callback and prep_idx % 50 == 0:
-                    progress_callback(0, total_items, 0)
+                    if progress_callback and prep_idx % 50 == 0:
+                        progress_callback(0, total_items, 0)
 
             # First, process cached hits quickly
             for p, curr_size, curr_sha, is_video in cached_tasks:
@@ -865,28 +922,13 @@ class FaceClusterManager:
                                             face_rec["frame_idx"] = frame_idx
                                             all_video_faces.append(face_rec)
 
-                                    serializable_faces = []
-                                    for f_idx, r in enumerate(all_video_faces):
-                                        crop_p = None
-                                        cb = r.get("crop_bytes")
-                                        if cb:
-                                            c_path = self.crops_dir / f"crop_vid_{curr_sha[:10]}_{f_idx}.jpg"
-                                            try:
-                                                with open(c_path, "wb") as f_crop:
-                                                    f_crop.write(cb)
-                                                crop_p = str(c_path)
-                                            except Exception:
-                                                pass
-                                        serializable_faces.append({
-                                            "box": r["box"],
-                                            "box_w": r.get("box_w"),
-                                            "box_h": r.get("box_h"),
-                                            "score": r["score"],
-                                            "det_score": r.get("det_score", r["score"]),
-                                            "embedding": r["embedding"],
-                                            "crop_path": crop_p,
-                                            "frame_idx": r.get("frame_idx", 0),
-                                        })
+                                    serializable_faces = _persist_face_records(
+                                        self.crops_dir,
+                                        curr_sha[:10],
+                                        all_video_faces,
+                                        filename_prefix="crop_vid_",
+                                        include_frame_idx=True,
+                                    )
                                     self.cache[resolved_key] = {
                                         "size": curr_size,
                                         "sha256": curr_sha,
@@ -909,27 +951,11 @@ class FaceClusterManager:
                                     face_records = result.get("faces", [])
                                     total_faces_found += len(face_records)
 
-                                    serializable_faces = []
-                                    for idx, r in enumerate(face_records):
-                                        crop_p = None
-                                        cb = r.get("crop_bytes")
-                                        if cb:
-                                            c_path = self.crops_dir / f"crop_{curr_sha[:10]}_{idx}.jpg"
-                                            try:
-                                                with open(c_path, "wb") as f_crop:
-                                                    f_crop.write(cb)
-                                                crop_p = str(c_path)
-                                            except Exception:
-                                                pass
-                                        serializable_faces.append({
-                                            "box": r["box"],
-                                            "box_w": r.get("box_w"),
-                                            "box_h": r.get("box_h"),
-                                            "score": r["score"],
-                                            "det_score": r.get("det_score", r["score"]),
-                                            "embedding": r["embedding"],
-                                            "crop_path": crop_p,
-                                        })
+                                    serializable_faces = _persist_face_records(
+                                        self.crops_dir,
+                                        curr_sha[:10],
+                                        face_records,
+                                    )
                                     self.cache[resolved_key] = {
                                         "size": curr_size,
                                         "sha256": curr_sha,
@@ -1012,25 +1038,7 @@ class FaceClusterManager:
             if (rec := _extract_face_record(img_bgr, face)) is not None
         ]
 
-        serializable_faces = []
-        for idx, r in enumerate(face_records):
-            crop_p = None
-            if r.get("crop") is not None:
-                c_path = self.crops_dir / f"crop_{sha256[:10]}_{idx}.jpg"
-                try:
-                    cv2.imwrite(str(c_path), r["crop"])
-                    crop_p = str(c_path)
-                except Exception:
-                    pass
-            serializable_faces.append({
-                "box": r["box"],
-                "box_w": r["box_w"],
-                "box_h": r["box_h"],
-                "score": r["score"],
-                "det_score": r["det_score"],
-                "embedding": r["embedding"],
-                "crop_path": crop_p,
-            })
+        serializable_faces = _persist_face_records(self.crops_dir, sha256[:10], face_records)
 
         self.cache[resolved_key] = {
             "size": size,
@@ -1066,26 +1074,13 @@ class FaceClusterManager:
                     if rec is not None:
                         all_video_faces.append(rec)
 
-            serializable_faces = []
-            for f_idx, r in enumerate(all_video_faces):
-                crop_p = None
-                if r.get("crop") is not None:
-                    c_path = self.crops_dir / f"crop_vid_{sha256[:10]}_{f_idx}.jpg"
-                    try:
-                        cv2.imwrite(str(c_path), r["crop"])
-                        crop_p = str(c_path)
-                    except Exception:
-                        pass
-                serializable_faces.append({
-                    "box": r["box"],
-                    "box_w": r["box_w"],
-                    "box_h": r["box_h"],
-                    "score": r["score"],
-                    "det_score": r["det_score"],
-                    "embedding": r["embedding"],
-                    "crop_path": crop_p,
-                    "frame_idx": r.get("frame_idx", 0),
-                })
+            serializable_faces = _persist_face_records(
+                self.crops_dir,
+                sha256[:10],
+                all_video_faces,
+                filename_prefix="crop_vid_",
+                include_frame_idx=True,
+            )
             self.cache[resolved_key] = {
                 "size": size,
                 "sha256": sha256,

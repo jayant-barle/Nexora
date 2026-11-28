@@ -130,3 +130,44 @@ def test_unnamed_numbering(tmp_path: Path):
     assert numbering["group_002"] == "Unnamed person 1"
     assert numbering["group_001"] == "Unnamed person 2"
     assert numbering["group_003"] == "Unnamed person 3"
+
+
+def test_merge_named_source_into_unnamed_target_preserves_name(tmp_path: Path):
+    """Merging a named source group into an unnamed target preserves the confirmed name."""
+    json_path = tmp_path / "runs" / "faces.json"
+    cm = FaceClusterManager(json_path=json_path)
+    cm.groups = [
+        {
+            "id": "group_001",
+            "name": None,
+            "display_name": None,
+            "member_faces": ["a.jpg:0"],
+            "representative_embedding": [],
+        },
+        {
+            "id": "group_002",
+            "name": "alice",
+            "display_name": "Alice",
+            "needs_review": True,
+            "member_faces": ["b.jpg:0"],
+            "representative_embedding": [],
+        },
+    ]
+    cm.file_groups = {
+        "a.jpg": ["group_001"],
+        "b.jpg": ["group_002"],
+    }
+    cm.face_names = {
+        "b.jpg:0": "Alice",
+    }
+    pm = PeopleManager(cm)
+    pm.merge_groups("group_001", "group_002")
+
+    assert len(cm.groups) == 1
+    assert cm.groups[0]["id"] == "group_001"
+    assert cm.groups[0]["name"] == "alice"
+    assert cm.groups[0]["display_name"] == "Alice"
+    assert cm.groups[0]["needs_review"] is False
+    assert cm.file_groups["b.jpg"] == ["group_001"]
+    assert cm.face_names["a.jpg:0"] == "Alice"
+    assert cm.face_names["b.jpg:0"] == "Alice"

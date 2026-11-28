@@ -251,3 +251,18 @@ def test_is_same_drive_fails_closed_on_error(tmp_path: Path, monkeypatch: pytest
 
     monkeypatch.setattr(Path, "resolve", broken_resolve)
     assert is_same_drive(tmp_path / "a.jpg", tmp_path / "b.jpg") is False
+
+
+def test_build_plan_matches_face_data_case_insensitively(tmp_path: Path) -> None:
+    src = tmp_path / "source"
+    dst = tmp_path / "dest"
+    src.mkdir()
+    dst.mkdir()
+
+    img = _create_image_with_date(src / "Photo_One.jpg")
+    face_data = {str(img.resolve()).upper(): {"faces": ["Alice"], "names": {"0": "Alice"}}}
+
+    plan = build_plan(src, dst, face_data=face_data)
+    assert len(plan) == 1
+    assert plan[0].matched_by == "Person: Alice"
+    assert plan[0].target == dst / "alice" / "Photo_One.jpg"

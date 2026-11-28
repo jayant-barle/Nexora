@@ -512,6 +512,37 @@
     }
   }
 
+  function notify(message, kind) {
+    var region = el("nx-toast-region");
+    if (!region || !message) return;
+    var toast = document.createElement("div");
+    toast.className = "nx-toast";
+    if (kind === "error") toast.classList.add("is-error");
+    else if (kind === "celebrate" || kind === "good") toast.classList.add("is-good");
+    toast.setAttribute("role", kind === "error" ? "alert" : "status");
+
+    var txt = document.createElement("span");
+    txt.textContent = String(message);
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "nx-toast-close";
+    closeBtn.setAttribute("aria-label", "Dismiss message");
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", function () {
+      toast.remove();
+    });
+
+    toast.appendChild(txt);
+    toast.appendChild(closeBtn);
+    region.appendChild(toast);
+    while (region.children.length > 4) {
+      region.removeChild(region.firstChild);
+    }
+    setTimeout(function () {
+      if (toast.parentNode) toast.remove();
+    }, kind === "error" ? 6000 : 4000);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     bindControls();
     navigateTo("dashboard");
@@ -521,5 +552,5 @@
     });
   });
 
-  global.NexoraRouter = { navigateTo: navigateTo, refreshAppState: refreshAppState };
+  global.NexoraRouter = { navigateTo: navigateTo, refreshAppState: refreshAppState, notify: notify };
 })(window);

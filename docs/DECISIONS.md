@@ -222,6 +222,11 @@
   - Updated `app.py` so launching without flags starts `nexora.web.app.main_web()` (HTML/CSS/JS PyWebView desktop UI) directly, while preserving classic Tkinter fallback under `--classic` (`--web` remains accepted).
 - 2026-11-28: Hover-Only Ambient Green Lighting refinement:
   - Removed persistent ambient radial lime glows and green light pools from `.nx-shell`, `.nx-kpi.is-lime-glow`, `.nx-glass-stage::before`, `.nx-glass-hero`, and `.nx-workspace-notice`, keeping cards charcoal/graphite at rest and revealing radial lime glow, layered hover shadows, and subtle border highlights strictly on `:hover` / `:focus-within` via CSS pseudo-elements (preserving functional lime icons, buttons, active sidebar indicator, progress rings, and chart gradients).
+- 2026-11-28: Codebase Audit Remediation:
+  - Updated `undo_run` (`nexora/undo.py`) to halt immediately on SHA-256 mismatch or `OSError` and skip writing `undone.json` until every restored file matches; surfaced stopped-run errors through `NexoraBridgeApi.execute_undo`.
+  - Preserved named source group identity (`name`, `display_name`, `needs_review=False`) in `PeopleManager.merge_groups` when merging into an unnamed group, and normalized Windows `face_data` / `face_map` path lookups (`os.path.normcase`) in `nexora/plan.py`.
+  - Replaced legacy removed `NexoraFairy` references in `garden.js` and `library.js` with accessible live-region toast notifications (`NexoraRouter.notify` / `#nx-toast-region`), added server-side `(page, page_size)` pagination in `list_source_files`, cached `runs/faces.json` by `(st_mtime_ns, st_size)` in `_reload_faces_if_idle`, and returned `"Unknown"` for omitted cache file sizes.
+  - Shared `format_size` / `create_unique_run_folder` (`nexora/mover.py`), face-detection rotation pass helper (`_detect_with_rotations`), Tkinter crop photo mtime cache (`_load_crop_photo`), and `ThreadPoolExecutor` SHA-256 scan-prep hashing; removed dead `fairy.js`, `scene.js`, `animations.css` and moved `pytest` to `requirements-dev.txt`.
 
 
 

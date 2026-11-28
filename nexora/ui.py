@@ -14,23 +14,11 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
 from nexora.plan import PlannedMove, build_plan
-from nexora.mover import run_plan
+from nexora.mover import create_unique_run_folder, format_size, run_plan
 from nexora.undo import find_latest_active_run_log as _find_latest_run_log, undo_run
 from nexora import theme
 from nexora.faces.groups import FaceClusterManager, get_runs_dir
 from nexora.faces.people import PeopleManager, validate_person_name
-
-
-def format_size(size_bytes: int) -> str:
-    """Format file size as KB, MB or GB with one decimal place."""
-    kb = size_bytes / 1024.0
-    if kb < 1024.0:
-        return f"{kb:.1f} KB"
-    mb = kb / 1024.0
-    if mb < 1024.0:
-        return f"{mb:.1f} MB"
-    gb = mb / 1024.0
-    return f"{gb:.1f} GB"
 
 
 def find_latest_active_run_log() -> Path | None:
@@ -74,6 +62,7 @@ class NexoraApp:
         self.scan_stop_event: threading.Event | None = None
 
         self.crop_photo_cache: list[ImageTk.PhotoImage] = []
+        self._crop_photo_by_key: dict[tuple[str, int], ImageTk.PhotoImage] = {}
         self.people_search_var = tk.StringVar(value="")
         self.people_sort_var = tk.StringVar(value="Largest first")
 
@@ -534,6 +523,24 @@ class NexoraApp:
         if selected_idx == 1:
             self.render_people_cards()
 
+    def _load_crop_photo(self, c_path: str) -> ImageTk.PhotoImage | None:
+        """Load and cache a 56x56 crop PhotoImage keyed by (path, mtime_ns) cleanly."""
+        if not c_path or not os.path.exists(c_path):
+            return None
+        try:
+            key = (c_path, os.stat(c_path).st_mtime_ns)
+            cached = self._crop_photo_by_key.get(key)
+            if cached is not None:
+                return cached
+            with Image.open(c_path) as raw_img:
+                tk_img = ImageTk.PhotoImage(raw_img.resize((56, 56)))
+            if len(self._crop_photo_by_key) > 1000:
+                self._crop_photo_by_key.clear()
+            self._crop_photo_by_key[key] = tk_img
+            return tk_img
+        except Exception:
+            return None
+
     def render_people_cards(self) -> None:
         """Render one card per face group with sample crops, naming, split, and merge."""
         self.cluster_manager.load()
@@ -606,14 +613,10 @@ class NexoraApp:
                 grp_a_frame.pack(side=tk.LEFT)
 
                 crop_a_path = s["group_a_crop"]
-                if crop_a_path and os.path.exists(crop_a_path):
-                    try:
-                        img_a = Image.open(crop_a_path).resize((56, 56))
-                        tk_img_a = ImageTk.PhotoImage(img_a)
-                        self.crop_photo_cache.append(tk_img_a)
-                        tk.Label(grp_a_frame, image=tk_img_a, bg="#E5E7EB", width=56, height=56).pack(side=tk.LEFT, padx=(0, 8))
-                    except Exception:
-                        pass
+                tk_img_a = self._load_crop_photo(crop_a_path)
+                if tk_img_a is not None:
+                    self.crop_photo_cache.append(tk_img_a)
+                    tk.Label(grp_a_frame, image=tk_img_a, bg="#E5E7EB", width=56, height=56).pack(side=tk.LEFT, padx=(0, 8))
 
                 info_a = tk.Frame(grp_a_frame, bg=theme.COLOR_BG)
                 info_a.pack(side=tk.LEFT)
@@ -636,14 +639,10 @@ class NexoraApp:
                 grp_b_frame.pack(side=tk.LEFT)
 
                 crop_b_path = s["group_b_crop"]
-                if crop_b_path and os.path.exists(crop_b_path):
-                    try:
-                        img_b = Image.open(crop_b_path).resize((56, 56))
-                        tk_img_b = ImageTk.PhotoImage(img_b)
-                        self.crop_photo_cache.append(tk_img_b)
-                        tk.Label(grp_b_frame, image=tk_img_b, bg="#E5E7EB", width=56, height=56).pack(side=tk.LEFT, padx=(0, 8))
-                    except Exception:
-                        pass
+                tk_img_b = self._load_crop_photo(crop_b_path)
+                if tk_img_b is not None:
+                    self.crop_photo_cache.append(tk_img_b)
+                    tk.Label(grp_b_frame, image=tk_img_b, bg="#E5E7EB", width=56, height=56).pack(side=tk.LEFT, padx=(0, 8))
 
                 info_b = tk.Frame(grp_b_frame, bg=theme.COLOR_BG)
                 info_b.pack(side=tk.LEFT)
@@ -842,15 +841,11 @@ class NexoraApp:
             crops_to_show = crop_paths[:6]
             if crops_to_show:
                 for c_path in crops_to_show:
-                    if os.path.exists(c_path):
-                        try:
-                            pil_img = Image.open(c_path).resize((56, 56))
-                            tk_img = ImageTk.PhotoImage(pil_img)
-                            self.crop_photo_cache.append(tk_img)
-                            lbl = tk.Label(crops_strip, image=tk_img, bg="#E5E7EB", width=56, height=56)
-                            lbl.pack(side=tk.LEFT, padx=(0, 6))
-                        except Exception:
-                            pass
+                    tk_img = self._load_crop_photo(c_path)
+                    if tk_img is not None:
+                        self.crop_photo_cache.append(tk_img)
+                        lbl = tk.Label(crops_strip, image=tk_img, bg="#E5E7EB", width=56, height=56)
+                        lbl.pack(side=tk.LEFT, padx=(0, 6))
             else:
                 tk.Label(
                     crops_strip,
@@ -1385,8 +1380,7 @@ class NexoraApp:
         self.status_var.set("Moving files...")
 
         runs_dir = get_runs_dir()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_folder = runs_dir / f"run_{timestamp}"
+        run_folder = create_unique_run_folder(runs_dir)
         log_path = run_folder / "run.log"
 
         def worker() -> None:

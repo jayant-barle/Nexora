@@ -719,3 +719,67 @@ def test_audit_fixes_midscan_locks_quality_metrics_and_sanitization(tmp_path: Pa
         assert unsaved_key in api._cluster_manager.cache
     finally:
         api._finish_job("Done")
+
+
+def test_list_source_files_pagination_and_size_unknown(tmp_path: Path) -> None:
+    """list_source_files supports server pagination and unknown cache size fallback."""
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    runs = tmp_path / "runs"
+    src.mkdir()
+    dst.mkdir()
+
+    for i in range(1, 6):
+        Image.new("RGB", (20, 20), color="navy").save(src / f"img_{i:02d}.jpg")
+
+    api = NexoraBridgeApi(runs_dir=runs)
+    assert api.set_folders(source_dir=str(src), dest_dir=str(dst))["ok"] is True
+
+    page2 = api.list_source_files(query="", file_type="all", page=2, page_size=2)
+    assert page2["ok"] is True
+    assert len(page2["files"]) == 2
+    assert page2["filtered_count"] == 5
+    assert page2["total_pages"] == 3
+    assert page2["page"] == 2
+    assert [item["name"] for item in page2["files"]] == ["img_03.jpg", "img_04.jpg"]
+
+    api._cluster_manager.cache[str((src / "img_01.jpg").resolve())] = {"type": "image", "faces": []}
+    hall = api.get_main_hall_summary()
+    assert hall["ok"] is True
+    assert hall["indexed_size_formatted"] == "Unknown"
+
+
+def test_reload_faces_if_idle_caches_stat_and_app_routing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_reload_faces_if_idle skips unchanged faces.json reads and app.py defaults to web UI."""
+    import runpy
+    import sys
+    from unittest.mock import patch
+
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    faces_json = runs / "faces.json"
+    faces_json.write_text('{"cache": {}, "groups": [], "file_groups": {}, "face_names": {}}', encoding="utf-8")
+
+    api = NexoraBridgeApi(runs_dir=runs)
+    with patch.object(api._cluster_manager, "load") as mock_load:
+        api._reload_faces_if_idle()
+        mock_load.assert_not_called()
+
+        faces_json.write_text('{"cache": {"a.jpg": {"faces": []}}, "groups": [], "file_groups": {}, "face_names": {}}', encoding="utf-8")
+        api._reload_faces_if_idle()
+        mock_load.assert_called_once()
+
+    called: list[str] = []
+    monkeypatch.setattr("nexora.web.app.main_web", lambda: called.append("web"))
+    monkeypatch.setattr("nexora.ui.main", lambda: called.append("classic"))
+    monkeypatch.setattr(sys, "argv", ["app.py"])
+    with pytest.raises(SystemExit) as exc_web:
+        runpy.run_path(str(Path(app_entry.__file__)), run_name="__main__")
+    assert exc_web.value.code == 0
+    monkeypatch.setattr(sys, "argv", ["app.py", "--classic"])
+    with pytest.raises(SystemExit) as exc_classic:
+        runpy.run_path(str(Path(app_entry.__file__)), run_name="__main__")
+    assert exc_classic.value.code == 0
+    assert called == ["web", "classic"]
