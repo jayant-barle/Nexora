@@ -119,15 +119,6 @@ def passes_quality_filter(
     if h > max_aspect * w or w > max_aspect * h:
         return False
     return True
-    w = float(face[2])
-    h = float(face[3])
-    if w < min_size or h < min_size:
-        return False
-    if w <= 0 or h <= 0:
-        return False
-    if h > max_aspect * w or w > max_aspect * h:
-        return False
-    return True
 
 
 def _invert_scale(faces: list[np.ndarray], scale_x: float, scale_y: float) -> list[np.ndarray]:

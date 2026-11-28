@@ -5,7 +5,7 @@ import pytest
 
 from nexora.plan import build_plan
 from nexora.mover import run_plan, compute_sha256
-from nexora.undo import undo_run
+from nexora.undo import find_latest_active_run_log, undo_run
 
 
 def test_undo_restores_every_file_from_run(tmp_path: Path) -> None:
@@ -93,3 +93,20 @@ def test_undo_skips_file_whose_original_path_is_now_taken(tmp_path: Path) -> Non
     assert orig_file.read_text(encoding="utf-8") == "interfering new file created after run"
     assert moved_target.exists()
     assert moved_target.read_text(encoding="utf-8") == "original content"
+
+
+def test_find_latest_active_run_log_skips_empty_logs(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    (runs / "face_crops" / "run.log").parent.mkdir(parents=True)
+    (runs / "face_crops" / "run.log").write_text('{"x": 1}\n', encoding="utf-8")
+
+    older = runs / "run_20260101_000001"
+    older.mkdir(parents=True)
+    (older / "run.log").write_text('{"original": "a", "moved_to": "b", "sha256": "0"}\n', encoding="utf-8")
+
+    newer_empty = runs / "run_20260102_000001"
+    newer_empty.mkdir(parents=True)
+    (newer_empty / "run.log").write_text("", encoding="utf-8")
+
+    found = find_latest_active_run_log(runs)
+    assert found == older / "run.log"

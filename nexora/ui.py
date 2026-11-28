@@ -15,9 +15,9 @@ from PIL import Image, ImageTk
 
 from nexora.plan import PlannedMove, build_plan
 from nexora.mover import run_plan
-from nexora.undo import undo_run
+from nexora.undo import find_latest_active_run_log as _find_latest_run_log, undo_run
 from nexora import theme
-from nexora.faces.groups import FaceClusterManager
+from nexora.faces.groups import FaceClusterManager, get_runs_dir
 from nexora.faces.people import PeopleManager, validate_person_name
 
 
@@ -33,26 +33,9 @@ def format_size(size_bytes: int) -> str:
     return f"{gb:.1f} GB"
 
 
-def get_runs_dir() -> Path:
-    """Get the runs directory path next to app.py or executable."""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent / "runs"
-    return Path(__file__).resolve().parent.parent / "runs"
-
-
 def find_latest_active_run_log() -> Path | None:
-    """Find the latest run log that has not been undone."""
-    runs_dir = get_runs_dir()
-    if not runs_dir.exists():
-        return None
-
-    run_dirs = sorted([d for d in runs_dir.iterdir() if d.is_dir()], key=lambda d: d.name, reverse=True)
-    for rdir in run_dirs:
-        log_file = rdir / "run.log"
-        undone_file = rdir / "undone.json"
-        if log_file.exists() and not undone_file.exists():
-            return log_file
-    return None
+    """Find the latest non-empty run log that has not been undone."""
+    return _find_latest_run_log(get_runs_dir())
 
 
 class NexoraApp:

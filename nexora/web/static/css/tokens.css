@@ -1,0 +1,82 @@
+/* NEXORA — Dark 3D Glassmorphism + Electric Lime Design Tokens */
+
+:root {
+  /* Core Palette */
+  --nx-bg: #080909;
+  --nx-sidebar: #101210;
+  --nx-surface: #151816;
+  --nx-card: #202321;
+  --nx-card-raised: #292D2A;
+  --nx-border: #343936;
+
+  /* Electric Lime Branding */
+  --nx-accent: #B5FF3B;
+  --nx-accent-start: #75CB32;
+  --nx-accent-end: #D2FF70;
+
+  /* Typography */
+  --nx-text: #F5F7F2;
+  --nx-text-secondary: #929793;
+
+  /* Semantic Status */
+  --nx-success: #8FEA88;
+  --nx-warning: #E7B95E;
+  --nx-danger: #E47F7F;
+
+  /* Surface & Semantic Aliases */
+  --nx-surface-raised: var(--nx-card-raised);
+  --nx-surface-muted: #2E3330;
+  --nx-accent-soft: var(--nx-accent-end);
+  --nx-good: var(--nx-success);
+  --nx-warn: var(--nx-warning);
+  --nx-good-bg: rgba(143, 234, 136, 0.12);
+  --nx-warn-bg: rgba(231, 185, 94, 0.14);
+  --nx-danger-bg: rgba(228, 127, 127, 0.14);
+  --nx-accent-bg: rgba(181, 255, 59, 0.13);
+  --nx-glass-bg: rgba(32, 35, 33, 0.72);
+  --nx-glass-border: rgba(255, 255, 255, 0.11);
+
+  /* Compatibility Aliases for Recoverable Existing Screens */
+  --nx-forest: #202321;
+  --nx-forest-deep: #D2FF70;
+  --nx-leaf: #B5FF3B;
+  --nx-leaf-bright: rgba(181, 255, 59, 0.2);
+  --nx-cream: #151816;
+  --nx-cream-soft: #202321;
+  --nx-wood: #292D2A;
+  --nx-wood-dark: #080909;
+  --nx-ink: #343936;
+  --nx-sky: #151816;
+  --nx-sky-soft: #202321;
+  --nx-lavender: #B5FF3B;
+  --nx-lavender-soft: rgba(181, 255, 59, 0.16);
+  --nx-gold: #E7B95E;
+  --nx-gold-warm: rgba(231, 185, 94, 0.18);
+  --nx-muted: #929793;
+
+  /* Typography Stacks */
+  --nx-font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --nx-font-body: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --nx-font-mono: Consolas, "Cascadia Mono", monospace;
+
+  /* Radii, Borders & Layered Shadows */
+  --nx-radius-sm: 10px;
+  --nx-radius-md: 16px;
+  --nx-radius-lg: 20px;
+  --nx-radius-pill: 999px;
+  --nx-shadow-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  --nx-shadow-card-hover:
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    0 18px 36px rgba(0, 0, 0, 0.58),
+    0 0 24px rgba(181, 255, 59, 0.08);
+  --nx-shadow-lime-btn:
+    0 6px 20px rgba(181, 255, 59, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+
+  /* Layout */
+  --nx-sidebar-w: 224px;
+  --nx-topbar-h: 64px;
+}

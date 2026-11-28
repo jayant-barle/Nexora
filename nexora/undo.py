@@ -11,6 +11,26 @@ from typing import Any
 from nexora.mover import compute_sha256
 
 
+def find_latest_active_run_log(runs_dir: Path) -> Path | None:
+    """Find newest non-empty run_<ts>/run.log that has not already been undone."""
+    if not runs_dir.exists():
+        return None
+    run_dirs = sorted(
+        (d for d in runs_dir.iterdir() if d.is_dir() and d.name.startswith("run_")),
+        key=lambda d: d.name,
+        reverse=True,
+    )
+    for rdir in run_dirs:
+        log_file = rdir / "run.log"
+        if log_file.is_file() and not (rdir / "undone.json").exists():
+            try:
+                if log_file.stat().st_size > 0:
+                    return log_file
+            except OSError:
+                continue
+    return None
+
+
 def undo_run(log_path: Path | str) -> dict[str, Any]:
     """Reverse a previous run from its log file.
     
